@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.10.0"
+spec_version = "0.11.0"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -11,6 +11,7 @@ applied = [
   "silent-misses",
   "note-store",
   "store-surfaces",
+  "declared-behaviour",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -32,7 +33,7 @@ assumptions = [
 open_questions = [
   "Whether a ranked structural scout escapes the published negative result that static prose repo overviews do not improve agent performance. The artifact type is untested rather than disproven, and no benchmark measures repo orientation independently of downstream task success.",
   "Whether a project already in production can express the release number it actually ships. Declaring a line restarts major and minor at zero, so a service at 2.4.0 becomes either 2.0.0 or 0.2.5, and neither is true; the fold opt-out that would settle it is deferred.",
-  "Whether `flw ledger`'s corpus should be bounded by directory or by what the VCS tracks. Bounding by directory reads a file the project has not committed — plans/post-review-roadmap.md is untracked, 5,315 words, and searchable today — and it also excludes a tracked report in a project that keeps its reports. Neither direction is answerable without reading a VCS, which no flw command does.",
+  "Whether `flw ledger`'s corpus should be bounded by directory or by what the VCS tracks. Bounding by directory reads whatever sits in plans/, committed or not, and it also excludes a tracked report in a project that keeps its reports. Neither direction is answerable without reading a VCS, which no flw command does.",
 ]
 
 [final_state]
@@ -77,6 +78,10 @@ provides = [
 properties = [
   "Every subcommand and flag the CLI accepts is declared in surfaces, and every declared one exists: the parser and the contract cannot drift apart unnoticed.",
   "flw sync never creates a link in a directory links.toml does not already record, so it can repair an install and can never widen one.",
+  "A prompt flw cannot get an answer to, because stdin is not a terminal, declines the offer, says that is why, and lets the rest of the run finish. Every [y/N] offer flw makes behaves the same way.",
+  "Ctrl-C at any point exits 1 with one line, not a traceback.",
+  "-n never writes what the command would otherwise write: no link, no file, no host configuration. On flw update a dry run may fetch, because a fetch writes only inside .git, and it moves neither HEAD nor the working tree.",
+  "flw doctor distinguishes a host installed on this machine from one that is absent but whose skills would be reachable through another host's directory, so doctor and install never describe the same machine differently.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -219,6 +224,6 @@ The behaviour above is proven by flw's own test suite plus one end-to-end exerci
 the suite cannot reach: installing into a real Claude Code, Codex and OpenCode, and
 confirming each host loads the skills through the symlink. That exercise is manual by
 necessity — it depends on three third-party tools this project does not control — and is
-recorded in docs/ rather than asserted here.
+unrecorded: no document in this repository reports the result of running it.
 """
 

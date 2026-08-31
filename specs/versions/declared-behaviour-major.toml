@@ -1,0 +1,163 @@
+base         = "store-surfaces"
+spec_version = "0.10.0"
+name         = "declared-behaviour"
+summary      = "four places where the CLI does something other than what its own flag, help or contract declares, and two contract clauses that were never true"
+
+approach = """
+WHERE THIS CAME FROM. A four-lens review team — disclosure, claims, newcomer, redaction —
+read the whole repository at 0eafd86 before its first public push, plus a cold-clone probe
+that followed README.md's install block literally in a scratch HOME. 24 findings: 2 CRITICAL,
+14 MAJOR, 8 MINOR, no disagreements between lenses. Most were prose and are already corrected.
+This record carries the four that change what the CLI does and the two that change what the
+contract claims. The other CRITICAL — `flw test` failing on a fresh clone, because the contract
+declares .venv/bin/pytest and nothing creates it — landed before this record as a new
+.flw/config.toml carrying [tests] setup. That is project configuration rather than contract, so
+it is outside flw-spec's lane and is named here only so a reader tracing two CRITICALs finds
+both. The report is .flw/reports/2026-08-31T2148-publish.md and is gitignored, so
+what it measured is carried here instead.
+
+WHAT THE REVIEW COVERED AND WHAT IT DID NOT. Read: every tracked file, the README and all of
+docs/ as a stranger reads them, the four SKILL.md files, the contract, all 30 version records,
+and the two redacted documents read cold. Executed: a clone into a scratch HOME with a full
+install/uninstall round trip, both corpus generators from docs/measuring.md, the baseline table
+re-measured, and every subcommand's --help diffed against its surfaces line. Not covered:
+whether Codex and OpenCode load skills through the symlink, because neither is on this machine
+— which is the exercise success_criteria already calls manual.
+
+ONE MEASUREMENT WORTH CARRYING, because it cannot be re-derived by reading. flw scout under
+Python 3.12.14 takes 1.9x its 3.11.14 time on the same machine and the same generated tree —
+0.54s and 2.18s against 0.29s and 1.16s at 2,000 and 8,000 files. docs/measuring.md names
+3.11.14 in its baseline header, so the table is not wrong; a reader who runs the protocol under
+a default python3 trips the document's own ">1.5x is the finding" rule against the scout rows
+and nothing else. Nothing in this version acts on it.
+
+THE PROMPTS ARE THE OTHER CRITICAL. cli/flw.py calls input() at four sites — :609 the ambient
+block, :901 the style selection, :1014 a style overwrite, :1263 a stale-style refresh — and
+neither EOFError nor KeyboardInterrupt is caught anywhere in the file. Reproduced: `flw style
+install` with stdin not a terminal raises `EOFError: EOF when reading a line` uncaught and
+exits 1 with a traceback. That is every non-interactive caller — a CI job, a script, an agent.
+All four sites are the same four lines, so one helper fixes all four; a per-site try is four
+copies of one decision.
+
+THE DECLINE MUST SAY WHY IT DECLINED, which is why the helper prints rather than silently
+returning no. v4.1 is a whole version about a tool reporting a false negative about its own
+work, and a prompt that answers itself "no" in silence is exactly that shape.
+
+WHAT THIS IS NOT. Not a general exception handler. main() catches OSError and deliberately not
+Exception, because a bug reported as a tidy message is a bug nobody can debug — that comment is
+at cli/flw.py:2786 and stands. EOF on a closed stdin is a condition, not a bug, so it is caught
+at the prompt. KeyboardInterrupt is caught at main() instead, because Ctrl-C is not specific to
+a prompt.
+
+THE DRY RUN THAT WAS NOT DRY. `flw update -n` is documented "pull, but refresh nothing" and it
+fast-forwards the working tree — reproduced against a scratch origin carrying a probe commit,
+which landed. `flw install -n`, `flw sync -n` and `flw style install -n` all mean nothing on
+disk changes. The user chose to make update agree with them rather than document the exception.
+A fetch is still permitted: it writes only inside .git and moves neither HEAD nor the working
+tree.
+
+REMOVING THE PULL MOVES A DEFECT UNLESS THE SECOND HALF SAYS SO. update() calls sync(dry_run) at
+cli/flw.py:1748, and sync compares each installed style copy against the source in the checkout as
+it stands. Today -n pulls first, so that comparison sees the new source and its "would refresh"
+matches what a real run does. Once -n stops pulling, the source has not moved, so -n reports
+nothing to refresh while `flw update` a minute later pulls a changed core/styles/terse_prose.md
+and offers exactly the refresh the dry run did not mention. That is this version's own defect
+wearing a different hat, so the dry run has to say which checkout its style section was measured
+against.
+
+THE EXIT CODE NEEDED NO CONTRACT CHANGE, only for the code to obey it. The Python-version guard
+at cli/flw.py:33 exits 2, and that path fires ahead of every subcommand. The contract already
+says 0 success, 1 failed or refused, with 2 scoped to flw test and flw validate. Widening 2 to
+also mean "wrong interpreter" would give one code two meanings; the guard refuses to run, which
+is what 1 already names.
+
+DOCTOR AND INSTALL DISAGREED ABOUT THE SAME MACHINE. In one session seconds apart, `flw install`
+printed "opencode: not on this machine — skipping" and `flw doctor` printed
+"✓ opencode: via ~/.claude/skills". Both are right — install tests whether the host is present,
+doctor tests whether its skills would be reachable — and docs/install.md explains the mechanism
+without reconciling the two outputs. Doctor is the one to change, because it is the one whose
+tick reads as "installed".
+
+THE TWO CONTRACT CLAUSES ARE CORRECTIONS, not decisions. The third open question cites
+plans/post-review-roadmap.md as "untracked, 5,315 words, and searchable today"; that file does
+not exist, so a stranger checking the contract's own example finds nothing. success_criteria
+says the three-host exercise "is recorded in docs/"; nothing in docs/ records it — the record
+that did was docs/verified.md, which this contract removed at :53. Both are the class
+stale-claims named: a statement the repository no longer backs. The correction says only what
+was established, that the exercise is unrecorded. Whether it was ever run is a different claim
+and no reviewer produced evidence either way; naming which hosts happen to be absent from this
+machine would write a new decaying statement into the contract to replace the one being removed.
+"""
+
+contract_edit = """
+1. In the "the flw CLI" component's `properties` (currently two entries, at :77-80), add four:
+
+   "A prompt flw cannot get an answer to, because stdin is not a terminal, declines the offer,
+   says that is why, and lets the rest of the run finish. Every [y/N] offer flw makes behaves
+   the same way."
+
+   "Ctrl-C at any point exits 1 with one line, not a traceback."
+
+   "-n never writes what the command would otherwise write: no link, no file, no host
+   configuration. On flw update a dry run may fetch, because a fetch writes only inside .git,
+   and it moves neither HEAD nor the working tree."
+
+   "flw doctor distinguishes a host installed on this machine from one that is absent but
+   whose skills would be reachable through another host's directory, so doctor and install
+   never describe the same machine differently."
+
+2. In `open_questions`, replace the third entry's parenthetical example. The sentence
+   "Bounding by directory reads a file the project has not committed — plans/post-review-roadmap.md
+   is untracked, 5,315 words, and searchable today — and it also excludes a tracked report in a
+   project that keeps its reports." becomes "Bounding by directory reads whatever sits in plans/,
+   committed or not, and it also excludes a tracked report in a project that keeps its reports."
+   Nothing else in that entry changes.
+
+3. In `success_criteria.criteria`, replace the final clause. "That exercise is manual by
+   necessity — it depends on three third-party tools this project does not control — and is
+   recorded in docs/ rather than asserted here." becomes "That exercise is manual by necessity —
+   it depends on three third-party tools this project does not control — and is unrecorded: no
+   document in this repository reports the result of running it."
+
+No `surfaces` line changes. `flw update [-y|--yes] [-n|--dry-run]` still describes the flags the
+parser accepts; only what -n does changes. The exit-code surface at :111 is already correct and
+this version makes the code match it.
+"""
+
+[[decisions]]
+topic     = "flw update -n: change what the flag does, document it, or drop it"
+options   = ["make -n fetch and report without pulling", "document that -n still pulls and only skips the style refresh", "drop -n from update entirely"]
+chosen    = "make -n fetch and report without pulling"
+rationale = "The reviewer conditioned this finding on whether a prior record had already decided the exemption; it had not. v3.3.toml:101 scopes the dry run by describing where it sits and gives no rationale, v3.3 carries no decision about the flag at all, and its sibling task at :100 asked for -n to match install's spelling AND help text — install's is `show, do nothing`, while what shipped at cli/flw.py:2580 is `pull, but refresh nothing`. The current behaviour is drift from v3.3's own instruction rather than a choice anyone made. -n on install, sync and style install all mean nothing on disk changes, so update carrying a fourth meaning is an inconsistency inside one surface rather than a documented quirk. It is also the flag a careful user types precisely to avoid the thing it does, and a fast-forwarded checkout is the hardest of flw's side effects to undo. Documenting it was the reviewer's own recommendation and was rejected because it preserves the trap."
+
+[[decisions]]
+topic     = "what a [y/N] prompt does when stdin cannot answer"
+options   = ["treat it as no, silently", "treat it as no and print which condition fired", "exit non-zero and refuse to continue"]
+chosen    = "treat it as no and print which condition fired"
+rationale = "v4.1 is a whole version about a tool reporting a false negative about its own work, and a prompt that answers itself in silence is that shape: the caller cannot distinguish an offer declined by a user from one nobody was there to accept. Refusing outright was rejected because the offers are all optional extras — an ambient block, a style — and a non-interactive install that works apart from the extras is more useful than one that fails."
+
+[[decisions]]
+topic     = "the version guard exits 2, against a contract that scopes 2 to test and validate"
+options   = ["change the guard to exit 1", "widen the contract's exit-code surface to cover it"]
+chosen    = "change the guard to exit 1"
+rationale = "2 already means 'this run proved nothing' for test and validate. Making it also mean 'wrong interpreter' gives one code two meanings for a caller that cannot see which command it ran. The guard refuses to run, and 1 is already 'something failed or was refused'."
+
+[[dag]]
+group = 1
+phase = "A prompt nobody can answer"
+tasks = [
+  { id = "confirm-helper", desc = "cli/flw.py: add one confirm(prompt) helper wrapping input(), catching EOFError and returning False after printing that stdin is not a terminal so the offer was declined. Replace the four call sites at :609, :901, :1014 and :1263 with it, keeping each site's existing indent and its own 'skipped' line for the ordinary no. The run continues after a declined offer — these are optional extras and a non-interactive install that works apart from them is the point." },
+  { id = "interrupt", desc = "cli/flw.py: catch KeyboardInterrupt in main() alongside the existing OSError handler, print a one-line 'interrupted' to stderr and return 1. This ends the command; it does not decline an offer and continue, which is why it is a separate property from the one above. Do not widen the handler to Exception — the comment at :2786 says why and stands.", depends_on = ["confirm-helper"] },
+  { id = "prompt-checks", desc = "tests/: with stdin closed, each of the four offers declines, prints why, and the command carries on to finish its other work and exit 0 — the check for the CRITICAL, and what fails today. Separately, main() returns 1 and prints one line when the handler raises KeyboardInterrupt, rather than tracebacking.", depends_on = ["confirm-helper", "interrupt"] },
+]
+
+[[dag]]
+group = 2
+phase = "Flags and codes that mean what they say"
+tasks = [
+  { id = "guard-exit", desc = "cli/flw.py:33: the Python-version guard raises SystemExit(2); make it SystemExit(1). The message is unchanged." },
+  { id = "dry-update", desc = "cli/flw.py update(): under -n, run git fetch and print what a pull would bring — the upstream name and the commits in HEAD..@{upstream} — instead of git pull --ff-only, then continue to the existing style dry-run. HEAD and the working tree must not move. Two things the range alone does not say: if the fetch exits non-zero, print its stderr and say the range below is from the last successful fetch, because refs/remotes/ answers offline and would otherwise report stale history as news; and print one line saying the style section that follows is measured against the checkout as it stands rather than against what the fetch found. Change the flag's help from 'pull, but refresh nothing' to say it reports and writes nothing.", depends_on = ["guard-exit"] },
+  { id = "doctor-hosts", desc = "cli/flw.py doctor(): when a host is absent from this machine but satisfied_by() finds its skills reachable through another host's directory, print '✓ <host>: reachable via <path>' rather than '✓ <host>: via <path>'. Use the same presence test flw install uses, so the two commands cannot describe one machine differently.", depends_on = ["dry-update"] },
+  { id = "surface-checks", desc = "tests/: the version guard's exit code is 1. Doctor prints 'reachable via' for an absent host and 'via' for a present one. For update -n, both of these — with the existing git stub from tests/test_cli.py:131, record every flw.git call and assert none begins with 'pull'; and against a real throwaway repository in tmp_path, assert rev-parse HEAD is unchanged across the dry run. The second needs git on PATH, so guard it with a skip in the shape the TypeScript scout tests already use, and give the fixture -c user.email, -c user.name, -c commit.gpgsign=false and --initial-branch=main, none of which any test in this suite needs today.", depends_on = ["guard-exit", "dry-update", "doctor-hosts"] },
+  { id = "docs", desc = "README.md's flw update paragraph and docs/install.md: say what -n now does, and correct doctor's opencode line in the sample output at docs/install.md:78, which quotes the string doctor-hosts changes and is the only place in the tree that does. Correct nothing else — the review's other documentation findings already landed.", depends_on = ["surface-checks"] },
+]
