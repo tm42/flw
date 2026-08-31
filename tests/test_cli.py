@@ -2294,3 +2294,19 @@ def test_update_dry_run_leaves_head_where_it_was(tmp_path, monkeypatch, capsys):
     assert run("rev-parse", "HEAD", cwd=clone).stdout.strip() == before
     assert not (clone / "b.txt").exists()
     assert "would pull 1 commit(s)" in capsys.readouterr().out
+
+
+def test_doctor_separates_a_host_that_is_here_from_one_merely_reachable(
+    home, capsys, monkeypatch
+):
+    """`flw install` says "opencode: not on this machine" and doctor said
+    "✓ opencode: via ~/.claude/skills" in the same session, seconds apart.
+    Both were true and they read as a contradiction."""
+    install()
+    capsys.readouterr()
+    monkeypatch.setattr(flw, "present", lambda h: h.name == "claude-code")
+
+    doctor()
+    out = capsys.readouterr().out
+    assert "✓ claude-code: via " in out
+    assert "✓ opencode: reachable via " in out

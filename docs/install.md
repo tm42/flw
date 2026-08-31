@@ -75,7 +75,7 @@ links:
 hosts:
   ✓ claude-code: via ~/.claude/skills
   · codex: not installed
-  ✓ opencode: via ~/.claude/skills
+  ✓ opencode: reachable via ~/.claude/skills
 
 style:
   · not installed — `flw style install` writes it into each host
@@ -83,7 +83,11 @@ style:
 OK
 ```
 
-**`·` is not a failure.** It means the host is not on this machine. `✗` is a failure —
+**`reachable via` is not `via`.** Claude Code is here and reads that directory. OpenCode
+is not here, but reads the same one, so its skills would resolve the moment it arrived —
+which is why `flw install` calls it absent and `flw doctor` still ticks it.
+
+**`·` is not a failure.** It means the host is not on this machine and nothing reaches it. `✗` is a failure —
 a link that is dangling, hijacked, stale, or recorded but no longer there. `flw doctor -v`
 adds each host's notes and quirks.
 

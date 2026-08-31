@@ -1385,8 +1385,14 @@ def doctor(args: argparse.Namespace) -> int:
         seen = satisfied_by(host, live)
         if seen is None:
             print(f"  · {host.name}: not installed")
-        else:
+        elif present(host):
             print(f"  ✓ {host.name}: via {tilde(seen)}")
+        else:
+            # The host is absent but reads a directory another host's links are
+            # in, so its skills would resolve if it arrived. `install` says
+            # "not on this machine" about the same host in the same session, and
+            # a bare tick here reads as a contradiction of it.
+            print(f"  ✓ {host.name}: reachable via {tilde(seen)}")
         if args.verbose:
             print(f"      {host.note}")
 
