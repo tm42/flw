@@ -1,0 +1,8 @@
+{
+  "name": "flw",
+  "private": true,
+  "description": "Test-time dependency for the TypeScript scout: core/scripts/scout.mjs cannot be exercised without a TypeScript parser. Not a runtime dependency — flw ships nothing here and installs nothing to run a check.",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

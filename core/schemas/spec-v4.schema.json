@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tm42/flw/schemas/spec-v4.schema.json",
+  "title": "flw contract",
+  "description": "specs/current.toml \u2014 one per project, complete and current. It states what is true when the work is done, never how to get there: how each version came about lives in one file per version under specs/versions/. Five questions, one home each \u2014 what exists (final_state.components), what a user can do with it (provides), what is gone (final_state.removed), how we know it works (success_criteria), and what would force a redesign if false (assumptions).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "spec_version",
+    "final_state",
+    "success_criteria",
+    "assumptions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 4,
+      "description": "Selects the schema. validate_spec.py dispatches on this rather than on the path it was given."
+    },
+    "spec_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "LINE.MAJOR.MINOR. The line is 0 until a record declares release_line, and 1 once it has, marking the point the product moved from not-real to real; the major and minor fold behind it, moving by each applied record's classification suffix — major when a behaviour someone relied on now works differently, minor when a capability arrives and nothing that worked before changed. Scoped to this one contract: a repository whose parts release independently is several contracts, one per part at the root nearest_project resolves each to, never a single number folded across all of them."
+    },
+    "final_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "components"
+      ],
+      "properties": {
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/component"
+          },
+          "description": "What exists when the work is done. A component may be conceptual rather than file-shaped \u2014 one capability spanning several files is one component."
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/removal"
+          },
+          "description": "What this contract has deleted. Stating a removal is not the op that performs it, so a set here never forces a major bump on its own."
+        }
+      }
+    },
+    "success_criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criteria"
+      ],
+      "properties": {
+        "tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test"
+          },
+          "description": "Commands that must exit 0. These are the project's own \u2014 flw bakes in no test runner, no linter and no toolchain. `flw test -A` runs them and reports; it does not judge whether the work is done."
+        },
+        "criteria": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the tests cannot express. Required even when tests are present: a suite that passes is not the same claim as the work being done, and pretending otherwise is how a green build ships the wrong thing."
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "What would force a redesign if it turned out false. Required, and an empty list is a legitimate answer \u2014 the point is that the question was asked, not that it produced entries. Phrase as testable propositions ('input fits in memory'), not intents ('data is small')."
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Raised and not settled. Optional, because a contract with none is a complete contract. Better here than answered by assumption."
+    },
+    "applied": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The names of the version records whose runs have finished, oldest first. This is where the order of versions lives: flw-execute appends to it in the step that applies a version's contract_edit, so the order is written once, where the work landed, rather than inferred from a chain only one branch can hold."
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "paths",
+        "provides"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The natural key. Amendments address a component by name, so changing it is a remove plus an add \u2014 which is why rename needs no op of its own, and why names must be unique (checked semantically; the schema language has no uniqueItems here)."
+        },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Where this component lives, project-relative. Directories end in '/'. Nothing materializes these \u2014 they locate the component for a reader and for review."
+        },
+        "provides": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "What a user can do, one capability per entry. This is the product surface. A component that provides nothing is a file list, not a component."
+        },
+        "implementation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional. How this component is built \u2014 the mechanism, not the guarantee. 'SQLite, one file per user, no ORM' qualifies; 'probably use a dataclass' does not. Distinguish the three fields by what the sentence is about, not by whether a test could reach it: `provides` is about what a user can do, `properties` is about what the component guarantees, `implementation` is about how it is built \u2014 a mechanism value like a damping constant is perfectly testable and still belongs here. If it does not constrain, it is not spec, and it belongs in the version file's approach or nowhere."
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Optional. Falsifiable statements about what the component guarantees \u2014 an invariant a test can be written against. A sentence that cannot be false does not belong here, and neither does a restatement of a `provides` entry: a capability and an invariant read alike, but one is about a person and the other is about a function."
+        },
+        "surfaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Optional. Things that break someone outside this project when they change: subcommands and flags, exit codes, state files and their keys, config keys, tagged-block markers, install locations. A private helper is not one, however visible."
+        }
+      }
+    },
+    "removal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statement"
+      ],
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What is gone, in the author's words."
+        },
+        "check": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A command that exits non-zero while the removed thing is still present. Optional on purpose \u2014 some removals are conceptual, and a fabricated check is worse than an honest absence."
+        }
+      }
+    },
+    "test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Run from the project root; must exit 0. No runner allow-list \u2014 v2 had one because it carried a language registry, and the registry is gone."
+        }
+      }
+    }
+  }
+}

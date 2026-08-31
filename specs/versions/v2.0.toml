@@ -1,0 +1,99 @@
+base         = "1.0"
+spec_version = "2.0"
+name         = "2.0"
+summary      = "the contract is edited, not operated on: the amendment engine, the ledger and every record of done-ness are gone"
+
+approach = """
+This deletes more than it writes. Three mechanisms went, and the reasoning is in
+plans/design-v3.md §5.5 rather than repeated here — what matters for the work is
+what that leaves behind and in what order it can safely come apart.
+
+The engine was load-bearing for four callers: amend_spec itself, resolve_delta,
+validate_spec's ledger half, and the vendored tomlkit that only existed to write
+TOML back out. They come out together or not at all — removing amend_spec while
+validate_spec still re-derives kind from ops leaves a validator checking a record
+nothing produces. So the whole column goes in one phase.
+
+What survives from core/scripts is validate_spec's generic schema engine, which is
+good, has never been the problem, and is untouched. Its flw-specific half is
+rewritten: contracts get name-uniqueness, version files get lineage and dag
+integrity, and validating one version file walks the chain because there is no
+index to hold a hole.
+
+gates.py moves from a skill's scripts/ into core/scripts/ and gains a CLI entry
+point. That is not tidying. It becomes a command the user runs directly, in their
+own shell, outside whatever sandbox the agent is in — which is the whole answer to
+checks an agent cannot run. It also gains the four subprocess arguments that stop
+it lying: explicit bash so `source` works on Linux, closed stdin so a prompting
+command fails instead of hanging, a timeout, and 127 read as unavailable rather
+than failed.
+
+The skills are rewritten rather than edited. Their whole middle section was
+building and applying an amendment payload, and what replaces it is "edit the
+file" — there is no version of that paragraph worth keeping.
+
+Deliberately not done here: the contract's own gates still say `.venv/bin/pytest`,
+which is right for this repo and wrong as an example for anyone reading it. And
+flw has still never been loaded by a real host. Both stay open.
+"""
+
+[[dag]]
+group = 1
+phase = "shapes"
+tasks = [
+  { id = "version-schema", desc = "version.schema.json: three required fields, approach/dag/decisions optional. No applied, no diff, no ops." },
+  { id = "implementation", desc = "Add optional per-component implementation to spec-v3.schema.json, holding only what is binding." },
+  { id = "drop-schemas", desc = "Delete ledger.schema.json and delta.schema.json.", depends_on = ["version-schema"] },
+]
+
+[[dag]]
+group = 2
+phase = "engine"
+tasks = [
+  { id = "delete", desc = "Remove amend_spec, _amendment_ops, _toml_editor, _vendor_path, resolve_delta and core/vendor. One phase: they only make sense together.", depends_on = ["drop-schemas"] },
+  { id = "validator", desc = "Rewrite validate_spec's flw-specific half. Keep the generic schema engine exactly as it is.", depends_on = ["delete"] },
+]
+
+[[dag]]
+group = 3
+phase = "checks"
+tasks = [
+  { id = "gates", desc = "Move gates.py to core/scripts. Add the local [gates] config: setup, branch checks, and the ones this session cannot run.", depends_on = ["validator"] },
+  { id = "subprocess", desc = "Explicit bash, stdin closed, timeout, merged streams, tolerant decoding, and 127 reported as unavailable.", depends_on = ["gates"] },
+  { id = "cli", desc = "flw gates and flw validate as subcommands, so the user runs the same command in their own shell.", depends_on = ["subprocess"] },
+]
+
+[[dag]]
+group = 4
+phase = "prose"
+tasks = [
+  { id = "skills", desc = "Rewrite both SKILL.md files. Edit the contract directly; number the version yourself; a check you could not run is not a check that passed.", depends_on = ["cli"] },
+  { id = "references", desc = "good-contract.md and spec-critic.md under flw-spec/references, loaded only when that path is taken.", depends_on = ["skills"] },
+  { id = "context", desc = "Rewrite core/shared/context.md for two artifacts and two commands.", depends_on = ["skills"] },
+]
+
+[[dag]]
+group = 5
+phase = "self"
+tasks = [
+  { id = "contract", desc = "Amend flw's own contract and write this file. The first exercise of the new flow on a live contract.", depends_on = ["context"] },
+  { id = "surface", desc = "README and the design doc's superseded table.", depends_on = ["contract"] },
+]
+
+[[decisions]]
+topic     = "where gates.py lives"
+options   = ["core/skills/flw-execute/scripts/, per the Agent Skills layout", "core/scripts/, with a CLI subcommand"]
+chosen    = "core/scripts/, with a CLI subcommand"
+rationale = "The human has to run it themselves, in a shell the agent cannot reach, whenever a check needs a real environment. A path buried inside a skill bundle is not something you type. Making it `flw gates` also removes a hardcoded script path from the skill body."
+
+[[decisions]]
+topic     = "how a check that cannot run here is reported"
+options   = ["as a failure, since it did not pass", "as unavailable, listed separately for the user"]
+chosen    = "as unavailable, listed separately"
+rationale = "A restrictive sandbox makes this the normal case, not an error. Reporting it as failure trains everyone to ignore failures, which is worse than having no check at all. Exit 127 detects it automatically; [gates] yours declares it when it is known in advance."
+
+[[decisions]]
+topic     = "keeping the derived diff for its own sake"
+options   = ["keep it — the record then cannot misdescribe the change", "cut it — git diff already shows the change"]
+chosen    = "cut it"
+rationale = "Every time it caught something during design, the scenario was constructed. Its unique contribution over git diff was labelling the change and picking a version number — machinery guarding a number, on a file a human reviews anyway."

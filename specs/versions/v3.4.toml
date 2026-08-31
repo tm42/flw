@@ -1,0 +1,140 @@
+base         = "3.3"
+spec_version = "3.4"
+name         = "3.4"
+summary      = "flw-execute moves the contract to the version it just built, so the contract records what shipped instead of predicting it"
+
+approach = """
+WHAT IS WRONG TODAY. `flw-spec` edits `specs/current.toml` at the end of the interview,
+before a line of the work exists. The contract's own definition is what is true when the
+work is done, so from that edit until `flw-execute` finishes, the file states things that
+are not true — and nothing distinguishes that window from a contract that is simply
+correct. `flw validate` makes it worse rather than catching it: its pair check demands
+exact equality between the contract's `spec_version` and the newest version record, so the
+prediction is not merely permitted, it is required. This version moves the edit to the end
+of a completed run and inverts the check to match.
+
+WHAT THE WORK IS NOT. Not the applied flag. `final_state.removed` records the deletion of
+every record of whether work is done — the flag, the computed diff, and the classification
+derived from it — and none of it comes back. Execute knows its own run finished because it
+walked the phases: knowledge held in the moment, not stored state. Nothing is computed,
+nothing is derived, and the human still assigns the version number while naming the file.
+Not the amendment engine either: `contract_edit` is prose naming sentences and where they
+go, applied by an agent making ordinary edits, not keyed operations a script replays
+byte-preservingly — the corruption class that removal entry describes needs a machine
+applying a patch it cannot read. Not a new notion of done: a contract behind its newest
+record says only that a version is in flight, which is a fact about two files and not a
+verdict, and flw still records no done anywhere.
+
+WHERE THE EDIT'S WORDS GET REVIEWED. The contract edit is the agreement, so the human has
+to read the actual sentences — not a summary of them, and not a diff produced hours later
+by an agent re-deriving what it thought was meant. So `flw-spec` writes the exact text into
+the version file, under a new `contract_edit`, and step 6 already shows the version file to
+the user before anything runs. Execute applies what is written there. That keeps authorship
+at spec time, where review is cheap, and leaves execute doing what it already does: reading
+a version file and making the edits it names.
+
+WHY THE EDIT COMES AFTER THE CHECKS. Recording what shipped before knowing whether it
+shipped is the same mistake this version exists to remove, one step smaller — so the edit
+lands only once `flw test` has run and the run is otherwise finished. The cost is real and
+worth naming: a `final_state.removed` check the edit itself declares does not run in the
+session that made it true. Execute closes that by re-running `flw test -A` when its edit
+added one, rather than leaving the first run of a new check to whenever someone next types
+the command.
+
+WHAT THE VALIDATOR CAN NO LONGER CATCH. Exact equality caught one real thing besides the
+prediction: a contract amended and never bumped. Allowing the contract to sit behind gives
+that up, because behind is now the normal state of any version between its spec and its
+execution, and nothing in the files distinguishes the two. That is accepted rather than
+worked around — a marker declaring a version in flight would be the applied flag under
+another name, and the direction that matters is still checked, because a contract *ahead*
+of its newest record is a claim with no record behind it and stays an error.
+
+THE FIRST CONTRACT IS EXEMPT. `flw-spec`'s first-contract mode still writes
+`specs/current.toml` whole, because execute reads the contract for its components and its
+`success_criteria.tests` and there is nothing to read otherwise. So v1.0 of any project
+keeps the prediction window, and it closes the first time execute completes. Only amending
+moves.
+
+BOOTSTRAPPING, AND WHY THIS FILE DOES NOT VALIDATE YET. This version builds the mechanism
+that moves the contract, and the honest way to prove the mechanism is to let it make the
+move — so `specs/current.toml` stays at 3.3 and the `contract_edit` below is applied by the
+run rather than by hand. Two consequences follow, both expected and both self-clearing:
+`flw validate` reports an unexpected property `contract_edit` until group 1 adds that key to
+the schema, and reports the contract stranded at 3.3 behind a 3.4 record until group 2
+inverts the check. Neither is a gap in the contract and neither is a proposal — they are
+this version's own work, not yet done, and an agent that stops on either has misread them.
+`success_criteria.tests` is pytest and ruff, so `flw test` is unaffected and stays the
+signal to trust. Re-running this version once it has completed applies nothing:
+`current.toml` will read 3.4 and the version being run is 3.4, which is the equality that
+tells any run its edit has already landed.
+"""
+
+contract_edit = """
+The skills component gains, after its last provides line:
+  "A user reads a contract that records what shipped, not what was planned: it moves when
+   the work lands rather than when the plan is agreed, so a version still in flight shows
+   as a gap between the contract and its newest record."
+
+success_criteria.criteria: the sentence naming what is worth testing directly changes
+  "that a contract stranded behind its newest version record is named rather than
+   validating clean"
+to
+  "that a contract ahead of its newest version record is named rather than validating
+   clean, while one behind it passes, because that is a version between its spec and its
+   execution".
+"""
+
+[[decisions]]
+topic     = "how flw-execute learns what the contract edit is"
+options   = [
+  "execute re-derives it from the version file and the tree it just built",
+  "flw-spec writes the exact contract text into a new field in the version file",
+  "the contract edit is prose in the version file's last dag group, like any other task",
+]
+chosen    = "flw-spec writes the exact contract text into a new field in the version file"
+rationale = "The contract edit is the agreement, and the human reviews the version file before anything runs. Re-deriving makes execute a second author whose words reach the human only as a diff at the end, which is the drift execute's first rule exists to close. A final dag task is reviewed at the same moment but has nowhere to live in a version with no dag, and nothing can check it was written."
+
+[[decisions]]
+topic     = "whether execute applies the contract edit or hands it to the user"
+options   = ["execute edits current.toml and shows the diff", "execute prints the edit and the user applies it"]
+chosen    = "execute edits current.toml and shows the diff"
+rationale = "An ordinary edit, like every other file execute writes, landing in the diff step 5 already stages and prints. flw deleted the amendment engine on the grounds that ordinary editing is byte-preserving by construction; making the human hand-edit TOML at the end of every run reintroduces the cost that engine existed to remove, and leaves the contract un-bumped whenever they forget."
+
+[[decisions]]
+topic     = "whether the contract edit lands before or after flw test"
+options   = ["before, so a removal check the edit declares runs in the same session", "after, so the contract is never edited on a run whose checks failed"]
+chosen    = "after, and re-run flw test -A when the edit added a check"
+rationale = "Editing before verification predicts the outcome, which is the mistake this version removes. The removal-check gap is real, so execute closes it explicitly rather than leaving a newly declared check unrun until someone next types the command."
+
+[[decisions]]
+topic     = "what the pair check refuses once the contract can lag"
+options   = [
+  "keep exact equality and mark a version in flight some other way",
+  "allow the contract behind its newest record, refuse it ahead",
+]
+chosen    = "allow the contract behind its newest record, refuse it ahead"
+rationale = "Any marker for in-flight is the applied flag under another name. Behind is now the normal state between a version's spec and its execution, so the check gives up catching an amend that was never bumped; ahead is still a claim with no record behind it and stays an error."
+
+[[dag]]
+group  = 1
+phase  = "the version file carries the edit"
+tasks  = [
+  { id = "contract-edit-field", desc = "Add `contract_edit` to version.schema.json as an optional string with minLength 1. Its description says what it holds — the exact sentences the contract gains, loses or replaces, and where each goes — and who applies it: flw-spec writes it, the human reviews it with the rest of the version file, flw-execute applies it when its run completes. Optional because a version whose only contract change is the spec_version bump has nothing to write, and execute bumps that unconditionally." },
+  { id = "spec-writes-it", desc = "flw-spec SKILL.md: step 4 stops editing specs/current.toml and instead writes the agreed contract text into the version file's contract_edit; step 5 drops `current.toml`'s spec_version becomes the same and the sentence about validate refusing a stranded contract, and says instead that the contract moves when execute finishes. The thrifty amend paragraph follows — an unambiguous edit goes into contract_edit, not into the contract. First-contract mode is untouched and says why: there is no contract for execute to read otherwise.", depends_on = ["contract-edit-field"] },
+]
+
+[[dag]]
+group  = 2
+phase  = "the validator allows a version in flight"
+tasks  = [
+  { id = "pair-check", desc = "validate_spec.py check_chain: the contract equal to or behind the newest record is fine; ahead of it is the error. Compare with _parse_version rather than string equality. The message names what ahead means — a contract claiming a version no record accounts for — and no longer tells the reader to bump the contract to match." },
+  { id = "pair-check-tests", desc = "test_a_stranded_contract_is_caught becomes two: a contract behind its newest record validates clean, because that is a version between its spec and its execution; a contract ahead of it is named. Both against the existing specs fixture.", depends_on = ["pair-check"] },
+]
+
+[[dag]]
+group  = 3
+phase  = "execute records it"
+tasks  = [
+  { id = "execute-records", desc = "flw-execute SKILL.md gains a step between checking and reporting: on a run that completed every phase with the checks passing, set current.toml's spec_version to the version just run and apply the version file's contract_edit if it has one. Skip both when current.toml already reads that version — the edit has landed, from an earlier run or by hand. Do neither on a run that stopped. Re-run flw test -A when the edit added a final_state.removed check, and say so. The report's staged diff already carries specs/current.toml because the run touched it.", depends_on = ["contract-edit-field", "pair-check"] },
+  { id = "execute-lane", desc = "flw-execute SKILL.md: drop `Amend the contract (that is flw-spec)` from What this skill does not do, and replace it with what stays true — it does not decide what the contract should say, it applies what the version file already agreed. The STOPPED report block gains a line saying the contract was not moved, so a reader can tell a stopped run from a finished one by the files alone.", depends_on = ["execute-records"] },
+]

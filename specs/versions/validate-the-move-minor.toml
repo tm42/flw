@@ -1,0 +1,55 @@
+name    = "validate-the-move"
+base    = "install-robustness"
+summary = "run flw validate on the contract the run just wrote, before the run reports success"
+
+approach = """
+THE GAP, IN ONE SENTENCE. Step 5 of flw-execute makes three edits to current.toml —
+appends to `applied`, moves `spec_version`, applies the version file's `contract_edit` —
+and then does not check the result. It is the only step that writes the contract and the
+only one that verifies nothing.
+
+IT ALREADY KNOWS. The step's own text says "`flw validate` folds the same number out of
+`applied` and refuses a contract whose number disagrees", offered as reassurance that a
+mistake would be caught. Nothing tells the agent to run it, so nothing catches anything.
+The fix is one instruction where the reassurance already sits.
+
+WHY flw ITSELF NEVER NOTICED. flw's own suite validates the real contract at
+tests/test_direct_run.py:59, so `flw test` fails here when the contract breaks — measured
+by setting spec_version to 9.9.9, which failed that test and turned the run red. That is a
+test flw happened to write about itself. A project flw is used ON runs its own declared
+checks, and nothing in them validates its contract. The coverage here is an accident that
+does not travel, which is the same shape as every other thing this package has found while
+getting ready to be used somewhere else.
+
+WHAT VALIDATE CATCHES THAT flw test CANNOT. The cross-document facts: a name in `applied`
+with no record carrying it, a release number disagreeing with what the records fold to, a
+`contract_edit` that produced a document the schema refuses, a duplicate component name
+making every later reference ambiguous. None of those is expressible as a project check
+and all of them are produced by exactly the three edits step 5 makes.
+
+NO MECHANICAL GUARD, SAID RATHER THAN GLOSSED. This is prose, and nothing tests that the
+instruction stays in the file — unlike flw-spec's field names, which `format-guard` pins
+against the schema. A guard here would assert that a skill's prose contains a command,
+which pins wording rather than behaviour and breaks on any rewrite. The instruction is one
+line in the step that writes the contract; the risk of it being deleted unnoticed is lower
+than the cost of a test that fails every time someone rephrases the paragraph.
+
+WHAT IS NOT HERE. Adding `flw validate` to any project's default checks. What a project
+runs is the project's business, declared in its own config or contract, and flw does not
+get to append to it.
+"""
+
+contract_edit = """
+In the component named "validation and checks", append to `provides`:
+
+  "A contract a run has just written is validated before that run reports success, so an
+   edit producing a document the schema or the record set refuses stops the run instead of
+   being handed over as finished work."
+"""
+
+[[dag]]
+group = 1
+phase = "the step that writes the contract checks what it wrote"
+tasks = [
+  { id = "validate-after-the-edit", desc = "core/skills/flw-execute/SKILL.md step 5: after the three edits and after printing `git diff specs/current.toml` on its own, run `flw validate` and stop the run if it fails. The diff is printed first so the user sees what was written whether or not it validates. Rewrite the existing sentence that offers validate as reassurance — 'You do not have to get this right from memory — `flw validate` folds the same number out of `applied`' — so it names the command as something the step runs rather than something that exists. On failure the run has already written the contract, which no other stop in this skill has done, so say what that means in the report: the phases completed, the contract was moved, it does not validate, and it needs fixing before anything is committed. That is not the STOPPED shape, which says the contract did not move." },
+]

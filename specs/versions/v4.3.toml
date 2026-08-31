@@ -1,0 +1,211 @@
+base         = "4.2"
+spec_version = "4.3"
+name         = "4.3"
+summary      = "the scout stops being wrong and stops being slow: a reviewable scout.mjs, one graph across both languages, and a timing sentence the code can meet"
+
+approach = """
+WHAT THIS VERSION IS NOT. Not the scout's `properties` and `implementation` text — 4.0
+wrote that three times and was wrong three times, and it cannot be written before the
+ranking it describes is fixed. Not the Python test rewrite either: 20 of 23 mutants
+survive today, and a rewrite aimed at that number belongs with the properties it would be
+testing. Both go to 4.4, which is why this file changes behaviour and adds only the tests
+that pin the specific changes it makes. Not a rewrite of either scout: both algorithms
+survive, one of them gains the other's edge resolution, and every fix below is local.
+
+THE MEASUREMENTS, TAKEN FOR THIS SPEC ON 2026-08-24. Carried here because a number is the
+part of a review that cannot be re-derived by reading, and because the contract's timing
+sentence is restated below against these and not against the review's.
+
+  tree                       files    shipped   quadratics fixed   + statement walk
+  synthetic, 40 packages    20,040    349.67s        3.40s              3.27s
+  CPython 3.12 stdlib        1,804      9.41s        5.48s              3.34s
+  flw itself                    40      0.07s        0.06s                 —
+
+Output is byte-identical across all three columns on both trees, which is what makes these
+performance fixes rather than behaviour changes. The `.flw/reports/2026-08-23T1336-eng.md`
+run measured 81.61s at 20,000 files on a different synthetic shape; the direction and the
+order of magnitude agree and the absolute numbers do not, so this table is the one to
+believe for this machine. That report's coverage is now carried and the report is
+disposable.
+
+THE THIRD QUADRATIC, WHICH THE REVIEW DID NOT FIND. With both of its fixes applied, the
+CPython stdlib still takes 5.48s at 1,804 files, and `cProfile` puts 6.27s of a 12.8s
+profiled run inside `ast.walk` against 2.06s in `compile` — 32 million `isinstance` calls
+over expression nodes that can never hold an import or a definition. Walking statement
+children only cuts the stdlib to 3.34s with identical output. It is here rather than in
+4.4 because it is what makes the restated timing sentence true instead of merely less
+false.
+
+WHY THE TWO SCOUTS BECOME ONE GRAPH. `scout.py` resolves an import edge through
+`definers[name]`, so an edge runs to whatever file *defines* the imported name.
+`scout.mjs` resolves through the module specifier, so the edge runs to whatever file the
+import names — and a re-export barrel takes the whole score while the definition takes
+none. Reproduced for this spec on a seven-file TypeScript repo with typescript 5.9.3, five
+importers going through a barrel:
+
+  shipped     src/barrel.ts   CoreThingHere   0.4444    (src/core.ts absent entirely)
+  converged   src/core.ts     CoreThingHere   0.4444    (src/barrel.ts absent entirely)
+
+`implementation` is the field whose stated job is reconstruction, and one sentence cannot
+describe both a name-to-definer graph and a specifier-to-module one. Rather than write two,
+`scout.mjs` adopts the Python resolution, which also makes `scout.mjs:2`'s "Same algorithm
+as the Python one" true for the first time. The convergence deletes `resolve()` and with it
+the tsconfig-`paths` finding the review raised against edges, because under name resolution
+a specifier is no longer consulted to build one. What survives of that finding is narrower
+and stays: an aliased bare specifier is still counted as an external dependency.
+
+WHAT THE CONVERGENCE COSTS. `import * as ns from "./x"` contributes no names, so it loses
+its edge. That is not a regression against `scout.py`, which already drops `import x.y` the
+same way — `definers` is keyed on definition names and a module name is rarely one. The
+loss becomes consistent across the two scouts rather than new, and naming it here is the
+point: a later reader finding namespace imports unranked should find this paragraph rather
+than conclude something broke.
+
+TYPESCRIPT 7 IS NOT A COMPATIBILITY FIX. The review recorded that `scout.mjs` dies on
+typescript@7.0.2 at `ts.ScriptTarget.Latest`. Probed for this spec: 7.0.2 is the Go port,
+its main entry exports exactly `version` and `versionMajorMinor`, and the whole compiler
+API has moved under `./unstable/*` with a different shape. There is no small change that
+makes one file work against both, and writing against an entry point whose own package
+calls it unstable is not a floor flw can stand on. So 7 is detected and refused by name,
+with the version it found and what it needs. 7.0.2 is the current `latest` on npm, which is
+why refusing well matters more than it looks.
+
+WHY THE NUL BYTES GO FIRST. Two literal NUL bytes at `scout.mjs:173,199` make the file
+binary to git and to grep: `grep -c DAMPING` exits 1 while the string is present four
+times, so `specs/current.toml`'s own removal check — `! grep -rq … 'design\\.md' core/ cli/`
+— cannot see anything in this one file. Until they are gone every later change in it lands
+unreviewable and unchecked, which is why it is the whole of phase 1 rather than a line in
+phase 4. The fix is the two-character escape `"\\0"` and not a space: the adversarial lens
+established that NUL is load-bearing as a key separator, because a repository whose path
+contains a space would otherwise corrupt every key.
+
+THE TEST-TIME DEPENDENCY, AND WHY IT IS NOT A RUNTIME ONE. `scout.mjs` has no test of any
+kind and cannot get one without a TypeScript parser, and there is no `typescript` in this
+repo or in the global npm root. So flw's own suite declares one — `package.json` with
+typescript as a devDependency, `node_modules/` ignored — and the TypeScript tests skip by
+name when it does not resolve. flw still ships nothing at runtime and installs nothing to
+run; a contributor who never types `npm install` sees skips in `pytest -q` output rather
+than failures, and the skip reason names the command that turns them on.
+
+WHY THIS IS MINOR AND NOT MAJOR. It replaces a `provides` sentence, which 4.0 counted
+toward a MAJOR bump. There the replacement followed a file changing shape and sat beside a
+deleted open question; here the sentence is replaced because it was false — the contract
+claims "in about a second" and the shipped scout takes 349.67s at twenty thousand files.
+Nothing a user can do disappears and nothing is removed, so this is corrective.
+
+WHAT IS DELIBERATELY LEFT. The scout MINORs the review raised and this version does not
+touch: a non-numeric `--budget` yielding an empty ranking, three unreachable defensive
+branches in `scout.py`, a captured-and-unread line number in both scouts, `SKIP` in
+`scout.mjs` subsumed by the dotfile test beside it, and `scout.mjs:68-72` reporting every
+`require` failure as "no typescript" — that last one narrows on its own once the version
+check lands, because the two failures stop being reported alike. They are not in 4.4
+either. A MINOR nobody has hit is a candidate, not a debt.
+"""
+
+contract_edit = """
+The "validation and checks" component's `provides` sentence about orientation changes
+  "A user can get a ranked orientation to a repository nobody has read — its packages,
+   what depends on what, and the definitions the rest of the code leans on — in about a
+   second, with no index to build and nothing to install."
+to
+  "A user can get a ranked orientation to a repository nobody has read — its packages,
+   what depends on what, and the definitions the rest of the code leans on — in a few
+   seconds at twenty thousand files, with no index to build and nothing to install."
+
+The same component's `paths` gains "tests/", after the two scouts.
+
+The same component's `implementation` changes
+  "Stdlib only. Checks run through bash explicitly, because /bin/sh is dash on some
+   systems and a venv activation is the common case. No runner allow-list: restricting the
+   runner cannot restrict what the runner does."
+to
+  "Stdlib only at runtime, and nothing is installed to run a check. flw's own suite
+   declares one test-time dependency it does not ship — the TypeScript compiler, in
+   package.json — because the TypeScript scout cannot be exercised without a parser; those
+   tests skip by name when it does not resolve. That scout needs the 5.x or 6.x compiler
+   API: typescript 7 replaced it with an entry point its own package marks unstable, and
+   is refused by version rather than failed against. Checks run through bash explicitly,
+   because /bin/sh is dash on some systems and a venv activation is the common case. No
+   runner allow-list: restricting the runner cannot restrict what the runner does."
+
+The "the project surface" component's `paths` gains "package.json" and ".gitignore",
+after "LICENSE".
+"""
+
+[[decisions]]
+topic     = "how the two scouts stop disagreeing about what an import edge points at"
+options   = [
+  "scout.mjs adopts the Python name-to-definer resolution",
+  "the contract states two algorithms, one implementation sentence per scout",
+  "scout.mjs follows export-from re-exports and keeps its specifier graph",
+]
+chosen    = "scout.mjs adopts the Python name-to-definer resolution"
+rationale = "One component, one graph, one implementation sentence — and the sentence is the field whose stated job is reconstruction, so two of them is two components pretending to be one. The convergence is also the smallest: a pure re-export barrel records no definitions today, because export declarations are not collected, so resolving through definers moves the score to the definition with no re-export machinery at all. Stating two algorithms ships the barrel failure as documented behaviour; following re-exports is the largest change of the three and leaves the two graphs different in kind."
+
+[[decisions]]
+topic     = "what scout.mjs does about typescript 7"
+options   = ["a second code path against the unstable API", "detect the major version and refuse by name", "pin the devDependency and say nothing at runtime"]
+chosen    = "detect the major version and refuse by name"
+rationale = "7.0.2's main entry exports only version and versionMajorMinor; the compiler API moved under ./unstable/* with a different shape, so there is no small change that serves both and no floor under the one that is marked unstable. Pinning flw's own devDependency fixes flw's tests and not the user, whose repo carries whatever it carries — and 7.0.2 is npm's current latest, so an unrecognised crash is now the default experience rather than the edge case."
+
+[[decisions]]
+topic     = "how the TypeScript scout's first tests get a parser"
+options   = ["a devDependency plus skip-when-absent", "no tests; the contract records it as unverified", "typescript installed unconditionally as part of setup"]
+chosen    = "a devDependency plus skip-when-absent"
+rationale = "The five fixes this version makes to scout.mjs are exactly the class that shipped unverified last time. Skips are visible in pytest -q and name the command that turns them on, so the honest state is reported rather than hidden; an unconditional install charges every contributor and every check run about 60 MB for two scripts."
+
+[[decisions]]
+topic     = "whether the statement-only walk belongs here or in 4.4 with the test rewrite"
+options   = ["here, with the other two quadratics", "4.4, since the review did not raise it"]
+chosen    = "here, with the other two quadratics"
+rationale = "It is 39% of the remaining time on the only real tree measured and it is what the restated contract sentence rests on. Splitting a performance change away from the sentence it makes true would put a number in the contract that the shipped code misses for one version."
+
+[[dag]]
+group  = 1
+phase  = "scout.mjs becomes a text file"
+tasks  = [
+  { id = "nul-escape", desc = "core/scripts/scout.mjs lines 173 and 199 hold literal NUL bytes as the perDef key separator. Replace each with the two-character escape \\0 in the source, so the runtime separator is unchanged and the file stops being binary. Not a space and not any printable character: a repository path containing one would corrupt every key. Verify with `file core/scripts/scout.mjs` reporting text and `grep -c DAMPING core/scripts/scout.mjs` returning 4." },
+  { id = "nul-test", desc = "tests/test_scout.py gains a test that core/scripts/scout.mjs contains no NUL byte, reading it as bytes. It exists because the contract's own removal check is a grep and greps are blind to a binary file — pin the property rather than the incident.", depends_on = ["nul-escape"] },
+]
+
+[[dag]]
+group  = 2
+phase  = "the scout stops being quadratic"
+tasks  = [
+  { id = "pagerank-dangling", desc = "core/scripts/scout.py pagerank: every dangling file currently loops over every node on every iteration. Accumulate dangling rank into one scalar per iteration and spread it once. Hoist the per-source edge-weight total out of the iteration loop while there — it is recomputed 30 times and never changes. The same two changes apply to the loop in core/scripts/scout.mjs, which is a line-for-line port of it." },
+  { id = "packages-total", desc = "core/scripts/scout.py, the PACKAGES section: `packages[key] += sum(v for (p, _), v in per_def.items() if p == path)` walks every entry of per_def once per file. Build one per-file total before the loop and index it. Leave the `if len(packages) > 1` guard where it is; what was wrong was paying the cost above it, not the guard." },
+  { id = "statement-walk", desc = "core/scripts/scout.py parse: replace `for node in ast.walk(tree)` with a walk over statement children only — push tree.body, then per node extend from body, orelse, finalbody, handlers, and each match case's body. Imports and definitions are statements and can appear nowhere else, so nothing is lost; what is skipped is every expression node, which is where 32 million isinstance calls go. Measured on the CPython 3.12 stdlib: 5.48s to 3.34s, output identical." },
+  { id = "perf-test", desc = "tests/test_scout.py gains a test that pins the dangling-mass fix by result rather than by timing: a tree where most files import nothing local, asserting the ranking is unchanged from the even-spread formulation. No wall-clock assertion anywhere — a timing test on shared CI is a flake, and the contract's sentence is a claim about this machine's measurements, recorded in this file.", depends_on = ["pagerank-dangling", "packages-total", "statement-walk"] },
+]
+
+[[dag]]
+group  = 3
+phase  = "the test filter stops depending on where the repo is checked out"
+tasks  = [
+  { id = "relative-test-filter", desc = "core/scripts/scout.py:73 is_test and core/scripts/scout.mjs:47 isTest both run on the absolute path, so a repository checked out anywhere under a directory named test/ or tests/ classifies every file as a test, ranks nothing and exits 0. Pass the path relative to root into both predicates at every call site." },
+  { id = "relative-test-filter-test", desc = "tests/test_scout.py: a repository rooted at a directory named `tests` still ranks its code. pytest's tmp_path components are named test_something0, which is why the existing suite cannot catch this — the fixture has to create the directory itself.", depends_on = ["relative-test-filter"] },
+]
+
+[[dag]]
+group  = 4
+phase  = "the TypeScript scout gets the Python graph, and its first tests"
+tasks  = [
+  { id = "ts-devdep", desc = "package.json at the repo root declaring typescript as the one devDependency. JSON carries no comments, so the reason it exists is stated in the contract's implementation sentence rather than in the file. .gitignore gains node_modules/. Nothing else in the repo reads package.json; it exists so `npm install` makes the TypeScript tests runnable." },
+  { id = "mjs-definer-graph", desc = "core/scripts/scout.mjs, the edge loop: resolve each imported name through `definers` and add an edge to every file defining it, exactly as core/scripts/scout.py does — not through resolve(src, spec, known). Delete resolve() and its `known` set once nothing calls them. A name importing nothing local adds no edge, which is also how the Python scout behaves. Update the file's own header comment: `Same algorithm as the Python one` becomes true here and should say what the edge is.", depends_on = ["ts-devdep"] },
+  { id = "mjs-external-alias", desc = "core/scripts/scout.mjs classifies any non-relative specifier as an external package, so a tsconfig paths alias is reported as a third-party dependency of the project. With edges no longer resolved through specifiers, this is all that is left of that finding. Exclude a bare specifier whose first segment matches a top-level directory of the repo, and exclude node builtins (node: prefix and the node:module builtin list) and test-only imports from files isTest already identifies — core/scripts/scout.py:148-150 does the last of those with a stated measurement.", depends_on = ["mjs-definer-graph"] },
+  { id = "mjs-directories", desc = "core/scripts/scout.mjs DIRECTORIES slices two path segments, so src/user1.ts is reported as its own directory holding one file. Answer it the way core/scripts/scout.py:277 does: the first segment, or `.` for a file at the root.", depends_on = ["ts-devdep"] },
+  { id = "mjs-ts7", desc = "core/scripts/scout.mjs: after require(\"typescript\") succeeds, refuse a major version of 7 or above by name — say the version found, say it needs the 5.x or 6.x compiler API, and exit 2. ts.version is present on 7.0.2 even though nothing else the scout uses is. Separately, the catch around require currently reports every failure as `no typescript`; now that a second failure exists, say which one happened.", depends_on = ["ts-devdep"] },
+  { id = "mjs-walk-survives", desc = "core/scripts/scout.mjs:35 aborts the whole scan on one unreadable directory with a Node stack trace and exit 1 — the failure mode core/scripts/scout.py:84-86 documents as learned the hard way. Wrap the readdirSync and skip. Through the wrapper the same case currently exits 0 with empty stdout, because cli/flw.py only inspects returncode 2; make the wrapper report a non-zero exit it does not recognise rather than swallowing it.", depends_on = ["ts-devdep"] },
+  { id = "mjs-tests", desc = "tests/test_scout_mjs.py, the first test of this file in its life. A module-level skipif when `node -e \"require.resolve('typescript')\"` fails from a fixture repo, with a reason naming npm install. Each test builds a small TypeScript repo under tmp_path with node_modules/typescript symlinked from this repo's own, runs the scout as a subprocess, and asserts on stdout. Cases, one per fix: a five-importer re-export barrel ranks the defining file and not the barrel; a two-level tree reports one top-level directory rather than one per file; an unreadable directory does not abort the scan; a tsconfig-aliased import is not listed as an external dependency. Assert the specific behaviour each task changed — a general property of the ranking is 4.4's, written against the properties field that does not exist yet.", depends_on = ["mjs-definer-graph", "mjs-external-alias", "mjs-directories", "mjs-ts7", "mjs-walk-survives"] },
+]
+
+[[dag]]
+group  = 5
+phase  = "the Python scout stops dropping files silently"
+tasks  = [
+  { id = "py-bom", desc = "core/scripts/scout.py:140 reads with encoding=\"utf-8\", so a file with a UTF-8 BOM raises and is dropped from the graph entirely, though CPython imports it fine. Read with utf-8-sig." },
+  { id = "py-recursion", desc = "core/scripts/scout.py:140-142 catches SyntaxError, ValueError and OSError. RecursionError and MemoryError are not among them, so one generated file ends the whole run in a traceback. Add both." },
+  { id = "py-unparsed-count", desc = "core/scripts/scout.py: a file that fails to parse is dropped from the analysis and from the header count with no mention, so a tree where everything fails reports `no python found` — the live case being an interpreter older than the target repo. Count them and say so in the header when the count is not zero.", depends_on = ["py-recursion"] },
+  { id = "py-entry-cues", desc = "core/scripts/scout.py:183-185 checks the entry-point cues argparse, click and typer against `seen`, which for `from click import command` holds `command` rather than `click`, so a from-import of any of the three never marks an entry point. Check the imported module root as well as the names. While there, `if \"__main__\" in text` at :181 matches inside comments and docstrings — decide it against the parsed tree rather than the raw text." },
+  { id = "py-tests", desc = "tests/test_scout.py gains one test per fix in this phase: a BOM file is ranked, a file that fails to parse is counted in the header, and `from click import command` marks an entry point. Each is a case the current suite has no fixture for.", depends_on = ["py-bom", "py-recursion", "py-unparsed-count", "py-entry-cues"] },
+]

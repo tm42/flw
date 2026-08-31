@@ -1,0 +1,151 @@
+name    = "stale-claims"
+base    = "test-reporting"
+summary = "delete or correct every statement the repository no longer backs, and say that its version convention is a default a project may replace"
+
+approach = """
+ONE SUBJECT, FOUND BY A REVIEW RATHER THAN CHOSEN. Two cold footprint reviewers were asked
+whether flw had grown larger than the problem it solves. Both said no with numbers — 85 of
+3,578 Python lines earn nothing, 2.4%, and six of nine prose files carry nothing cuttable.
+What they found instead was one recurring defect at four sizes: the repository states things
+it no longer backs. flw-spec names a field the schema rejects. flw-execute's exit table names
+a case that cannot happen. pyproject excludes a directory deleted in v2.0. The validator
+implements seven keywords no schema uses. Four skills state their negative space three times
+each. Every task below deletes or corrects one such statement, which is why they are one
+record rather than four.
+
+THE ONE THAT IS NOT COSMETIC. `version-bump-major` deleted the `kind` field and moved the
+major/minor classification into the filename. It updated `version.schema.json` and left
+`core/skills/flw-spec/SKILL.md` behind, and its own dag has no task for that skill — an
+omission, not a decision. So the only skill that authors version records instructs the author
+to write `kind = "additive"` into a document whose schema sets `additionalProperties: false`,
+and to name the file `<name>.toml` without the suffix the release number is folded from.
+Reproduced on a record written exactly as instructed:
+
+  $ validate_spec.py add-build-posture.toml version.schema.json
+    $: unexpected property 'kind'
+  exit=1
+
+`grep -n -- "-minor\\|-major\\|suffix" core/skills/flw-spec/SKILL.md` returns nothing, so an
+agent that deletes `kind` to clear the error has nothing telling it where the classification
+went, and `expected_release()` then moves the release number by whatever filename it guessed.
+This blocks the repair path for everything else here, because every other fix ships through a
+version record and flw-spec is what writes those. It is phase 1 for that reason.
+
+WHY THIS IS MINOR. Nothing the contract claims is deleted or replaced. The two provides this
+touches — "a version record is addressed by a name it keeps ... and the release number moves
+by itself" under the skills, and the refused-filename entry under validation and checks — are
+both already correct and both currently undelivered; making them true is corrective. The
+validator keyword cut is invisible to the contract, which never named a keyword set. Judged by
+what this change does rather than by what the contract carries, per the rule in flw-spec's own
+step 5.
+
+WHAT THE REVIEW REFUSED TO CUT, SO NOBODY REOPENS IT. The four `Start here, silently` headers,
+72 lines and the largest duplication in the prose: they warn that the path must be absolute
+because the file-reading tool collapses `..` lexically, and they carry the ladder for finding
+$FLW — both of which run before context.md is locatable, so no shared file can hold them. The
+four embedded war stories, each checked against the repo and each 2-5 lines that lead with the
+rule. The duplicated link-fault ladder in doctor and sync, pinned on both sides by tests. The
+v3 schema, which is a migration path rather than a leftover. scout.py's iterative Tarjan.
+ambient.md. None of these is in scope below and none should be.
+
+THE ONE ADDITION BEYOND THE FINDINGS, MARKED SO IT CAN BE CUT. Task `format-guard` in phase 1
+is not a review finding. It pins the exact failure that produced this record — a document
+format changed in the schema and not in the skill that writes to it — so the next format
+change fails a test instead of shipping. Delete the task if you would rather take the fix
+without the guard; nothing else depends on it.
+
+WHAT WAS CONSIDERED AND DROPPED, SO IT IS NOT REDISCOVERED. A release-line digit the user
+owns, so the number would read 0.7.1 rather than 7.1, and a git tag proposed by flw-execute at
+the end of a run to join the contract's number to the tool's. Both were dropped: the tag
+because the projects this is for do not use tags, and the digit because it bakes one project's
+convention into the tool. What the digit was reaching for is that a spec version should mean
+something, and meaning differs per repository — a feature inside a service may version that
+feature alone, with 1.0 meaning it reached production. That is prose an agent applies, so it
+belongs in a project's own extension rather than in a field.
+
+WHAT IS DEFERRED AND WHY. validate_spec.py:536 makes the fold mandatory: a contract whose
+spec_version disagrees with what its records add up to is an error, so a project that wants to
+set the number by hand, or carry none, cannot. That is the one part of this that is genuinely
+not per-repo and the one part needing code. It is left out because the repositories that need
+it are not on this machine, and an opt-out with no real case to test against is a guess about
+what the switch should do.
+
+WHAT IS NOT HERE. The style subsystem, 775 of cli/flw.py's 2,117 lines, 37% of the CLI. The
+code reviewer traced every part of it to one of six separate `provides` and declined to file
+it: the machinery matches the feature as specified. Whether the feature should be that large
+is a contract question and belongs to its own interview, not to a cleanup record.
+"""
+
+[[dag]]
+group = 1
+phase = "flw-spec writes the format the validator accepts"
+tasks = [
+  { id = "record-format", desc = "core/skills/flw-spec/SKILL.md step 5: replace `specs/versions/<name>.toml` at :128 with `specs/versions/<name>-minor.toml` or `<name>-major.toml`. Replace the `kind` clause at :131 with the classification written as a suffix, carrying the rule settled in this record's decision: `-major` when what a user can do changes — a capability arrives, or a behaviour they relied on now works differently — and `-minor` when the same capabilities work better, which covers corrections, refinements and internal deletion. Keep the existing judge-the-change-not-the-contract sentence at :139 rather than deleting it, and fold it into the :131 clause so the rule reads once. The decision block says why this replaces the shape-based wording and must not be presented as a restatement of it. The `name` field stays the bare name without the suffix; version-bump-major records why." },
+  { id = "format-guard", desc = "tests/test_validate_spec.py: a test that fails when flw-spec's instructions and version.schema.json disagree about the record's fields. Read the top-level property names out of core/schemas/version.schema.json, and assert that core/skills/flw-spec/SKILL.md's step 5 names no field the schema rejects. NOT A REVIEW FINDING — this is the guard for the class of defect this record exists to fix, and the approach says how to drop it.", depends_on = ["record-format"] },
+  { id = "convention-is-local", desc = "core/skills/flw-spec/SKILL.md, immediately after the classification rule in step 5: say that the rule is flw's default rather than law, and that a project may replace it in `.flw/extensions/flw-spec.md` — the file step 2 already reads. Name the two things a project usually redefines: what major and minor mean for it, and where 1.0 sits, which in a service is often whatever reached production. Say also that a project scopes its versions by where `specs/` lives, because `nearest_project()` resolves the nearest one, so a feature inside a larger service gets its own contract and its own numbering by holding its own `specs/` directory. Prose only; nothing in the fold changes and validate keeps enforcing it.", depends_on = ["record-format"] },
+]
+
+[[dag]]
+group = 2
+phase = "the exit-2 rule has one home"
+tasks = [
+  { id = "exit-two", desc = "The `flw test` exit-2 rule is in three files saying three different things: specs/current.toml:94 gives three cases and is correct, core/shared/context.md:42 gives one, core/skills/flw-execute/SKILL.md:173 gives four. flw-execute's fourth case does not exist — a `check:` line that cannot be read exits 1, verified by running it, and the design.md `check:` syntax it may refer to was deleted (final_state.removed carries the removal). Delete context.md:42 and flw-execute:173-175. Keep flw-execute's three-row exit table and follow it with one line pointing at the contract for the exit-2 cases. Keep flw-execute:176-179, which says something the contract does not." },
+]
+
+[[dag]]
+group = 3
+phase = "the validator stops implementing what nothing uses"
+tasks = [
+  { id = "unused-keywords", desc = "core/scripts/validate_spec.py: delete the seven JSON Schema keyword branches that no schema in core/schemas/ uses — oneOf, maxLength, maximum, exclusiveMinimum, exclusiveMaximum, maxItems, minProperties — at :174, :194, :201, :205, :220, :241 and :251, and their seven entries in ALLOWED_KEYWORDS. 70 lines, 10% of the file. Safe by the module's own design: ALLOWED_KEYWORDS exists so a schema naming an unimplemented keyword raises ValidationError at :150-154 rather than passing silently, so a later author reaching for maxLength gets a named error, which is the outcome the keyword's absence should produce. The other thirteen keywords are in use and stay." },
+  { id = "orphans", desc = "core/scripts/validate_spec.py: delete `_SCHEMAS` at :34 and `_parse_version` at :313, each with exactly one occurrence in the repository — its own definition. _parse_version had a caller that an earlier fix removed. Drop the unread `specs_dir` parameter from `expected_release` at :456, updating the call at :534 and the two calls in tests/test_validate_spec.py:448 and :452." },
+  { id = "unreachable", desc = "Two guards whose false branch cannot be reached. core/scripts/scout.py:512 — `if ranked_pkgs else 0` sits inside `if len(packages) > 1:` with ranked_pkgs sorted from packages on the line between, so it is always truthy. core/scripts/validate_spec.py:535 — `if isinstance(document, dict)` where document is initialised {} at :516 and only ever reassigned from tomllib.load; delete the redundant `document = {}` at :521 with it." },
+]
+
+[[dag]]
+group = 4
+phase = "the prose and config stop describing what is gone"
+tasks = [
+  { id = "uninstalled-escape", desc = "The uninstalled-checkout escape is in two of four skills in two wordings — flw-spec/SKILL.md:48-53 and flw-execute/SKILL.md:28-32 — while flw-review invokes `flw validate` at :47 and flw-research invokes `flw scout` at :52 and `flw doctor` at :210 with no instruction for a checkout where flw is not a command. Add one line to core/shared/context.md's Commands block, which every skill reads at step 1, and delete both existing copies. Nets 11 lines out and takes coverage from two skills to four." },
+  { id = "negative-space", desc = "Delete the four `What this skill does not do` sections — flw-execute:289-296, flw-review:329-335, flw-research:222-225, flw-spec:203-205 — a third statement of a negative space each skill already gives in its Lane and again in its Rules. Two sentences appear nowhere else and must survive somewhere in their skill: flw-execute's closing line about a change's own check, which resolves a real conflict with ambient.md:52, and flw-review's `It also blocks nothing`." },
+  { id = "duplicated-prose", desc = "Three remaining duplications. (a) The extension-cannot-waive-a-Rule sentence at each skill's step 2, a fifth copy of context.md:82, which every skill read one step earlier — cut each back to the extension's name and what it is. (b) flw-spec/SKILL.md: the properties/surfaces interview question is written at :82-85 and again at :105-109 and the copies have drifted by a clause; keep the amend copy, which is the complete one, and point the first-contract copy at it. (c) core/styles/terse_prose.md:135-136: delete the second sentence, which refers to `the old guide` that nothing in the file or in v4.6 identifies, breaking the file's own resolve-every-reference rule inside the file that states it." },
+  { id = "stale-config", desc = "pyproject.toml: delete `extend-exclude = [\"core/vendor\"]` and its two-line comment. core/vendor does not exist and the contract carries `test ! -e core/vendor` as the check that it stays gone; _toml_editor.py and _vendor_path exist nowhere but specs/versions/v2.0.toml, the record that removed them. The comment tells the next reader that deleting E402 would let two files merge back, an instruction that cannot be followed. Either drop E402 from extend-select or replace the comment with what is true — `ruff check --select E402 .` passes on the whole tree today." },
+  { id = "scout-docstring", desc = "cli/flw.py: the scout() docstring at :1809 restates the argparse description 250 lines below it, and the design claim behind both appears three times — scout.py:22-26, flw.py:1815-1817 and flw.py:2067-2069 — where only scout.py's copy names the study it rests on. Cut :1809 and :1814-1817 from the docstring, keeping the dispatch-on-tree paragraph at :1811-1813, which is the one fact the docstring holds that --help does not." },
+]
+
+[[decisions]]
+topic     = "what major and minor are judged by"
+options   = [
+  "By shape, as shipped: `-major` if the change deletes or replaces anything — in practice, a document format or a published surface.",
+  "By functionality: `-major` when what a user can do changes — a capability arrives, or a behaviour they relied on now works differently. `-minor` when the same capabilities work better.",
+  "Leave the wording as it is and copy it forward into the suffix form, letting the next author hit the same ambiguity.",
+]
+chosen    = "By functionality."
+rationale = """
+The shape rule has the polarity backwards, and flw's own history shows it rather than
+arguing it. Three records that each added a capability shipped as minor: v2.1 brought the
+entire flw-review skill into existence, v3.2 added installing a writing style into a host,
+v4.5 added the build posture — each has its own `provides` in the contract today, and each
+bumped the last digit. Against that, version-bump-major was classified major for deleting
+the `kind` field, which v5.0 had added one record earlier, in a format only flw reads, with
+legacy records explicitly exempted so nothing on disk could break.
+
+So the rule bumps hard on deletion, which a user cannot observe, and softly on addition,
+which is the only thing they can. A release number built that way says nothing about what
+changed for the person reading it, which is the one job it has.
+
+Judged by functionality the same history reads correctly: v2.0's amendment engine, v3.0's
+research skill and v5.0's parallel speccing are majors because a user could do something new
+afterwards; test-reporting is a major because a full run stopped meaning what it meant, and
+flw-execute branches on that exit code; version-bump is a minor because it finishes what v5.0
+left undone rather than adding anything; sync-guard is a minor because nothing outside the
+function changed at all.
+
+This record is a minor under either reading, and the functionality reading needs no argument
+for it: flw-spec starts writing records the validator accepts, duplicated prose and unused
+code go, and there is nothing a user can do afterwards that they could not do before.
+
+NOT APPLIED BACKWARDS. v2.1 stays 2.1 and the release number stays where the shipped
+classifications put it. A release number that moves after the fact is worse than one that was
+once cut in the wrong place, and the records that would be reclassified have already landed —
+the suffix is meant to change during a record's interview, not after it.
+"""

@@ -1,0 +1,100 @@
+base    = "sync-guard"
+name    = "test-reporting"
+summary = "show a failing check's whole output, list the failures at the end, and refuse to call a full run done when something could not be run"
+
+approach = """
+THE TRUNCATION NOBODY ASKED FOR. `report` prints a failing check's last six lines and
+discards the rest: `core/scripts/run_tests.py` had `r.output.strip().splitlines()[-6:]`. A
+pytest failure's useful part is the assertion and the traceback above it, which is routinely
+more than six lines and is the part cut. A user reading six lines of a failure they cannot
+reproduce goes and runs the command again by hand, which is the work the tool exists to save.
+
+FAILURES SCATTER UP THE SCROLLBACK. Each result prints as it finishes, so on a twenty-check
+run the failing ones are somewhere above and the summary says only how many. Listing them
+again at the end costs one line each and is what the reader came for.
+
+THE EXIT CODE THAT CALLED NOTHING A PASS. `flw test -A` is the contract's full definition of
+done. It returned 0 when every declared check had been handed back and nothing ran at all —
+in this worktree, which has no `.venv`, `13 passed · 2 for you` and exit 0 with neither
+declared test having run. The 13 are `final_state.removed` checks; the two that test anything
+did not execute.
+
+WHY -A AND NOT A MODE FLAG. The rule is that `-A` fails if any check was unrunnable, and it
+needs no detection of who is running it. A user running it in their own shell has the venv, so
+nothing is unrunnable and it passes; an agent running it in a session without one gets a
+non-zero code, which is correct, because the definition of done was not demonstrated. The
+distinction between a human and a machine collapses into the same rule.
+
+WHAT STAYS. Plain `flw test` — the branch set, the working command — keeps handing checks back
+and exiting 0 on what ran. Only a run where *everything* was handed back becomes 2, because
+that run proved nothing either. Declaring one check in `[tests] yours` must not turn every
+green run red, which is what a blanket rule would do.
+
+WHY EXIT 2 RATHER THAN 1. 2 already means "nothing was declared to run, which is not a pass".
+A run where everything was handed back is the same statement about the same run: nothing ran,
+so nothing was proved. 1 stays what it is — something ran and failed.
+
+WHAT WAS NOT EXAMINED. Whether the full output of a check that writes megabytes needs a cap
+of its own. Nothing in flw's own check set does, and a cap chosen without a case to measure
+against is the truncation this version is removing.
+"""
+
+contract_edit = """
+1. In the component named "the flw CLI", replace the `surfaces` entry beginning "Exit codes":
+
+   from  "Exit codes: 0 success, 1 something failed or was refused. `flw test` and
+          `flw validate` also use 2 for nothing declared to run, which is not a pass."
+
+   to    "Exit codes: 0 success, 1 something failed or was refused. `flw test` and
+          `flw validate` also use 2 for a run that proved nothing — nothing declared to run,
+          nothing left runnable here, or a full run with a check it could not run."
+
+2. In the component named "validation and checks", replace the `provides` entry beginning "A
+   check this session cannot run":
+
+   from  "A check this session cannot run is handed back as the user's to run,
+          distinguishable from one that failed."
+
+   to    "A check this session cannot run is handed back as the user's to run,
+          distinguishable from one that failed — and a full run that had to hand one back
+          does not report success, because the definition of done was not demonstrated."
+
+3. In the same component, append to `provides`:
+
+   "A failing check's whole output is shown, and every failure is named again at the end of
+   the run rather than only where it scrolled past."
+
+Nothing else changes.
+"""
+
+[[decisions]]
+topic     = "how a run that could not run everything is distinguished"
+options   = [
+  "a flag saying whether a human or a machine is running",
+  "`-A` fails on any unrunnable check, and plain `flw test` does not",
+]
+chosen    = "the -A rule"
+rationale = "It needs no detection and no new flag. A user running -A in their own shell has whatever the checks need, so nothing is unrunnable and the run passes; a session without those things gets a non-zero code, which is the honest answer. Detecting the caller would be a guess — an agent's subprocess and a user's pipeline look alike — and a wrong guess would either hide a real gap or fail a correct run."
+
+[[decisions]]
+topic     = "how much of a failing check's output to show"
+options   = ["a larger fixed number of lines", "all of it"]
+chosen    = "all of it"
+rationale = "Any number is the same bet the six was: that the useful part is at one end. It is not — an assertion is at the top of a pytest failure and the summary is at the bottom. No check flw ships produces enough output for a cap to matter, and choosing one without a case to measure against would be the same mistake with a bigger number."
+
+[[dag]]
+group = 1
+phase = "report"
+tasks = [
+  { id = "full-output", desc = "core/scripts/run_tests.py: print a failing check's whole captured output rather than its last six lines." },
+  { id = "enumerate", desc = "After the summary line, list every failed check by its command, so the failures are together at the end as well as inline where they happened. Nothing when none failed.", depends_on = ["full-output"] },
+]
+
+[[dag]]
+group = 2
+phase = "exit"
+tasks = [
+  { id = "codes", desc = "cli/flw.py's test command: return 2 when every runnable check came back unavailable, and — under -A only — when any did. Keep 1 for a check that ran and failed, and keep 0 for a plain run whose runnable checks passed.", depends_on = ["enumerate"] },
+  { id = "skill-table", desc = "flw-execute §4: update the exit table and say that -A is the full definition of done, so a check it could not run makes the run non-zero.", depends_on = ["codes"] },
+  { id = "tests", desc = "Tests for: full output shown, failures enumerated, -A non-zero with one unavailable check, plain run zero with one unavailable check, plain run 2 with all unavailable. Each checked against the mutation it exists to catch.", depends_on = ["codes"] },
+]

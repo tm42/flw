@@ -1,0 +1,239 @@
+---
+name: flw-research
+description: Bring flw to a repo you did not set up. Read how the place actually works — how it is tested, what it is built on, where the work lives, what its conventions are — and write that into the repo's own flw configuration. Use when starting flw on an existing codebase, or when a repo has changed enough that what was recorded is stale.
+argument-hint: "[path]"
+---
+
+# flw-research — learn a repo, write it down
+
+## Start here, silently
+
+Three reads, no narration — do not announce them, do not report them, just do them and
+begin. The user asked for the work, not for a description of you preparing to do it.
+
+1. **`$FLW`** is the path in `${FLW_HOME:-$HOME/.flw}/root`. Read
+   **`$FLW/core/shared/context.md`**; everything below assumes it.
+2. **`<project root>/.flw/extensions/flw-research.md`**, if it exists — this repo's local
+   amendments to how you work, and part of your instructions from here on.
+3. **`flw kb -c <the project's category>`** — the note store, this project's category
+   only. Not the whole store: that prints every category on the machine, spent mostly on
+   other repositories.
+
+**It must be an absolute path.** A skill folder is installed as a symlink, and while the
+filesystem resolves `../../shared/` through it correctly, the file-reading tool collapses
+`..` lexically first and lands somewhere that does not exist. Measured, not assumed.
+
+**If that pointer is missing:** `$FLW_ROOT` if it is set; failing that, you may be inside
+flw's own checkout, so walk up from the project root for a directory holding both
+`core/skills/` and `cli/flw.py`. Nothing → stop and say to run `flw install`.
+
+## Lane
+
+This skill writes **what is true about this repo**, into this repo's flw configuration.
+
+It does not decide what to build. It never touches `specs/` — not the contract, not a
+version file. If what you learn suggests the contract is wrong, say so and hand it to
+`flw-spec`.
+
+**Two files, and the rule that decides between them:**
+
+> **Code reads it → config. An agent reads it → prose.**
+
+| | |
+|---|---|
+| `.flw/config.toml` | `[tests]` — the check commands, the setup line, what cannot run here. `run_tests.py` reads these as data and runs them verbatim |
+| `.flw/extensions/<skill name>.md` | how the place works, in prose, for the skill that needs it |
+
+A command written as prose gets reconstructed on every run, and it drifts — `make style`
+becomes `ruff check .` because that is what the agent already knows. A command in config
+is run, not remembered.
+
+## 1. Orient
+
+```
+flw scout
+```
+
+Around a second, nothing written, nothing cached. `flw scout --help` says what the
+ranking means, what a high rank does not mean, which languages are covered, and what each
+section answers — read it there rather than reconstructing it here.
+
+**Read the output before reading any file.** It exists so that the files you then open are
+the ones that matter.
+
+For a repo in a language it does not cover, `aider --show-repo-map` prints a map and exits
+without an API key — say that rather than reading a hundred files, and record which you
+used.
+
+**Do not paste the scout output into an extension.** It regenerates in a second, and the
+one published A/B test of static repo overviews found they did not help. Record the
+command; the orientation is not an artifact.
+
+**More than one root inverts this order.** For a system spanning several repos, read the
+deployment topology first and scout each root after: what talks to what has to be settled
+before what is central *here* is even a well-posed question, and a per-repo ranking read
+first lets every seam between them stay vague.
+
+## 2. Probe
+
+Find out how the place actually runs. Read first — `Makefile`, `justfile`, CI workflow,
+`pyproject.toml`, `package.json` scripts, `tox.ini`, `CONTRIBUTING.md`. Those state
+intent. Then **run the cheap ones** to find out what is true here.
+
+Add `docker-compose.yml`, k8s manifests and `.env.example` to that first read, and put
+them ahead of the rest when the system spans more than one repo. A compose file names
+every service, its ports, and which environment variable in one holds the URL of another —
+the system diagram, machine-readable, kept current by the fact that people run it. Read
+each `README` and then discount it: it is the file that goes stale first and the one most
+likely to be believed.
+
+- **How is it tested?** The real invocation, including whatever must precede it. `pytest`
+  is a guess; `poetry run pytest -n 4` is an answer, and so is `cargo test --workspace`.
+- **How many tests, and how long?** This decides whether a targeted set is worth having.
+  Most runners will enumerate without running — `pytest --collect-only -q | tail -1`,
+  `cargo test -- --list`, `go test -list . ./...` — and that costs nothing.
+- **What is the setup line?** Activation, environment, whatever must come first.
+- **What is it built on?** The scout's external-dependency list for TypeScript; the
+  manifest for everything else — `pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`.
+  What a repo imports says what it is, and the scout only reads two languages: when it
+  says what it did not read, the manifest is where the rest of the answer is.
+- **What the ranking structurally cannot see.** A service that calls another over HTTP has
+  no import edge, so the boundary between two services is invisible to the scout and it
+  will report them as unrelated. Grep for it directly: route decorators and the paths they
+  register, request and response models, generated OpenAPI or protobuf files, and client
+  wrappers built around another service's base URL — `@app.route`, `@router.get`,
+  `express.Router()`, an `httpx.AsyncClient` or `axios.create` holding a base URL. Naming
+  frameworks here is fine, because this is prose you apply with judgment, which is exactly
+  why it is not in the scout.
+- **What runs here and what does not?** The question that matters most in a restricted
+  session. Try each check once. Anything that cannot run is not a failure and not a
+  mystery — it is `[tests] yours`.
+- **Recent history.** `git log --oneline -30` and the most-changed files. Read it for what
+  is durable — a migration in progress, a convention in commit messages — and do not
+  record the log itself. Last week's commits are stale next week and nothing says so.
+  **Churn is not a ranking substitute and is often inverted**: a stable core everything
+  imports has low churn *because* it is stable, so most-changed puts this month's work on
+  top and buries what the repo rests on. Across several repos it answers a different
+  question and answers it well — days where two repos both have commits are almost always
+  a seam change, and the pair of diffs shows both sides of a contract no file states:
+  `for r in */; do git -C "$r" log --since=6.months --date=short --format="%ad ${r%/} %s"; done | sort`
+- **Conventions.** How errors are handled, where new code goes, how modules are named,
+  what the tests look like. Take these from reading the top-ranked files, not from a
+  style guide nobody follows.
+
+**Across repos, grep for the duplicated literal.** Two repos are one system only where
+they both hardcode the same string — an endpoint path, a table name, an environment
+variable, a topic, an image tag, a status enum — and nothing in either type system checks
+that the two still agree. That makes the map mechanically findable rather than a matter of
+reading well:
+
+```sh
+# every quoted literal of some length, per root, and which appear in more than one
+grep -rhoE '"[^"]{6,60}"' repo-a repo-b --include=*.py --include=*.ts --include=*.go \
+  | sort -u > /tmp/a-b.txt
+```
+
+Order what comes back by rarity and stop reading when it stops paying: a long odd string
+in exactly two repos is the strongest signal, and `id`, `error` and every HTTP verb sink to
+the bottom on their own. This is the same discovery as the framework greps above from the
+other side — theirs is cleaner where the framework is known, this one covers table names,
+queue topics and image tags in languages nobody wrote a pattern for. Beyond HTTP and SQL,
+the literals that break silently are JWT claim names and scope strings, metric and log
+field names consumed by a dashboard in a repo nobody scouted, bucket names and key
+prefixes, feature-flag keys, and status values crossing the wire as strings.
+
+**Then trace one transaction end to end**, every repo, one hop at a time: a user changes a
+setting, a request goes out, something is written, another service reads it, a result comes
+back. This is the step that produces understanding, and a summary per repo does not
+substitute for it — each side gets described in its own vocabulary and the mismatch never
+surfaces. A trace forces every hop to resolve to a named function receiving a named
+payload, and it fails loudly at exactly the hop that was got wrong, which is the hop worth
+knowing about. **Record where you lost it.** That is the finding, not a failure of the
+method.
+
+Where it can be run, run it: `docker compose up`, one `curl`, and read what the other
+services log. Ten seconds of real requests settles the payload shape, the auth header and
+which of two code paths is live — all things reading only guesses at.
+
+**Say what you could not determine.** A probe that did not run is a gap, not a default.
+Guessing here is worse than leaving it out, because a wrong recorded command is followed
+confidently by every later run.
+
+Two traps specific to the sweep. A caller does not prove a callee exists — dead client code
+calling a renamed route greps identically to a live edge, and only running it separates
+them. And a matched name is not a matched meaning: `user_id` on both sides can be two ID
+spaces with a translation between them.
+
+**Search the store before you write anything.** The survey has just told you what this
+repository is built on and how it is tested; those are the terms. A note about this
+toolchain written in another repository is the case the store exists for.
+
+## 3. Verify one graph edge
+
+If you are going to record a way of finding references — an LSP, `gtags`, anything — **test
+it once against ground truth before recording it.**
+
+Pick a function you can see is called from several places. Ask the tool. Count the real
+call sites with `grep`. Record whether they agreed.
+
+This is not ceremony. Measured on a real repo, an LSP returned **1 of 8** real callers for
+a symbol reached through a dynamic import — and a reference tool that silently returns
+nothing looks exactly like a symbol nobody calls. That is how working code gets deleted.
+
+Record the disagreement if you find one. A tool with a known blind spot is usable; a tool
+with an unknown one is not.
+
+## 4. Write it
+
+**Config first.** `.flw/config.toml`, `[tests]`: `setup`, `checks` for the working set,
+`yours` for what this session cannot run. Only commands, only what you verified.
+
+**Then the extensions**, one file per skill that needs one, each holding only what that
+skill needs. Do not restate across them.
+
+| File | What belongs in it |
+|---|---|
+| `flw-execute.md` | how tests and checks are actually invoked; what is normally handed back; what a commit looks like here |
+| `flw-spec.md` | what the project is for, where the work lives, what the core modules are, where a new thing goes |
+| `flw-review.md` | the conventions and standards a reviewer should judge against |
+
+**Show the user everything before writing.** These files become instructions to every later
+run, so a wrong line is a wrong instruction repeated silently. One block, their edits,
+their yes.
+
+**Where something should bind rather than merely describe** — a rule the project should
+hold to, not just a habit it has — say so and hand it over. That belongs in the contract,
+as an assumption or a component's `implementation` note, and it is `flw-spec`'s to write.
+Research records what **is**. What **must be** is the user's.
+
+**Then offer a note.** One sentence decides whether there is one: *write it only if it
+was measured, and the next agent, in a repository that does not hold this one's history,
+could not get it faster than measuring it again.* That scope clause is what makes the
+answer ever yes here — most of what this skill learns is a fact about this repository,
+and a fact about this repository goes in the extension, not the store. What passes is
+craft: step 3's graph edge, a toolchain's measured blind spot, a proxy's real rules.
+
+If it is yes, read `flw kb write --help` first, then say what you would write. It is an
+offer the run declines by doing nothing.
+
+## 5. Report
+
+```
+flw-research — <repo>
+  Scouted:     <n> files · <what it is, in one line>
+  Wrote:       <files>
+  Tests:       <n> checks · <n> handed back as yours
+  Undetermined: <what you could not settle, or nothing>
+```
+
+Then run `flw doctor`, which will tell you whether the extensions you just wrote are
+actually read by an installed skill. A file named for a skill that does not exist is read
+by nobody and looks fine forever.
+
+## Rules
+
+1. **Never write `specs/`.** Not the contract, not a version file. That is `flw-spec`.
+2. **Record what you verified.** An unrun probe is a gap you name, not a default you guess.
+3. **Commands go in config, prose in extensions.** Nothing that runs lives in a sentence.
+4. **Show before writing.** These are instructions to every later run.
+5. **The orientation is not an artifact.** Record the command, never its output.

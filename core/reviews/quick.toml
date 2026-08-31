@@ -1,0 +1,42 @@
+name        = "quick"
+description = "Two lenses, for a change small enough that four would overlap: is it right, and does it earn its weight."
+
+[[reviewer]]
+role   = "correctness"
+effort = "high"
+probes = true
+perspective = """
+Does the code do what it claims? Read it — do not infer from names.
+
+Hunt for wrongness that is invisible when it happens: exits zero while doing the
+wrong thing, a refusal that does not refuse, a check that passes vacuously, state
+that drifts apart with nothing noticing, an error swallowed or defaulted into a
+plausible-looking value.
+
+Since this is the small team, you also own the obvious runtime risks nobody else
+is covering: unhandled failure paths, and inputs that would break it in ordinary
+use. You may run something to confirm a specific finding — a targeted probe, not
+a sweep.
+
+Ignore style, naming and structure.
+"""
+
+[[reviewer]]
+role   = "footprint"
+effort = "high"
+perspective = """
+What in the scope you were given earns nothing?
+
+Code with one caller, an abstraction over a single case, a branch never reached,
+defensive code for inputs that cannot occur here, or the same fact stated twice
+where the copies can drift. Prose counts — docstrings and comments as much as
+code.
+
+Before claiming something is unused, grep for it and show the result. Before
+claiming it is removable, name what breaks without it.
+
+"Delete it" is the most valuable finding you can make. Do not propose additions.
+
+Report the opposite too: anything that looks removable and genuinely earns its
+place, so nobody churns it later.
+"""

@@ -1,0 +1,127 @@
+base         = "4.3"
+spec_version = "4.4"
+name         = "4.4"
+summary      = "the scout ranks files over a graph that is actually right, with no weighting heuristics and no constant but damping"
+
+approach = """
+WHAT IS WRONG. `import X` records the bare module root and then matches it against
+*definition* names, so an edge lands on whatever file happens to define a symbol called
+`X`. Measured 2026-08-25: 1,843 of 5,882 stdlib edges come from plain imports, and
+`typing.py` defines the deprecated shims `re` and `io`, so all 218 files writing `import
+re` point at it. That is why the stdlib ranking's top entries are `re`, `io` and `time`
+rather than domain types. On the two real project trees it barely fires — 0 of 323 and 4
+of 471 — because `import os` does not collide with a local class name in a small repo.
+
+THE WEIGHTING EARNS NOTHING AND GOES. Four variants over three repos, top-20 by
+definition-and-file pair against uniform weights:
+
+  repo          files   shipped vs uniform   x10 fires on   underscore   >5 defs
+  flathunt         76      19/20 identical    94% of edges          1%         0%
+  agentic         189      20/20 identical    75%                   3%         3%
+  cpython        1796      11/20 identical    33%                   3%        10%
+
+The mechanism is the third column: a multiplier applied to 75–94% of edges cancels,
+because every edge is divided by its source's total outgoing weight. It differentiates
+only on a tree where a third of imported names are short single words. The three
+heuristics came from aider, which ranks *name references*, where `get` and `close` collide
+with your own methods; nobody writes `from x import get`, so the problem does not arise
+here — zero generic names appear in any top-20 on any repo under any variant. IDF was
+tried and is uniform weighting with extra steps, because a name is defined in exactly one
+file about 99% of the time.
+
+The cpython column was the only argument for keeping the multiword rule, and it is
+measured on the broken graph above. It does not survive the fix.
+
+RANK FILES, NOT DEFINITIONS. PageRank already produces a file rank. Splitting that rank
+across a file's definitions is what needs edge weights, `per_def` and `totals[src]` — so
+the split goes and the presentation is: PageRank orders the files, and within a file the
+names are ordered by how many files import each, a plain count. The weighting question
+stops existing rather than being answered, and the useful half of the output survives.
+
+WHAT THE VERSION IS NOT. Not a machine-readable output format — that is the right primary
+and it is a separate change. Not named registrations and not schema-shaped classes: both
+work well on a repo with a web framework and produce noise on one without, and the scout
+cannot tell which it is in. That judgment moves to the agent, guided from `flw-research`,
+which is why this version keeps the scout mechanical.
+
+WHY CYCLES ARE IN AFTER ALL. The objection was that a large repo has one giant SCC and
+"these 40 files form a cycle" is unreadable. That is a file-level problem. Between
+packages the SCCs are few and small, so the section is worth having once package edges
+exist.
+
+PACKAGES ARE FOUND, NOT SLICED. `parts[0]` puts every service of a monorepo under
+`services/` and reports one node. Package roots are directories carrying `__init__.py`,
+`pyproject.toml` or `package.json`; the current rule is wrong exactly where the reader
+most needs it right.
+
+WHAT WILL STILL BE WRONG, STATED RATHER THAN DISCOVERED LATER. `sys.path` manipulation and
+dynamic imports do not resolve and never will — expect roughly 85–90% of imports to land.
+Two implementations of one algorithm have already drifted once badly enough to cost a
+version, and every section added doubles that surface. Two languages: a Go service in a
+mixed monorepo is invisible, not degraded, and the header will confidently count the
+others.
+"""
+
+contract_edit = """
+The "validation and checks" component's `properties` array gains four entries:
+
+  "A definition reached through files that are themselves depended on outranks one imported
+   by the same number of files that nothing depends on; with damping at zero the two tie
+   exactly, because what separates them is transitivity and not how many importers each
+   has."
+
+  "An importer's rank divides evenly across what it imports, and an import that resolves to
+   nothing in the repository does not divide it at all: a file importing one local name and
+   twenty from elsewhere gives that name the same score as a file importing nothing else."
+
+  "The printed ranking is converged: running more iterations changes no score the scout
+   prints."
+
+  "Both scouts rank the file that defines an imported name rather than the file a specifier
+   names, so a re-export barrel takes none of the score passing through it, and a file
+   importing a name it defines does not rank itself."
+
+The same component's `implementation` gains, at the end:
+
+  "The scout ranks by PageRank over the import graph, iterated until the ranking stops
+   moving. Every edge weighs the same: an edge runs from the importing file to the file
+   that defines the imported name, or for a plain module import to the module's own file.
+   Damping is the only constant, and it belongs to PageRank rather than to any repository —
+   the weighting heuristics that stood here were measured changing at most one top-20 entry
+   in twenty on a real project tree, and were deleted."
+"""
+
+[[dag]]
+group  = 1
+phase  = "the graph stops being wrong"
+tasks  = [
+  { id = "module-imports", desc = "core/scripts/scout.py: `import a.b.c` currently records the bare root `a` and matches it against definition names. Resolve it to the module's own file instead — `a/b/c.py` or `a/b/c/__init__.py`, relative to the scan root and to any `src/`-style root that holds the top-level packages — and drop the edge when nothing resolves. Resolve `from . import x` and `from .mod import x` through the importing file's own package position; `node.level` carries the depth. Same change in core/scripts/scout.mjs for a bare specifier that resolves to a repository file." },
+  { id = "module-imports-test", desc = "tests/test_scout.py and tests/test_scout_mjs.py: a repo where one module is named the same as a definition in an unrelated file. `import config` must rank config.py, not the file defining `class config`. Measured on the stdlib: 218 files writing `import re` all pointed at typing.py, which defines the deprecated `re` shim.", depends_on = ["module-imports"] },
+]
+
+[[dag]]
+group  = 2
+phase  = "the ranking loses its constants"
+tasks  = [
+  { id = "drop-weighting", desc = "core/scripts/scout.py: delete weight_for, MULTIWORD, and the `count**0.5` factor; every edge weighs 1.0. Delete per_def and the weighted totals with them — PageRank now ranks files, and within a file the definitions are ordered by how many distinct files import each. Same deletions in core/scripts/scout.mjs, whose weightFor is a port of the same three heuristics. The MOST DEPENDED ON section keeps its shape: a file, then its definitions.", depends_on = ["module-imports"] },
+  { id = "converge", desc = "core/scripts/scout.py and scout.mjs: replace ITERATIONS with iteration until the ranking stops moving — sum of absolute change across all nodes below a tolerance scaled to 1/n, with a hard cap so a pathological graph cannot spin. The cap is a safety limit and not a tuning parameter; say so where it is written.", depends_on = ["drop-weighting"] },
+  { id = "ranking-tests", desc = "tests/test_scout.py: four tests, one per contract property. Transitivity — two definitions with ten importers each, one set of importers itself depended on, ordered at the shipped damping and exactly equal with DAMPING monkeypatched to 0.0; the equal importer counts are what make it a claim about transitivity rather than popularity. Even division, and an import resolving to nothing not dividing at all. Convergence — running with the iteration cap doubled changes no printed score. Self-edge — a file importing a name it defines does not rank itself, which without the guard takes the whole ranking.", depends_on = ["converge"] },
+]
+
+[[dag]]
+group  = 3
+phase  = "the structure gets reported"
+tasks  = [
+  { id = "package-roots", desc = "core/scripts/scout.py and scout.mjs: a package is a directory carrying `__init__.py`, `pyproject.toml` or `package.json`, nearest ancestor wins, falling back to the first path segment when a tree has no markers. Replaces `parts[0]`, which reports every service of a monorepo as one node named after the directory holding them.", depends_on = ["drop-weighting"] },
+  { id = "package-edges", desc = "Both scouts: a DEPENDS ON section listing package-to-package edges with the number of file edges behind each, aggregated from the graph already built. This is what answers `who uses whom` across services, which the per-file ranking never states.", depends_on = ["package-roots"] },
+  { id = "package-cycles", desc = "Both scouts: report cycles between packages, from the strongly connected components of the package graph. Print only components of two or more, naming the packages and the edge count in each direction. Between packages these are few and small; the same section at file level would print one giant component on any real repo, which is why it is not there.", depends_on = ["package-edges"] },
+  { id = "structure-tests", desc = "tests/test_scout.py: a monorepo fixture with two packages under a common parent, each carrying pyproject.toml, one importing the other. Assert both are reported as packages rather than the parent; assert the edge and its count; and assert a mutual import is reported as a cycle.", depends_on = ["package-cycles"] },
+]
+
+[[dag]]
+group  = 4
+phase  = "the tool explains itself and the skill stops repeating it"
+tasks  = [
+  { id = "scout-help", desc = "cli/flw.py: `flw scout --help` gains what the skill currently spells out — what the ranking means and what it does not, that nothing is written or cached, the two languages it covers and that anything else is invisible rather than degraded, and what each section answers. argparse's description and epilog, with RawDescriptionHelpFormatter so the layout survives." },
+  { id = "research-guidance", desc = "core/skills/flw-research/SKILL.md: §1 loses what moved into --help and points at it. §2 gains a probe for what the scout structurally cannot see — a service calling another over HTTP has no import edge, so the boundary between services is invisible to the ranking. Say what to look for and to grep for it directly: route decorators and their paths, request and response models, generated OpenAPI or protobuf files, client wrappers around another service's base URL. Frameworks by name here are fine, because this is prose an agent reads and applies with judgment, which is exactly why it is not in the scout.", depends_on = ["scout-help"] },
+]

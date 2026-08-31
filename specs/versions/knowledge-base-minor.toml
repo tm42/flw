@@ -1,0 +1,190 @@
+name         = "knowledge-base"
+base         = "shape-independence"
+spec_version = "0.8.0"
+summary      = "flw kb searches everything the project has written down about itself, and reads one record or component by name"
+
+approach = """
+WHAT THIS IS. A fourteenth subcommand that makes flw's own documents searchable and addressable.
+The design is `plans/design-kb.md`, fourth draft, and every number below was measured against this
+repository on 2026-08-27 after the shape-independence run.
+
+WHY IT IS NOT `flw why`. The third draft called it that, and the name was a reduction. Four of the
+seven output groups — CONTRACT, REMOVED, CHANGED, DONE — answer what is true, what is gone, what a
+version did and what was built. Only DECISION and WHY answer a why-question. The name also biased
+the design: the third draft ordered its groups with the settled fork first, on the grounds that a
+decision is the answer and everything else is a lead. That holds for one question. Ask this corpus
+about `validate_spec.py` and the answer is DONE and CONTRACT; ask about an assumption and it is
+CONTRACT alone. What is invariant is not which group answers but which groups bind, so the order is
+CONTRACT, REMOVED, DECISION, CHANGED, DONE, WHY, PLANS — binding, then what settled it, then what
+happened, then what was reasoned.
+
+THE CORPUS, MEASURED. 35 files, 75,407 words, 456 KB: the contract, 25 records, two review team
+configs, seven markdown files under `plans/`. The first draft of the design built this around
+`decisions[]` alone; decisions are 7,151 words of 41,290 in `specs/`, so that command would have
+searched a sixth of what has been written and answered "nothing was decided about that" for the
+rest. The tier it missed is dag task descriptions — 11,797 words across 214 tasks — which is the
+most specifically searchable content here, because task descriptions name files and line numbers.
+
+WHOLE WORDS, NOT SUBSTRINGS. Substring `lock` matches 14 of 25 records; whole-word
+`lock|locks|locking|locked` matches 2. The 14 match through `block` and `blocked_by`: the records
+hold 56 whole-word occurrences of `block` and its forms against 15 of `lock`, and 13 of those 15
+are in one record. Substring matching returns over half the corpus for a one-word query, which
+reads as nothing specific having been decided when the opposite is true.
+
+WHAT THIS IS NOT. It does not summarise — it prints rationale and contract statements whole and
+verbatim, and has no model to paraphrase with. It builds no index, cache or database: 456 KB parses
+in well under a second, and an artifact on disk is a second copy that goes stale. It computes no
+relevance score; the grouping does that work, and a score over 35 documents is tuning with no
+ground truth. It writes nothing. It reads no other repository. It does not search code — `flw
+scout` ranks source files and `grep` exists, and this reads what was written about the work. And it
+takes terms rather than questions: `flw kb why did we not lock` is four AND-ed terms and matches
+nothing.
+
+WHAT NOBODY DEPENDS ON IT. Every skill reads `specs/` directly today and would keep working if the
+command were deleted. `flw-review` is the strongest case and the case is not new: the discipline
+injected verbatim into every reviewer already says do not report anything already deliberately
+decided, and then asks a reviewer dispatched into a fresh context to check 25 records by hand.
+`flw kb <the thing I am about to call a mistake>` is that instruction, executable. It stays a
+convenience rather than a dependency, and that decides how much it is allowed to break.
+
+THE BOOTSTRAP, FOR THE SECOND TIME. `flw kb [term...] [--show]` is applied to the contract's flw CLI
+surfaces by hand at spec time, and appears in `contract_edit` nowhere. v4.2 settled this and called
+itself the first version to reach the limit: the property it added — every subcommand the parser
+accepts is declared in surfaces, and every declared one exists — makes a version that adds a
+subcommand unable to pass its own checks until the contract already names it, and flw-execute moves
+the contract only after the checks pass. Verbatim, as applied, after the `flw validate [path]`
+entry:
+
+  flw kb [term...] [--show]
+
+This is the second occurrence, which makes it a rule rather than an exception, so the fourth phase
+writes it into flw-spec where the next person to add a subcommand will read it.
+
+The cost is a red tree between spec time and phase 2. Applying the line now makes
+tests/test_cli.py::test_the_cli_surface_matches_the_parser_in_both_directions fail with `flw kb is
+declared but the parser has no such command`, and the `cli` task closes it. That failure is the
+bootstrap made visible rather than a surprise, and a session picking this record up should expect
+exactly it and nothing else.
+"""
+
+contract_edit = """
+1. In the component named "validation and checks", append to `paths`:
+
+     "core/scripts/kb.py"
+
+2. In the component named "validation and checks", append to `provides`:
+
+     "A user can search everything the project has written down about itself — the contract,
+     every version record and the design documents beside them — with each hit grouped by what
+     kind of thing it is, so a settled decision is not made again for want of finding it."
+
+     "A user can read one version record or one contract component by name, without knowing
+     which file holds it or what its classification suffix is."
+
+3. In the component named "validation and checks", append to `properties`:
+
+     "The corpus a knowledge-base query reads is exactly the contract, the version records, the
+     review team configs and plans/*.md. Nothing else under the project is read, so a clone
+     answers the same query identically."
+
+     "Matching is whole words with their plural and participle forms, so a query for one word
+     never matches a longer word containing it."
+
+     "A group printing fewer matches than it found says how many it found."
+
+     "A query that matches nothing exits 0 and a name that resolves to no record or component
+     exits 1: a search with no hits is an answer, and a lookup that failed is not."
+
+4. In the component named "validation and checks", append to `implementation`:
+
+     "One walk reads specs/versions/ for both callers: it opens each file once and returns the
+     name, the classification off the filename, and the parsed document. check_chain keeps the
+     first two and the knowledge base keeps all three, so validation and search cannot disagree
+     about what the record set contains."
+
+5. Append to the contract's `open_questions`:
+
+     "Whether a knowledge-base corpus should be bounded by directory or by what the VCS tracks.
+     .flw/reports/ is excluded because this repository gitignores it, and a project that tracks
+     its reports gets the same exclusion with no way to say otherwise. Answering it means
+     reading a VCS, which no flw command does."
+"""
+
+[[decisions]]
+topic     = "whether .flw/reports/ is in the corpus"
+options   = [
+  "Include it — review findings are the same kind of content the rest of the corpus is made of.",
+  "Exclude it, because the directory is gitignored and its contents do not travel.",
+  "Include it behind a flag, defaulting to off.",
+]
+chosen    = "Exclude it, because the directory is gitignored and its contents do not travel."
+rationale = "Measured: 14 markdown files, 31,082 words — comparable to plans/ at 28,680, so this is not a rounding error, and the first option is genuinely attractive. It loses on .gitignore:9. A knowledge base whose corpus is untracked gives a different answer on every clone and no answer at all on a fresh one, and the whole value of this command is that what it prints is what the project agreed. flw's own doctrine agrees from the other side: a report is scaffolding, and its durable half is copied into a version record's approach when the version is specced, so what survives is already in the corpus. A flag is refused for the reason the design refuses a flag on plans/ — an option nobody finds is not a boundary. Two costs are real and stated rather than argued away: a finding filed and never specced is invisible, which is exactly the flw-review case this command was built for, and the boundary now depends on a project's .gitignore, which is the open question the contract gains."
+
+[[decisions]]
+topic     = "which module owns the record walk both validation and the knowledge base need"
+options   = [
+  "A new core/scripts/records.py that both import.",
+  "Keep it in validate_spec.py; kb.py imports it.",
+  "Put it in kb.py; validate_spec.py imports it.",
+]
+chosen    = "Keep it in validate_spec.py; kb.py imports it."
+rationale = "Two callers, and flw's own rule is that two is probably not an abstraction — a third module would be a file created to avoid an import. Of the two remaining, only one has a defensible dependency direction: the new tool may depend on the old one, but validation is load-bearing and must not grow a dependency on a search command that could be deleted tomorrow without anything breaking. validate_spec.py already holds parse_record_filename, which is a naming utility rather than validation, so the walk is not the first non-validating thing in it."
+
+[[decisions]]
+topic     = "where core/scripts/kb.py sits in the contract"
+options   = [
+  "Append it to the paths of \"validation and checks\", where both scouts already sit.",
+  "Rename the component to something that covers validation, checks, scouts and search.",
+  "Give the knowledge base a sixth component of its own.",
+]
+chosen    = "Append it to the paths of \"validation and checks\", where both scouts already sit."
+rationale = "This reproduces a decision already made. The scout raised the identical question — it is not validation either — and it was settled on 2026-08-25 in favour of staying inside the component, because splitting costs a major bump and re-opens where tests/ belongs. Nothing about a third non-validating script changes that arithmetic. Renaming has a cost the scout decision did not face: eleven records name the component verbatim inside their contract_edit prose, and those are historical documents that record what was applied, so a rename either invalidates them or rewrites what was reviewed. The component's name being wrong for the third time is a real cost and it is the smaller one."
+
+[[decisions]]
+topic     = "how a version that adds a subcommand passes the drift test that reads the contract"
+options   = [
+  "Apply the surfaces line by hand at spec time and record it, as v4.2 did.",
+  "Have flw-execute apply contract_edit before running the checks rather than after.",
+  "Declare the subcommand in this version and add the parser in the next.",
+]
+chosen    = "Apply the surfaces line by hand at spec time and record it, as v4.2 did."
+rationale = "The other two were refused in v4.2 and the refusals still hold: editing the contract before the checks records what shipped before knowing whether it shipped, which is the mistake the model exists to remove, and splitting across two versions leaves one whose only content is a declaration for the other. What changes is the framing. v4.2 wrote \"one recorded exception leaves the model intact for every version after\", and this is the second occurrence — the deadlock is not a property of v4.2, it is a property of every version that adds a subcommand, permanently, because the parser and the contract were made mutually dependent on purpose. So this version writes the rule into flw-spec rather than claiming a second exception."
+
+[[dag]]
+group = 1
+phase = "one walk, and the corpus it reads"
+tasks = [
+  { id = "extract-walk", desc = "core/scripts/validate_spec.py: add load_records(versions_dir) returning, per record name, the path, the classification from parse_record_filename, and the parsed document. check_chain (:420-455) calls it instead of opening files itself. Behaviour must not move: the message for an unparseable file, the duplicate-name message, the missing-name skip and the release_line collection are the same before and after, and the existing tests are the proof." },
+  { id = "walk-test", desc = "tests/test_validate_spec.py: load_records returns the parsed document as well as the name and classification, and returns the legacy stems (1.0 through 3.4) under their bare names. Mutation-check by breaking the duplicate-name branch and confirming the existing check_chain test fails by name.", depends_on = ["extract-walk"] },
+  { id = "corpus", desc = "New core/scripts/kb.py: corpus(root, specs_dir) assembling the contract, the records via load_records, core/reviews/*.toml and plans/*.md. Excludes plans/*.html — code-graph-report.html alone holds 73 whole-word occurrences of `font` — and reads nothing under .flw/. A project missing plans/ or core/reviews/ is normal and yields the tiers it has." },
+  { id = "corpus-test", desc = "tests/test_kb.py: a fixture project carrying plans/x.md, plans/x.html and .flw/reports/y.md, asserting the first is read and the other two are not, by searching for a term that appears only in each. A project with specs/ and nothing else assembles without error.", depends_on = ["corpus"] },
+]
+
+[[dag]]
+group = 2
+phase = "flw kb <term> searches and groups"
+tasks = [
+  { id = "match", desc = "kb.py: whole-word case-insensitive matching with the plural and participle forms — lock, locks, locking, locked. Multiple terms are AND across the whole document, not per field. A quoted argument is a phrase. Measured target: `lock` matches 2 of 25 records, not the 14 a substring match returns.", depends_on = ["corpus"] },
+  { id = "groups", desc = "kb.py: the seven groups, printed in the order CONTRACT, REMOVED, DECISION, CHANGED, DONE, WHY, PLANS. Every hit names the record it came from; CHANGED also prints the classification, because that group exists to say which version introduced a sentence and CONTRACT already prints the sentence. Within a group, newest first: records named in the contract's applied list order by their position in it, and the nine that are not named order by the version number in their filename, after them. A long prose hit prints a window around the match rather than the field — the longest approach is 1,201 words.", depends_on = ["match"] },
+  { id = "caps", desc = "kb.py: a group printing fewer matches than it found says how many it found and how to see the rest. A truncated result set that does not announce its truncation reads as a complete answer, which is the failure one level up that this command exists to prevent.", depends_on = ["groups"] },
+  { id = "cli", desc = "cli/flw.py: a `kb` subparser taking `term` (nargs=\"*\") and `--show NAME`, dispatching to core/scripts/kb.py by the pattern test, scout and validate already follow. Help text says what it reads and what it refuses: it searches what was written about the work, never the work. Exit 0 when a search matches nothing.", depends_on = ["groups"] },
+  { id = "search-test", desc = "tests/test_kb.py and tests/test_cli.py: whole-word matching against the fixture and against this repository's own records (2 of 25 for lock); AND across terms; group order; a CHANGED hit carrying its classification; newest-first putting an applied-list record above an unnamed legacy one; a capped group naming its total; exit 0 on no match. The parser-versus-surfaces drift test at tests/test_cli.py:1783 already covers the subcommand's declaration and must pass without editing it.", depends_on = ["cli", "caps"] },
+]
+
+[[dag]]
+group = 3
+phase = "flw kb --show reads one thing by name"
+tasks = [
+  { id = "show-record", desc = "kb.py: --show <name> resolves a record by its name field and prints it whole — summary, approach as wrapped paragraphs, the dag as phases and tasks, each decision as chose / over / because. The point is that names do not map to filenames: shape-independence lives in shape-independence-major.toml and the suffix is the classification, which is what you were about to ask the record about.", depends_on = ["corpus"] },
+  { id = "show-component", desc = "kb.py: --show also resolves a contract component by its name — paths, provides, properties, surfaces, implementation. Record names are kebab-case and component names are prose with spaces, so the namespaces cannot collide today; if a name resolves to both, print both and say so rather than guessing. A name resolving to neither exits 1 naming what it looked in.", depends_on = ["show-record"] },
+  { id = "show-test", desc = "tests/test_kb.py: --show by record name finds the record whatever its classification suffix; --show 'validation and checks' prints that component's paths; an unknown name exits 1 and the message names both namespaces searched; a name matching a record and a component prints both.", depends_on = ["show-component"] },
+]
+
+[[dag]]
+group = 4
+phase = "the census, and the rule that made this possible"
+tasks = [
+  { id = "census", desc = "kb.py: with no term and no --show, a census rather than a listing — how many of each kind exist, the newest few in each, and the standing contract state: assumptions, open questions, what is removed. It is the first thing to run in a repository nobody has read, so it must be legible without knowing flw's vocabulary.", depends_on = ["corpus"] },
+  { id = "census-test", desc = "tests/test_kb.py: the census counts the fixture's records and names its open questions; a project whose contract has no open_questions prints the section as empty rather than omitting it silently.", depends_on = ["census"] },
+  { id = "spec-skill-bootstrap", desc = "core/skills/flw-spec/SKILL.md, in the amend section beside the version-file fields: a version that adds a subcommand applies its own `flw <name> [flags...]` line to the contract's flw CLI surfaces at spec time, and says so in its approach, because the CLI component's first property makes the parser and the contract mutually dependent and flw-execute moves the contract only after the checks pass. v4.2 recorded this as a one-off; knowledge-base is the second, so it is a rule. Three sentences, not a section." },
+]

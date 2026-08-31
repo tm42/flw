@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tm42/flw/schemas/review.schema.json",
+  "title": "flw review config",
+  "description": "A reviewer team, as data. Shipped ones live in core/reviews/; a project's own in .flw/reviews/, which take precedence by name. The config says which lenses to look through; how to report and what to avoid is the skill's job and is not repeated per reviewer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "description", "reviewer"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "How the team is invoked. Matches the filename."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One line: what this team is for and when to reach for it."
+    },
+    "reviewer": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/reviewer" },
+      "description": "One entry per lens. Every reviewer is dispatched with the same instructions and a different perspective, so overlapping lenses produce overlapping findings and waste a context each."
+    }
+  },
+  "$defs": {
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "perspective"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A short name for the lens. Appears in the consolidated report against every finding it produced."
+        },
+        "effort": {
+          "enum": ["high", "normal"],
+          "default": "normal",
+          "description": "How hard this lens is to look through, not which model to use. Model names are host-specific; the agent doing the dispatching maps this to whatever it has. Reserve high for lenses where being wrong is invisible."
+        },
+        "probes": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this reviewer may execute things rather than only read — malformed input, boundary values, a re-run to check idempotency. Stated structurally rather than buried in the perspective, because an adversarial lane that is only ever described decays into opinion, and because it tells a reader which reviewers will run code."
+        },
+        "perspective": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What this lens looks for, and what it should leave to the others. Written as instructions to the reviewer. Do not restate the reporting format or the general discipline — the skill supplies both to every reviewer, and repeating them here means they drift."
+        }
+      }
+    }
+  }
+}

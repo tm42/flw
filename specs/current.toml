@@ -1,0 +1,224 @@
+schema_version = 4
+spec_version = "0.10.0"
+
+# The order the versions landed in. flw-execute appends a name here when its run
+# finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
+# read them as an order, and inventing one now would assert something no run recorded.
+applied = [
+  "4.0", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "5.0",
+  "version-bump", "sync-guard", "test-reporting", "stale-claims", "release-line",
+  "install-robustness", "validate-the-move", "shape-independence", "knowledge-base",
+  "silent-misses",
+  "note-store",
+  "store-surfaces",
+]
+
+# flw's own contract, hand-written before the schema that validates it exists.
+# That ordering is deliberate: if this structure cannot describe flw honestly and
+# completely, the structure is wrong, and finding out costs one file instead of a
+# validator built around a bad shape. See plans/design-v3.md §5.
+
+assumptions = [
+  "Python 3.11 or later is available as a system interpreter; tomllib is the floor and flw ships no runtime dependencies at all.",
+  "The Agent Skills format stays stable enough that one SKILL.md carrying every host's optional frontmatter keys installs on all of them; hosts ignore keys they do not recognise rather than rejecting the file.",
+  "Hosts are responsible for their own permission and approval policy; flw does not intercept, wrap, or police host operation.",
+  "A project's own conventions are discoverable by reading it, so flw can seed an interview from a repo rather than requiring the user to state everything twice.",
+  "A human reads what an agent wrote before the work runs. Every mechanism flw might build to police an agent's description of its own change is redundant with that review, and cannot be trusted more than it.",
+  "Some of a project's checks cannot run in an agent's session — no network, no database, no browser. Handing those back is the normal case, not a degraded one. Which ones is the project's to declare, because no exit code identifies them.",
+  "Claude Code is the only host with a switchable output style. On the others, style guidance can only sit in the always-on instructions file, so flw writes it there as its own removable block.",
+  "The user's project may use any version control system, or none; flw proposes commits but does not make them, and reads no VCS state except to locate a project root when nothing nearer is found.",
+]
+
+open_questions = [
+  "Whether a ranked structural scout escapes the published negative result that static prose repo overviews do not improve agent performance. The artifact type is untested rather than disproven, and no benchmark measures repo orientation independently of downstream task success.",
+  "Whether a project already in production can express the release number it actually ships. Declaring a line restarts major and minor at zero, so a service at 2.4.0 becomes either 2.0.0 or 0.2.5, and neither is true; the fold opt-out that would settle it is deferred.",
+  "Whether `flw ledger`'s corpus should be bounded by directory or by what the VCS tracks. Bounding by directory reads a file the project has not committed — plans/post-review-roadmap.md is untracked, 5,315 words, and searchable today — and it also excludes a tracked report in a project that keeps its reports. Neither direction is answerable without reading a VCS, which no flw command does.",
+]
+
+[final_state]
+removed = [
+  { statement = "the Claude Code plugin packaging — plugin.json, marketplace.json, and the /plugin install path", check = "test ! -e .claude-plugin" },
+  { statement = "the auto-approve and post-edit hook layer, and everything that existed to serve it: the shell parser, the justdoit lock, and shell-hygiene guidance", check = "test ! -e core/hooks" },
+  { statement = "the language registry as an authority — commands are a property of a project, not of a language", check = "test ! -e core/scripts/languages.py" },
+  { statement = "the project-type taxonomy (MLE/DS/ENG/CHANGE) and the success_criteria branches keyed on it", check = "python3 -c \"import pathlib,sys,tomllib; d=tomllib.loads(pathlib.Path('specs/current.toml').read_text()); sys.exit(1 if 'project_type' in d else 0)\"" },
+  { statement = "scaffold as a command, and the interface stub it projected", check = "test ! -e core/scripts/scaffold.py" },
+  { statement = "validate as a command; its checks are declared tests and its judgments are review perspectives", check = "test ! -e core/scripts/check_design.py" },
+  { statement = "the hand-maintained version-bump machinery across four files", check = "test ! -e core/scripts/bump_version.py" },
+  { statement = "the amendment engine — editing the contract through keyed operations, so that edits were byte-preserving and versions self-classifying. Ordinary editing is byte-preserving by construction, and whole-entry replacement created a corruption class editing does not have.", check = "test ! -e core/scripts/amend_spec.py" },
+  { statement = "the vendored TOML editor, and the sys.path machinery that reached it. Nothing writes TOML any more.", check = "test ! -e core/vendor" },
+  { statement = "the ledger — an append-only index of every version. What it indexed is now one file per version, and the directory listing is the index.", check = "test ! -e specs/ledger.toml" },
+  { statement = "every record of whether work is done: the applied flag, the computed diff, and the classification derived from it. Each protected a version number that a human assigns while numbering the file.", check = "python3 -c \"import pathlib,sys,tomllib; d=tomllib.loads(pathlib.Path('specs/versions/v2.0.toml').read_text()); sys.exit(1 if 'applied' in d else 0)\"" },
+  { statement = "design.md as a second per-repo prose layer, and the check: lines the test runner parsed out of it. Extensions are that layer now, per skill and generated rather than typed; a command hidden in prose needed a regex that had already broken once.", check = "! grep -rq --exclude-dir=__pycache__ 'design\\.md' core/ cli/" },
+  { statement = "adapters/ as a directory of per-host notes. The CLI already holds that data and `flw doctor -v` already prints it, so the directory was a second home for something live and tested.", check = "test ! -e adapters" },
+  { statement = "docs/verified.md, the separate record of what running flw against real hosts and repositories taught. Five of its six findings were already written at the site of the code each one explains, and a second copy in a document nobody opens before editing is drift waiting to happen. Findings are recorded as comments where the workaround is.", check = "test ! -e docs/verified.md" },
+]
+
+[[final_state.components]]
+name  = "the flw CLI"
+paths = ["cli/"]
+provides = [
+  "A user can install flw's skills into Claude Code, Codex or OpenCode with one command, and remove them exactly, leaving no trace in host configuration.",
+  "A user can verify an install — that every link resolves, no bundle silently overrides a core skill, and no orphan remains from a removed bundle.",
+  "A user who updates flw is never left with a host silently running older material: what a host holds as a symlink is live the moment the pull lands, and what it holds as a copy is reported and offered for refresh in the same run.",
+  "A user can register a local bundle of extra skills and have it install and uninstall exactly like flw's own.",
+  "A user can see which of a repo's extensions a skill will actually read, and which sit there read by nobody.",
+  "A user can see, per host, where skills install and what that host does and does not support, before installing — and is told when a host cannot do something a skill wants, rather than the skill silently not working.",
+  "A user can install flw's writing style into every host as a separate opt-in step, and remove it exactly, because a style reshapes every response in a session rather than only the ones a skill handles.",
+  "Nothing flw installs destroys what was already there: it never overwrites a file it did not write, and never deletes one it did not create.",
+  "A user can install a style of their own by name in place of the shipped one.",
+  "A user is told when an installed style has fallen behind the file it was copied from, and when it is installed but not selected, rather than finding either out by reading two files.",
+  "A user offered a refresh is told which side moved — flw's source, or the copy under their own hand — so accepting is never a bet on which edit is about to be discarded.",
+  "A user can bring an install back into line with the checkout — relinking what moved, removing what no longer exists, refreshing a style copy that fell behind — without re-running install, without linking into a host they never chose, and without replacing anything flw did not put there, each change reported with what it replaced.",
+  "An install that is interrupted leaves a state flw can name and repair: the record of a link is written before the link itself, so what is left over is a record with nothing at its path rather than a symlink nothing knows about, and `flw sync` fixes it.",
+  "A symlink flw made but has no record of — from a run that was interrupted or one that raced another — is adopted back into the record by `flw sync` rather than staying invisible to `flw uninstall`.",
+  "A command that meets an ordinary filesystem condition — an unreadable record, a corrupt root pointer, a missing directory — says what happened and which path it was reading, rather than printing a traceback.",
+  "A host's instructions file keeps the line endings it had. flw appending or removing its own tagged block changes the block and nothing else, so the diff in someone else's repository is the size of the change.",
+]
+properties = [
+  "Every subcommand and flag the CLI accepts is declared in surfaces, and every declared one exists: the parser and the contract cannot drift apart unnoticed.",
+  "flw sync never creates a link in a directory links.toml does not already record, so it can repair an install and can never widen one.",
+]
+surfaces = [
+  "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
+  "~/.flw/root — one line, the absolute path of the checkout every skill resolves through.",
+  "~/.flw/links.toml — [[link]], keys: path, skill, target.",
+  "~/.flw/bundles.toml — [[bundle]], keys: name, path.",
+  "~/.flw/ambient.toml — [[host]], keys: host, path, created. Which instructions files flw wrote a block into, and whether flw created the file; uninstall reads it to decide what it may delete.",
+  "~/.flw/style.toml — [[host]], keys: host, name, source, path, previous, installed_sha, created, settings_created, selected. `previous` is the user's own outputStyle, restored on uninstall.",
+  "~/.flw/styles/<name>.md — a style of the user's own, installed by name.",
+  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests] setup, checks, yours; [kb] category.",
+  "<!-- flw:begin --> / <!-- flw:end --> and <!-- flw:style:begin --> / <!-- flw:style:end --> — the marker pairs bounding flw's skills block and its style block in a host's instructions file. What lies between a pair is flw's to rewrite; what lies outside is the user's and is never touched.",
+  "flw install [hosts...] [-n|--dry-run] [--ambient] [-y|--yes]",
+  "flw uninstall [hosts...] [-n|--dry-run]",
+  "flw style install [name] [-y|--yes] [-H|--host] [-n|--dry-run]",
+  "flw style uninstall [-H|--host] [-n|--dry-run]",
+  "flw sync [-n|--dry-run] [-y|--yes]",
+  "flw update [-y|--yes] [-n|--dry-run]",
+  "flw doctor [-v|--verbose]",
+  "flw add <path> [--name]",
+  "flw remove <name>",
+  "flw list",
+  "flw test [path] [-A|--all] [--timeout] [--no-stream]",
+  "flw scout [path] [-n|--budget]",
+  "flw validate [path]",
+  "flw ledger [term...] [--show]",
+  "flw kb [-c|--category CAT] [-t|--tag TAG] [--type TYPE] [--here] [--global] [-T|--tree] [-s|--stats] [-p|--paths]",
+  "flw kb search <term...> [-c|--category CAT] [-t|--tag TAG] [--type TYPE] [--here] [--global] [-T|--tree] [-s|--stats] [-p|--paths]",
+  "flw kb show <slug>",
+  "flw kb write <category> <title> [-d|--description DESC] [--type TYPE] [--tags a,b] [--here]",
+  "flw kb lint",
+  "flw version",
+  "Exit codes: 0 success, 1 something failed or was refused. `flw test` also uses 2 for a run that proved nothing — nothing declared to run, nothing left runnable here, a full run with a check the project handed back, or a full run with no contract to read. `flw validate` uses 2 for a file it was given and could not check, and 0 for a project that has no contract yet, which is a state and not a fault.",
+  "~/.flw/kb/ — the machine-wide note store. A directory tree of markdown files where a category is a directory; flw creates it on first write, holds no index of it, and reads no VCS in it.",
+  "<project root>/plans/notes/ — the project's note store, created by flw kb write --here. plans/*.md above it belongs to flw ledger and is not read by flw kb.",
+  "Skill symlinks into ~/.claude/skills, ~/.agents/skills and ~/.config/opencode/skills.",
+  "The outputStyle key in ~/.claude/settings.json.",
+  "~/.claude/output-styles/<name>.md.",
+]
+
+[[final_state.components]]
+name  = "the skills"
+paths = ["core/skills/", "core/reviews/", "core/styles/", "core/shared/"]
+provides = [
+  "A user can turn intent into a versioned contract through interview, with explicit lock-in and no silent inference.",
+  "A user can amend the contract at the level of requirements, architecture and design, and get a version file recording what changed, why, and the reasoning behind the plan.",
+  "A user can read and edit that plan before anything runs, because deciding what to reuse, recycle and tear out is engineering judgment no contract holds.",
+  "A user can have the work walked phase by phase, with any gap surfacing as a proposal rather than silent drift.",
+  "A user can have a second reader check a contract for the semantic gaps validation structurally cannot see.",
+  "A user can run a configurable review team over the work at any stage, including a perspective that probes rather than reads.",
+  "A user can bring flw to a repo they did not set up and have its conventions, test invocation and structure written into that repo's flw configuration, so later work builds on what exists instead of duplicating it.",
+  "A user can amend how a skill behaves in one repo with prose that skill reads, without forking the skill or maintaining a copy of it.",
+  "A user gets the same plain, hard-wrapped prose out of every reviewer and every report whether or not the style is installed in the host, because the skills read it themselves.",
+  "A user reads a contract that records what shipped, not what was planned: it moves when the work lands rather than when the plan is agreed, so a version still in flight is a record the contract's applied list does not yet name.",
+  "A user can install a build posture alongside the skills that requires one runnable check behind the non-trivial logic an agent writes, and requires saying what was not done rather than implying a completeness the work does not have.",
+  "A user can spec two changes at once on separate branches without either having to be renumbered when it lands, because a version record is addressed by a name it keeps, the order they landed in is recorded by the contract rather than by the records, and the release number moves by itself when a run finishes.",
+  "A user can run a version's work without waiting for its checks, and gets a report that says the version was built and not verified rather than one that reads as finished.",
+  "A user gets a store that fills itself, because flw-execute, flw-research and each dispatched flw-review reviewer are offered a write at the point they have just finished learning something — and offered it, never blocked by it.",
+]
+
+[[final_state.components]]
+name  = "validation and checks"
+paths = ["core/scripts/validate_spec.py", "core/scripts/run_tests.py", "core/scripts/scout.py", "core/scripts/scout.mjs", "core/scripts/ledger.py",
+  "core/scripts/store.py", "tests/"]
+provides = [
+  "A malformed contract or version file fails at authoring time with the offending field named, rather than quietly at execution time.",
+  "A break in the record set — a name the contract says was applied with no file to match, a record whose name disagrees with its filename, a dag that cannot be walked — is named rather than found later.",
+  "A user can run every check their project declared with one command, without remembering where each is written down.",
+  "A check this session cannot run is handed back as the user's to run when the project declared it so, and a full run that had to hand one back does not report success, because the definition of done was not demonstrated. Nothing is inferred from a check's exit code: no code distinguishes a command that is absent from one that ran and failed.",
+  "A user can run a narrow set while working and the full definition of done on demand, with the narrow set committed alongside the branch that needs it.",
+  "A user can get a ranked orientation to a repository nobody has read — its packages, what depends on what, and the definitions the rest of the code leans on — in a few seconds at twenty thousand files, with no index to build and nothing to install.",
+  "A user can declare once, for this machine, which of a project's checks cannot run here, instead of repeating that in every repository they work in.",
+  "A version record whose filename does not say whether the change is major or minor is refused at authoring time, and a contract whose release number disagrees with what its applied records add up to is named — so the number is folded from the record set rather than remembered.",
+  "A failing check's whole output is shown, and every failure is named again at the end of the run rather than only where it scrolled past.",
+  "A release number carries a line its author declares — 0 until the work is real, 1 when it is — and the folded major and minor restart from it, so the number a reader sees says how far along the product is and not only how often the contract moved.",
+  "A contract a run has just written is validated before that run reports success, so an edit producing a document the schema or the record set refuses stops the run instead of being handed over as finished work.",
+  "A project that has never carried a legacy version number folds its release from its first record, so the check is live on the day flw is adopted rather than only in a repository with history.",
+  "A run of the full definition of done in a directory with no contract to read says so rather than reporting success.",
+  "A scout says what it did not read: files in languages neither scout parses are counted and named, so a ranking of the minority language in a mixed repository is never mistaken for the repository.",
+  "A user is told which project root a command resolved to before it runs, so one issued from the wrong directory is visible rather than silently answered by an ancestor.",
+  "A user can search everything the project has written down about itself — the contract, every version record and the design documents beside them — with `flw ledger`, each hit grouped by what kind of thing it is, so a settled decision is not made again for want of finding it.",
+  "A user can read one version record or one contract component by name with `flw ledger --show`, without knowing which file holds it or what its classification suffix is.",
+  "A user can keep what an agent worked out — a library's silent behaviour, a proxy's real rules, an approach that was measured and lost — where the next session in another repository or on another host will find it, without a database, an index, a server or a per-host integration.",
+  "An agent that never thought to search still meets the store, because a skill reads its own project's category at its opening and searches once it knows its subject.",
+  "A user can write a note from any agent on any host, or by hand in an editor, because a note is a markdown file in a directory and nothing about the format can refuse one.",
+  "A user is told what a note costs before opening it and how old it is, so following a title into a note is a decision rather than a surprise.",
+  "A user can find where a store is going wrong — notes with no description, no date, near duplicates of each other, or a slug that resolves to several — without flw deciding which of them to delete.",
+  "A user is told when the store holds a file flw could not read, rather than searching a store that silently answers from part of itself.",
+]
+properties = [
+  "A contract whose applied list names only records that exist validates clean; a record no applied list names is a version in flight rather than an error.",
+  "A check reported as one this session could not run is one the project named in [tests] yours. A failing [tests] setup fails every check in the run instead, with the setup's own error text attached.",
+  "A command that could not be run to completion is never reported as passing: a check whose text spans more than one line is refused at collection time rather than reported by its last line's exit code.",
+  "A definition reached through files that are themselves depended on outranks one imported by the same number of files that nothing depends on; with damping at zero the two tie exactly, because what separates them is transitivity and not how many importers each has.",
+  "An importer's rank divides evenly across what it imports, and an import that resolves to nothing in the repository does not divide it at all: a file importing one local name and twenty from elsewhere gives that name the same score as a file importing nothing else.",
+  "The printed ranking is converged: running more iterations changes no score the scout prints.",
+  "Both scouts rank the file that defines an imported name rather than the file a specifier names. Where more than one file defines that name, the edge goes to the definer in the module the import actually named, and to every definer only when no module resolves — so a re-export barrel still takes none of the score, and a name defined once per package does not edge to every package.",
+  "The release fold is computed for any applied list, including one naming no legacy numbered record, so a declared release number is checked from a project's first record onward.",
+  "The corpus `flw ledger` reads is exactly the contract, the version records, the review team configs and plans/*.md. Nothing else under the project is read.",
+  "Matching is whole words with their plural and participle forms, so a query for one word never matches a longer word containing it.",
+  "A group printing fewer matches than it found says how many it found.",
+  "A query that matches nothing exits 0 and a name that resolves to no record or component exits 1: a search with no hits is an answer, and a lookup that failed is not.",
+  "A note is never required to carry anything: a bare markdown file with no frontmatter is a valid note, and every field that is missing degrades a surface rather than failing a read. What flw kb write emits always parses as what flw kb reads, whatever characters the title, description, type and tags hold.",
+  "A note whose +++ block does not parse is read as a note with no frontmatter and reported by lint, never raised: the store is parsed in full on every query, so one hand-written typo must not be able to break every command on the machine.",
+  "The two stores are disjoint by directory. flw ledger reads plans/*.md and flw kb reads plans/notes/, so no file is reachable from both and neither command has to say which one owns a hit.",
+  "A note's age comes from its frontmatter and from nowhere else. mtime is never read as a date, because a checkout rewrites it and a stale note that reads as fresh is worse than one that reads as undated.",
+  "A category is a directory and no note carries a category field, so moving a note between categories is mv and there is no second place for the two to disagree.",
+  "The project's category sorts first and never filters. No note is hidden because its directory name did not match the project's, which is the failure the store exists to avoid.",
+  "flw kb lint reports and never blocks: it exits 0 unless it cannot read a root, because the cheapest way to green a failing note check is to delete notes.",
+  "Filters compose and are ANDed, and a filter means the same thing on either side of the verb.",
+  "flw holds no index, cache or database of the store: every query walks and parses both roots, so nothing can go stale against the files.",
+  "A file the store could not read is skipped rather than raised, and named rather than skipped silently: lint reports it with the error, and every read verb says how many were skipped.",
+  "A note's identity survives its title's script. A slug keeps unicode word characters, so a title in any script produces a stem that carries it.",
+  "A filter given before the verb and a filter given after it compose rather than replace, and two filters that contradict each other are refused rather than silently answered with nothing.",
+  "A listing that is empty because a filter matched nothing says so differently from a store that holds no notes.",
+]
+implementation = "Stdlib only at runtime, and nothing is installed to run a check. flw's own suite declares one test-time dependency it does not ship — the TypeScript compiler, in package.json — because the TypeScript scout cannot be exercised without a parser; those tests skip by name when it does not resolve. That scout needs the 5.x or 6.x compiler API: typescript 7 replaced it with an entry point its own package marks unstable, and is refused by version rather than failed against. Checks run through bash explicitly, because /bin/sh is dash on some systems and a venv activation is the common case. No runner allow-list: restricting the runner cannot restrict what the runner does. The scout ranks by PageRank over the import graph, iterated until the ranking stops moving. Every edge weighs the same: an edge runs from the importing file to the file that defines the imported name, or for a plain module import to the module's own file. Damping is the only constant, and it belongs to PageRank rather than to any repository — the weighting heuristics that stood here were measured changing at most one top-20 entry in twenty on a real project tree, and were deleted. One walk reads specs/versions/ for both callers: it opens each file once and returns the name, the classification off the filename, and the parsed document. check_chain keeps the first two and the ledger keeps all three, so validation and search cannot disagree about what the record set contains. The note store parses both roots on every query and holds no index on disk, which is linear and measured flat to 4,000 notes; the one pass that compares notes against each other reaches its pairs through an inverted index over each note's whole words rather than by running every title's patterns over every other note, so its cost is bounded by how many duplicate pairs the store actually contains rather than by the square of its note count. A store whose titles all draw on one small vocabulary genuinely holds n²/2 pairs and is quadratic to enumerate, which is a property of that store and not of the algorithm."
+
+[[final_state.components]]
+name  = "the schemas"
+paths = ["core/schemas/"]
+provides = [
+  "A contract, a version record and a review team are each checked against a published shape by a stdlib-only validator, so a malformed one fails loudly at authoring time rather than quietly at execution time.",
+]
+
+[[final_state.components]]
+name  = "the project surface"
+paths = ["docs/", "README.md", "LICENSE", "package.json", ".gitignore", "plans/"]
+provides = [
+  "A stranger can install flw, understand what it is for, and write their own skill for it without reading the author's mind.",
+  "A reader can find why flw is shaped the way it is, including what was deliberately not built.",
+]
+
+[success_criteria]
+tests = [
+  { command = ".venv/bin/pytest -q" },
+  { command = ".venv/bin/ruff check ." },
+]
+criteria = """
+The behaviour above is proven by flw's own test suite plus one end-to-end exercise that
+the suite cannot reach: installing into a real Claude Code, Codex and OpenCode, and
+confirming each host loads the skills through the symlink. That exercise is manual by
+necessity — it depends on three third-party tools this project does not control — and is
+recorded in docs/ rather than asserted here.
+"""
+

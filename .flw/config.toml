@@ -1,0 +1,5 @@
+# flw's own declared checks run pytest and ruff out of .venv/, which a fresh clone does
+# not have — `flw test` on a new checkout failed on both until this file existed. The
+# guard makes it instant once the venv is there; flw itself still installs nothing.
+[tests]
+setup = "test -x .venv/bin/pytest || { python3 -m venv .venv && .venv/bin/pip install -q pytest ruff; }"

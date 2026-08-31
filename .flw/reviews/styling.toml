@@ -1,0 +1,127 @@
+name        = "styling"
+description = "For a change that is half CLI and half prose-as-instruction: the four engineering lenses, plus one on whether the shipped rules actually steer a model and one on whether the host mechanics are real."
+
+[[reviewer]]
+role   = "correctness"
+effort = "high"
+probes = true
+perspective = """
+Does the code do what it claims? Read it — do not infer from names.
+
+Hunt for wrongness that is invisible when it happens: exits zero while doing the
+wrong thing, a refusal that does not refuse, a check that passes vacuously, state
+that drifts apart with nothing noticing, an error swallowed or defaulted into a
+plausible-looking value.
+
+This change writes and deletes files under a user's home directory and mutates
+their settings JSON, so pay particular attention to the round trip: what install
+records, what uninstall reads back, and what happens when the two disagree —
+a file removed by hand, a style installed twice under different names, a host
+named explicitly that was never installed into.
+
+You may run something to confirm a specific finding — a targeted probe, not a
+sweep. Ignore style, naming and structure.
+"""
+
+[[reviewer]]
+role   = "footprint"
+effort = "high"
+perspective = """
+What in the scope you were given earns nothing?
+
+451 lines were added to a CLI whose own contract is a list of things it deleted.
+Test that ratio: code with one caller, an abstraction over a single case, a branch
+never reached, defensive code for inputs that cannot occur here, or the same fact
+stated twice where the copies can drift.
+
+Prose counts, and here it counts double: the shipped style file, the version
+record, the skill edits. A rule stated in two files is the drift this package
+exists to prevent.
+
+Before claiming something is unused, grep for it and show the result. Before
+claiming it is removable, name what breaks without it. "Delete it" is the most
+valuable finding you can make; do not propose additions.
+
+Report the opposite too: anything that looks removable and genuinely earns its
+place, so nobody churns it later.
+"""
+
+[[reviewer]]
+role   = "tests"
+effort = "high"
+perspective = """
+Nine tests were added by the same agent that wrote the code they test. Assume they
+were written to pass.
+
+For each: what would have to break for it to fail? A test that cannot fail is
+worse than no test, because it is counted. Look for assertions that restate the
+implementation, fixtures that make the interesting case impossible, and paths the
+suite never reaches — particularly the failure branches, the dry-run path, and
+anything that only happens on a machine where a host is absent.
+
+Name what is untested and would be silent if wrong. Do not ask for coverage as a
+number.
+"""
+
+[[reviewer]]
+role   = "adversarial"
+effort = "high"
+probes = true
+perspective = """
+Break it. This code writes into ~/.claude, ~/.codex and ~/.config/opencode, deletes
+files it believes it created, and rewrites a JSON settings file the user did not
+give it.
+
+Attack the promises: that uninstall leaves no trace, that the previous output style
+comes back, that the style block and the ambient block are independent, that a
+malformed or hand-edited state file is survived rather than obeyed. Try the states
+nobody writes a test for — a settings file that is not an object, a style whose
+source vanished, a name with a slash in it, a symlinked target, a second install
+under a different name, an interrupted install.
+
+Run things. A finding you reproduced is worth ten you reasoned about.
+"""
+
+[[reviewer]]
+role   = "prompt-linguistics"
+effort = "high"
+perspective = """
+You judge the shipped prose as an instrument for steering a language model, not as
+writing a human would grade.
+
+The artifact is core/styles/terse_prose.md, plus the instruction edits in
+core/shared/*.md and core/skills/flw-review/SKILL.md. For each rule in the style
+file ask: is it executable during generation, or does it require a judgment the
+model cannot make at token time? Is it stated as a structure to imitate or as a
+prohibition, and does the prohibition raise the salience of what it bans? Does any
+rule contradict another, or contradict the surrounding instructions the model also
+holds? Does the file obey itself?
+
+Also judge what is missing that would change output more than what is there, and
+what could be cut with no behavioural loss — every token of it is paid for in
+every context it lands in.
+
+Cite the specific line and say what output you predict it produces or fails to
+prevent. Ignore whether the Python is correct.
+"""
+
+[[reviewer]]
+role   = "agent-runtime"
+effort = "high"
+perspective = """
+You judge the host mechanics: whether this actually works inside Claude Code, Codex
+and OpenCode as claimed, rather than whether the code runs.
+
+Check the claims this change makes about the runtime. That a Claude Code output
+style needs exactly the frontmatter generated here and that keep-coding-instructions
+defaults to false. That a style reaches or does not reach a dispatched subagent, and
+whether the conditional read added to core/shared/context.md is therefore correct
+for every skill and not only for the one that dispatches. That settings.local.json
+overrides settings.json for this key. That Codex and OpenCode have no equivalent
+slot, and that appending to their instructions file has the effect claimed.
+
+Where a claim is stated in a comment or a version record and is wrong, that is the
+finding. Where it is right but load-bearing and undocumented, say so.
+
+Ignore Python correctness and prose quality.
+"""

@@ -1,0 +1,183 @@
+name         = "silent-misses"
+base         = "knowledge-base"
+spec_version = "0.8.1"
+summary      = "stop flw kb reporting that nothing was written about a term the corpus holds, and stop one byte killing it"
+
+approach = """
+WHAT THIS IS. The `eng` review of `b806fbb..8c0d76f` — four lenses, fresh context each — returned
+1 CRITICAL, 15 MAJOR and 11 MINOR against the knowledge base that shipped one commit earlier. This
+closes all of them. The consolidated report is `.flw/reports/2026-08-27T2341-eng.md` and the four
+per-lens reports sit beside it; once this record exists they are disposable.
+
+COVERAGE, AND WHAT NOBODY READ. The scope was the five commits: `core/scripts/kb.py`, the
+`load_records` extraction in `core/scripts/validate_spec.py`, the `kb` subcommand in `cli/flw.py`,
+both test files, the contract edit, the version record and the design. Out of bounds and unread:
+the two scouts, `run_tests.py`, the install, style and sync machinery, and every other skill.
+
+THE ONE DEFECT WITH THREE FACES. The command's whole purpose is to stop a settled decision being
+made again for want of finding it, and it currently answers "nothing written down here matches"
+about things that were written. Measured against this repository by building a 6,322-word
+vocabulary out of the corpus and querying each word: 191 terms match a document and print nothing.
+Three classes account for them — 229 task ids, which live in `Hit.label`; 14 removal checks, which
+live in `Hit.note`; and 18 component `paths`, which become no hit at all. `flw kb census-test`
+names a task in the `knowledge-base` record and prints the no-match line. Separately, `\\b` asserts
+a word character inside the boundary, so a term edged with punctuation cannot match at any
+position: `.flw` appears in 21 corpus documents, `--all` in 3 and `.gitignore` in 5, and all three
+queries report nothing. And an empty term does the opposite — `pattern("")` compiles to
+`\\b(?:|ed|ing|s)\\b`, whose empty alternative matches at every word boundary, so `flw kb ""`
+prints the whole corpus and `flw kb lock ""` prints 201 lines where `flw kb lock` prints 73. The
+flw-review discipline that tells a reviewer to run `flw kb <the thing I am about to call a
+mistake>` is exactly the caller that builds that argument from a variable.
+
+THE TRACEBACK. One byte that is not UTF-8 anywhere in the corpus kills search, `--show` and the
+census alike, because `UnicodeDecodeError` is a `ValueError` and the CLI handler catches `OSError`.
+The same command handles every neighbouring filesystem condition correctly — `chmod 000` gives
+`error: Permission denied`, a dangling symlink gives `error: No such file or directory`, a
+directory named `plans/notes.md` gives `error: Is a directory` — which is what makes this a bug
+rather than a policy. The lenses split on its severity, CRITICAL against MAJOR, and neither
+disputed a fact; that disagreement is recorded in the report and is not settled here, because both
+readings produce the same fix.
+
+WHAT THIS IS NOT. Not a redesign. Every finding is a correction inside the shape `knowledge-base`
+established, and no group, no ordering and no exclusion moves. The corpus boundary is the one
+contract sentence that changes, and it is weakened rather than replaced — see the decision below.
+
+WHAT WAS MEASURED AND HOLDS. The review found no defect in the parts most likely to carry one.
+`load_records` preserves `check_chain` byte for byte, read line by line. `recency()` is a total
+order and cannot raise. `forms()` cannot violate the whole-word property — `lock` still matches 3
+records of 26 where substring matches 15. The command is read-only in fact: `stat` of every path
+before and after all four invocations is byte-identical, twenty concurrent runs produce one
+distinct output, and `SIGINT` mid-run over a 501-record 28 MB corpus leaves the tree unchanged,
+because nothing is written. At that size search takes 0.43s and the census 0.28s. Fourteen of
+thirty-one mutations were caught by the test named for each. Do not churn any of it.
+
+TWO THINGS THE REVIEW SAID THAT THIS RECORD DOES NOT DO. The `knowledge-base` record's `corpus`
+task says the corpus reads `core/reviews/*.toml` and its `census-test` task says an empty
+`open_questions` prints as an empty section; the build reads `.flw/reviews/` and omits the heading,
+and both task descriptions are wrong. They stay wrong — the decision below says why, and this
+approach is where a reader of either record finds the correction. The record also names seven
+output groups where eight shipped; REVIEWS is the eighth, and `plans/design-kb.md` and the CLI help
+both describe it correctly.
+
+A NOTE ON HOW THE REVIEW RAN, because it bears on how much the findings are worth. Two reviewers
+mutated `core/scripts/kb.py` at the same time: one was breaking the code to see whether the suite
+noticed, the other restored the file from git on seeing unexplained diffs. A restore landing
+between an edit and a test run reports an unmutated tree as passing, which reads as a coverage gap
+that is not there. Every one of the 17 surviving mutations was therefore re-measured, re-reading
+the file after pytest exited and discarding any run where the mutation was no longer on disk. All
+17 survived both passes and nothing was discarded.
+"""
+
+contract_edit = """
+1. In the component named "validation and checks", replace the `properties` entry beginning "The
+   corpus a knowledge-base query reads" with:
+
+     "The corpus a knowledge-base query reads is exactly the contract, the version records, the
+     review team configs and plans/*.md. Nothing else under the project is read."
+
+   The deleted half claimed that a clone answers the same query identically. It does not: the
+   corpus is bounded by directory, so an untracked file inside one is read.
+
+2. Replace the `open_questions` entry beginning "Whether a knowledge-base corpus should be bounded
+   by directory or by what the VCS tracks" with:
+
+     "Whether a knowledge-base corpus should be bounded by directory or by what the VCS tracks.
+     Bounding by directory reads a file the project has not committed — plans/post-review-roadmap.md
+     is untracked, 5,315 words, and searchable today — and it also excludes a tracked report in a
+     project that keeps its reports. Neither direction is answerable without reading a VCS, which no
+     flw command does."
+"""
+
+[[decisions]]
+topic     = "whether to correct two task descriptions in a record the contract has already applied"
+options   = [
+  "Leave the record; put the correction in this record's approach, where a reader of either reaches it.",
+  "Correct the two descriptions in place, because flw kb --show now serves them as the project's own account of itself.",
+  "Correct them, and settle in flw-spec when an applied record may be corrected at all.",
+]
+chosen    = "Leave the record; put the correction in this record's approach, where a reader of either reaches it."
+rationale = "The two lenses that found this disagreed, and the disagreement is real on both sides. A record is what was specced and reviewed, and editing it after the fact means the file in git is not the file anyone agreed to — which is the property `name` exists to protect and the reason a record's identity never changes. Against that: `flw kb --show knowledge-base` now hands a reader two lines that are the opposite of what shipped, and a reader hits the record before the design. What settles it is that nothing binding is wrong. The contract says only \"the review team configs\", `plans/design-kb.md` and the CLI help both name `.flw/reviews/` correctly, and the eighth group is described correctly in both. So the cost is one stale sentence in a historical document, against a precedent for rewriting history. The third option was refused for a different reason: settling a general rule from one instance is how a rule comes to fit the case that produced it and nothing else."
+
+[[decisions]]
+topic     = "whether the corpus boundary is fixed or the property that describes it is weakened"
+options   = [
+  "Weaken the property: say what is read, and drop the claim that a clone answers identically.",
+  "Read what the VCS tracks, so the claim becomes true.",
+  "Take an explicit file list in .flw/config.toml instead of a directory glob.",
+]
+chosen    = "Weaken the property: say what is read, and drop the claim that a clone answers identically."
+rationale = "The claim is false as measured: `git ls-files plans/` lists six files and the corpus reads seven, the extra being 5,315 untracked words. Making it true needs a VCS, and `core/shared/context.md` states that project resolution is deliberately not a VCS command because flw assumes no version control at all — so option two buys one property at the cost of a stated principle, in the one command least entitled to spend it. A configured file list moves the boundary into a file somebody has to maintain, and a corpus that is wrong because nobody updated a list is worse than one that is wide. The open question already on the contract is where this belongs, and it is widened to name both directions rather than only the inverse."
+
+[[decisions]]
+topic     = "what a corpus file that is not UTF-8 does"
+options   = [
+  "Read it with errors=\"replace\" so it stays searchable, and never raise.",
+  "Skip the file and say which one was skipped.",
+  "Refuse the whole query, naming the file.",
+]
+chosen    = "Read it with errors=\"replace\" so it stays searchable, and never raise."
+rationale = "Both lenses that reached this proposed the same fix independently. A design note with a latin-1 paste is mostly readable text with a handful of bad bytes, and dropping it silently loses the largest tier of the corpus for one character — `plans/` is 28,793 words of 78,956. Replacement keeps every word around the damage findable, which is what the command is for. Refusing the query is worse than either: it makes one bad byte anywhere block every answer, which is the failure mode the guard at kb.py:69 was already written to avoid for a malformed contract. The TOML tiers keep their existing behaviour of being skipped with the rest still searched, because a record that cannot be decoded cannot be parsed either."
+
+[[decisions]]
+topic     = "whether flw validate's traceback on the same byte is in scope"
+options   = [
+  "Fix it here: same bug class, one version.",
+  "Leave it; the review ruled it out of scope and it predates this work.",
+]
+chosen    = "Fix it here: same bug class, one version."
+rationale = "`validate_file` catches `tomllib.TOMLDecodeError` and a non-UTF-8 file raises `UnicodeDecodeError` out of `tomllib.load`, so `flw validate` — the command whose entire job is reporting a document it cannot read — dies with a traceback instead of naming the file. The correctness lens found it while tracing the knowledge base's version and correctly ruled it outside the diff under review. Splitting it into its own record would leave the two halves of one guard fixed a version apart, and the second half is three lines."
+
+[[dag]]
+group = 1
+phase = "the search finds what is there, and prints the match"
+tasks = [
+  { id = "match-whole-hit", desc = "core/scripts/kb.py:299: the per-hit filter matches the whole hit rather than its body — label, text and note. A task id lives in Hit.label and a removal check in Hit.note, so neither can match today. Measured target: of a 6,322-word vocabulary built from the corpus, terms that match a document and print nothing fall from 191 to 5." },
+  { id = "paths-are-a-hit", desc = "core/scripts/kb.py:203-224: a component's `paths` entries become CONTRACT hits, which closes the five terms left by match-whole-hit. `flw kb core/scripts/scout.mjs` should reach the component that declares it.", depends_on = ["match-whole-hit"] },
+  { id = "punctuation-terms", desc = "core/scripts/kb.py:131,133: `(?<!\\w)` and `(?!\\w)` in place of `\\b` in both branches of pattern(). `\\b` asserts a word character inside the boundary, so `.flw` cannot match anywhere; it appears in 21 corpus documents, `--all` in 3, `.gitignore` in 5. The whole-word property must survive: `lock` still refuses `blocked_by` and `a blocking call`." },
+  { id = "empty-term", desc = "core/scripts/kb.py:118-133: forms() returns [] for an empty or whitespace-only word and pattern() compiles `(?!)` when there are no forms, so an empty term matches nothing. Today it matches every document and, because search() prints a hit when any pattern matches, one empty argument switches the per-hit filter off entirely — `flw kb lock \"\"` prints 201 lines against `flw kb lock`'s 73." },
+  { id = "window-bounds", desc = "core/scripts/kb.py:326,328: treat find() and rfind() returning -1 as `no space here` and keep the original bound, and never advance start past the match position. Today `flat.find(\" \", start) + 1` collapses start to 0 and `flat[start:-1]` prints the whole field: a record whose approach is one 200,000-character token prints 2,384 lines and 211,930 bytes instead of a window, and a match more than 200 characters inside an unbroken run prints a body that does not contain it." },
+  { id = "match-tests", desc = "tests/test_kb.py: a term found only in a task id and one found only in a removal check each produce a hit; a component path term reaches CONTRACT; `.flw` and `--all` match while `lock` still refuses `blocked_by`; an empty term matches nothing and does not widen a sibling term's hits; a record whose approach carries the term after 700 characters of filler renders a window that contains the term and opens with the ellipsis. Mutation-check each against the code it names.", depends_on = ["paths-are-a-hit", "punctuation-terms", "empty-term", "window-bounds"] },
+]
+
+[[dag]]
+group = 2
+phase = "nothing in the corpus is a traceback"
+tasks = [
+  { id = "encoding-guards", desc = "core/scripts/kb.py:68 and :81: catch (tomllib.TOMLDecodeError, UnicodeDecodeError). core/scripts/kb.py:84: read plans with read_text(errors=\"replace\") so the file stays searchable. core/scripts/validate_spec.py:354: catch UnicodeDecodeError beside the existing branch, reporting it the way the parse error is reported. One byte that is not UTF-8 currently kills search, --show and the census alike." },
+  { id = "validate-encoding", desc = "core/scripts/validate_spec.py:607-612: validate_file catches tomllib.TOMLDecodeError and a non-UTF-8 file raises UnicodeDecodeError out of tomllib.load, so `flw validate` tracebacks on the file it exists to report. Name the path and the condition, in the shape validate_file already uses for a parse error.", depends_on = ["encoding-guards"] },
+  { id = "contract-shape", desc = "core/scripts/kb.py:214, :478 and :507: component.get(\"name\", \"\") rather than component[\"name\"]. A contract component with no name — which flw validate reports as a missing required field — currently raises KeyError out of documents() and show(). The census already survives it; search and --show must too, for the reason the comment at kb.py:69 already gives." },
+  { id = "guard-tests", desc = "tests/test_kb.py and tests/test_validate_spec.py: a plans file holding one non-UTF-8 byte is still searched and its readable words still match; a version record and a review config that cannot be decoded are skipped with the rest of the corpus still searched; flw validate names the path rather than raising; a contract component with no name does not stop a search. Mutation-check each.", depends_on = ["validate-encoding", "contract-shape"] },
+]
+
+[[dag]]
+group = 3
+phase = "the subcommand honours the contract"
+tasks = [
+  { id = "show-empty", desc = "cli/flw.py:2105: `if args.show is not None:`. An empty --show currently falls through to the census and exits 0, where the contract says a name resolving to nothing exits 1 — so `flw kb --show \"$NAME\"` with NAME unset reports success and answers a question nobody asked." },
+  { id = "print-the-root", desc = "cli/flw.py after :2102: print the resolved root, and drop the line from census() at kb.py:583 so there is one home for it. The component provides that a user is told which project root a command resolved to before it runs; flw test honours it and the two kb surfaces someone runs from an arbitrary directory do not." },
+  { id = "no-match-newline", desc = "core/scripts/kb.py:365: the no-match return ends with a newline. Every other output path does, and the CLI prints with end=\"\", so a search with no hits leaves the prompt on the answer's line." },
+  { id = "census-counts-records", desc = "core/scripts/kb.py:569: count applied records that exist rather than names in the applied list. A contract naming three records with two files present prints `2 version records — 3 applied` and says nothing about the discrepancy that flw validate reports." },
+  { id = "cli-tests", desc = "tests/test_kb.py: --show with an empty string exits 1 and does not print the census; a search and a --show each print the resolved root and the census does not print it twice; the no-match line ends with a newline; a census over a contract naming a record with no file counts the records. Mutation-check each.", depends_on = ["show-empty", "print-the-root", "no-match-newline", "census-counts-records"] },
+]
+
+[[dag]]
+group = 4
+phase = "the tests notice"
+tasks = [
+  { id = "render-assertions", desc = "tests/test_kb.py:334: test_flws_own_records_all_render asserts only `code == 0 and text.strip()`, which holds for a two-line output. Assert inside the loop what each record carries — APPROACH where it has an approach, PLAN where it has a dag. Both branches can be deleted from render_record today with the suite green." },
+  { id = "richer-contract", desc = "tests/test_kb.py:160: the RICHER fixture declares provides alone, so five of the six contract fields the search indexes and three of the five --show prints are exercised by nothing — five mutations pass. Give it properties, surfaces, implementation, assumptions and open_questions, each carrying the fixture term, and assert the labels in the group test and the headings in the component test." },
+  { id = "eight-groups", desc = "tests/test_kb.py:193: no test puts more than four groups in one result, and the .flw/reviews fixture gives its reviewer no perspective, so its hit text is empty and REVIEWS can never match. Build one fixture that matches in all eight and assert the order literally rather than against kb.GROUPS — swapping two entries in GROUPS passes today.", depends_on = ["richer-contract"] },
+  { id = "census-newest", desc = "tests/test_kb.py:346: the census NEWEST block is untested — emptying it passes, and dropping reverse=True so it lists the oldest records as the newest also passes. Assert the block opens with the in-flight record." },
+  { id = "whole-word-sets", desc = "tests/test_kb.py:126: the ratio assertion reads 3 < 3.75, so one more record using `lock` as a word fails it and the failure names nothing about whole-word matching. Assert the sets instead — a record matching only through `blocked_by` is in the substring set and not the whole-word set, which is what the ratio stood in for." },
+]
+
+[[dag]]
+group = 5
+phase = "deletions, and the numbers that were never true"
+tasks = [
+  { id = "one-decision-render", desc = "core/scripts/kb.py:436-453: render_record re-implements the decision block render_hit already produces, byte-identically — the rejected-options filter, the chose/over/because triple and the textwrap.fill loop are each written twice. Build the triple in one helper both call and have render_record call render_hit, which never touches patterns when parts is set. Net deletion." },
+  { id = "delete-dead", desc = "core/scripts/kb.py:284-288: delete _relative's except ValueError, which cannot fire — both call sites pass paths globbed under root, and a relative root resolves too. core/scripts/kb.py:398: delete _paragraphs' indent parameter, never overridden across its four call sites, and inline the value." },
+  { id = "compile-once", desc = "core/scripts/kb.py:293 and :367: search() and render_search() each build the patterns from terms, so every query compiles them twice. Return the compiled patterns from search() and pass them in. re.compile is superlinear in term length — 0.003s at 1,000 characters and 2.931s at 100,000 — so this is a cost note rather than a threat, and the fix is smaller than the duplication." },
+  { id = "true-numbers", desc = "core/scripts/kb.py:97-99: the forms() docstring says substring `lock` matches 14 records of 26 and whole words match 2. Measured at HEAD it is 15 and 3; 14 and 2 were true at b806fbb with 25 records, so the pair took its record count from after the knowledge-base record landed and its match counts from before and never described one state. core/scripts/kb.py:475 and plans/design-kb.md:222: specs/current.toml is 193 lines, not 700 and not several hundred — 193 is the largest it has ever been. The argument each number supports survives the correction." },
+  { id = "design-status", desc = "plans/design-kb.md:3: the status line reads `proposed, nothing built` about a command that shipped, in a file flw kb itself prints under PLANS — the group labelled as possibly superseded. plans/design-v3.md:3 shows the convention: say it is built, and keep the draft history that follows." },
+]

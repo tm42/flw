@@ -1,0 +1,18 @@
+# Dev-tool configuration only. flw is not a Python package you install — it is a
+# folder of skills a host loads, running under the system interpreter with no
+# environment of its own. This file exists so `ruff check .` and `pytest -q`,
+# the two tests specs/current.toml declares, have somewhere to read their
+# settings from.
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# `ruff check --select E402 .` passes on the whole tree today.
+extend-select = ["I", "UP", "B", "E402"]
+
+[tool.pytest.ini_options]
+# The engine imports as `core.scripts.*` when under test and falls back to a
+# flat import when run as a script. Only the first needs help finding the root.
+pythonpath = ["."]
+testpaths = ["tests"]

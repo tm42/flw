@@ -1,0 +1,122 @@
+base         = "2.2"
+spec_version = "3.0"
+name         = "3.0"
+summary      = "research: onboard flw onto a repo it did not set up — and design.md goes"
+
+approach = """
+Two things that are really one. Extensions became the per-repo prose layer in v2.2, which
+made design.md a second one with different consumers. Research is the skill that fills the
+first, so the second has to go in the same version or the repo carries two answers to the
+same question.
+
+WHY design.md GOES. flw is a project built with flw and it never wrote one — "stdlib only"
+lives in the contract's assumptions and in the implementation field of the component it
+constrains. The file was available the whole time and the dogfood never reached for it.
+Its one unique property was being a single prose file every skill reads; extensions are
+that now, per skill, and generated rather than typed, which is the difference between
+duplication that drifts and duplication that regenerates.
+
+The removal also deletes a parser. gates collected check: lines out of design.md prose by
+regex — a regex that had already broken once on anchoring — and `unparsed` exists only to
+serve it. Four check sources become three, and gates exit 2 collapses from "nothing
+declared, or a line could not be read" to "nothing declared". After this, no command in
+flw lives inside prose.
+
+WHAT RESEARCH WRITES. `.flw/extensions/<skill>.md` and `.flw/config.toml`, never a
+contract. The routing rule is one line: code reads it, config; an agent reads it, prose.
+So test invocation and conventions are prose in the extension the relevant skill reads,
+while the check list and the not-runnable-here list are data in [gates], because prose
+makes an agent reconstruct a command each run and it drifts.
+
+Research writes what IS. What MUST BE stays the human's, in the contract.
+
+WHAT THE RESEARCH CHANGED. Four findings, none of them ours before this week.
+
+A published A/B test of static repo overviews (N=438) found they do not reduce
+steps-to-first-relevant-file and do not improve resolution; LLM-generated ones slightly
+hurt. It tested prose rather than ranked structure, so the artifact type is untested rather
+than refuted — but the mechanism transfers, because an overview costs context on every
+request whether it is relevant or not. So the scout regenerates on demand and the extension
+persists the recipe, not the orientation. That is the single largest design change here.
+
+Structural retrieval beat dense embeddings in every published head-to-head found, which
+retroactively justifies going straight to symbol graphs.
+
+Ranking over name references is worthless and ranking over imports is not: the first
+surfaces get(), close() and _utcnow(); the second surfaces the actual domain types. This is
+a deliberate divergence from aider, which ranks over references because tree-sitter across
+130 languages cannot resolve imports uniformly. Python's ast and TypeScript's compiler API
+both can.
+
+Vendored code has to be excluded before ranking or it wins — a vendored tomlkit took half
+the top ten on a real repo. github-linguist's vendor.yml is the list, borrowed rather than
+invented.
+
+WHAT IS DELIBERATELY NOT BUILT. Barrel-file collapse: when index.ts re-exports everything,
+every import resolves to the barrel and a file-level ranking collapses onto it. Nothing
+solves this — not dependency-cruiser, skott, grimp or pydeps — and the algorithm to port is
+known (Next.js's optimize_barrel walks re-export chains and reattributes). It is not built
+because a check across the actual target repos found zero TypeScript barrels and
+single-line __init__.py re-exports. A known limitation, recorded, not engineered around.
+
+Also not built: monorepo machinery, an index or cache of any kind, embeddings, and any
+bundled indexer. flw stays stdlib-only; the scout uses the language's own parser, which a
+repo of that language already has.
+"""
+
+[[decisions]]
+topic     = "where research writes its findings"
+options   = ["design.md, as the original design intended", "per-skill extensions plus .flw/config.toml"]
+chosen    = "extensions plus config"
+rationale = "design.md binds the instant it exists, with no draft state and nothing validating it, so automating it was dangerous. Extensions are descriptive and per-skill, and doctor already verifies them. A distilled convention may also be a habit worth killing rather than a rule worth enforcing — description is the honest register for a generated file."
+
+[[decisions]]
+topic     = "prose or config for what research discovers"
+options   = ["all of it as prose the skill reads", "split by consumer"]
+chosen    = "split by consumer"
+rationale = "Code reads it, config; an agent reads it, prose. A command written as prose gets reconstructed each run and drifts — make style becomes ruff check . because that is what the agent knows. It also retroactively explains why design.md's check: lines were wrong."
+
+[[decisions]]
+topic     = "whether the scout persists its output"
+options   = ["write the map into the extension", "persist only the command that regenerates it"]
+chosen    = "persist the command"
+rationale = "A published A/B test found static repo overviews do not help and LLM-generated ones slightly hurt. The scout runs in under a second, so persisting buys staleness and a permanent context tax for nothing. The extension says how to orient; it does not carry the orientation."
+
+[[decisions]]
+topic     = "build the scout or adopt an indexer"
+options   = ["adopt Serena, CodeGraph, SCIP or GNU GLOBAL", "ship a stdlib scout per language"]
+chosen    = "ship the scout"
+rationale = "No off-the-shelf tool does build-graph, rank, summarise. Every one examined has a documented scale failure (Serena ~11h on LLVM's 7,749 files, CodeGraph OOM at 44% on 137k files), no independent evidence, or an unverifiable popularity signal. The scout is ~200 lines of stdlib and does 1,780 files in 9.4s."
+
+[[decisions]]
+topic     = "language-specific code in a language-agnostic tool"
+options   = ["stay neutral and describe the technique", "ship Python and TypeScript scouts"]
+chosen    = "ship both"
+rationale = "flw's language-agnostic claim is about not assuming the project's toolchain. The scout uses the language's own parser — Python's ast, and the typescript package out of the target repo's own node_modules — so it assumes nothing a repo of that language does not already have. The line is drawn explicitly: these two because they cost nothing, everything else defers to aider --show-repo-map."
+
+[[dag]]
+group    = 1
+phase    = "remove design.md"
+tasks = [
+  { id = "gates-design", desc = "Drop the check: regex, the design branch and the unparsed parameter from gates.py; drop the unreadable-check error branch from the CLI and reword the no-gates message.", depends_on = [] },
+  { id = "prose-design", desc = "Remove the design.md section from context.md and every mention across the three skills; four check sources become three. Reword good-contract.md's routing line to point durable rules at the contract.", depends_on = ["gates-design"] },
+  { id = "tests-design", desc = "Delete the design tests from test_gates.py and the unparsed assertions.", depends_on = ["gates-design"] },
+]
+
+[[dag]]
+group    = 2
+phase    = "the scout"
+tasks = [
+  { id = "scout-py", desc = "core/scripts/scout.py — stdlib only. Import graph, linguist vendor exclusions, aider's weight heuristics, PageRank by power iteration, packages plus ranked definitions.", depends_on = [] },
+  { id = "scout-ts", desc = "core/scripts/scout.mjs — same algorithm, loading typescript from the target repo's node_modules. ts.resolveModuleName with a resolution cache for path aliases.", depends_on = ["scout-py"] },
+  { id = "scout-cli", desc = "flw scout — detect which languages a repo has, run what applies, report plainly when neither is present.", depends_on = ["scout-py", "scout-ts"] },
+  { id = "scout-tests", desc = "Tests over fixture trees: vendored code excluded, imports outrank name collisions, no project handled, neither language handled.", depends_on = ["scout-cli"] },
+]
+
+[[dag]]
+group    = 3
+phase    = "the research skill"
+tasks = [
+  { id = "skill-research", desc = "core/skills/flw-research/SKILL.md — probe, verify against a known edge, record. Writes extensions and config, never specs/. Says what it could not determine rather than guessing.", depends_on = [] },
+  { id = "skill-tests", desc = "Skill-text assertions for the routing rule, the never-writes-specs lane, and the verify-before-recording step.", depends_on = ["skill-research"] },
+]

@@ -1,0 +1,154 @@
+base         = "4.0"
+spec_version = "4.1"
+name         = "4.1"
+summary      = "every place a tool reports a false negative about its own work: a setup typo that turns failures into skips, a validator that stops at the first bad file, a reviewer whose report is lost in silence"
+
+approach = """
+ONE DEFECT, FIVE ADDRESSES. A tool that fails loudly is a tool someone fixes. Each of these
+succeeds while doing nothing, or reports somebody else's absence as its own clean run, and
+that is why they belong in one version rather than in the components they happen to live
+in. The worst is `run_tests.py:100`: `run_one` builds `f"{setup} && {check.command}"` and
+hands the whole string to one bash, so a `setup` line naming a command bash cannot find
+exits 127 before any check runs — and `Result.state` reads 127 as `unavailable`, the sandbox
+signal, for every check in the run. Same project, same three checks with one `false`, only
+the setup line differing:
+
+    setup = "activate-venv"    0 passed · 3 for you     EXIT=0
+    setup removed              2 passed · 1 failed      EXIT=1
+
+That inverts, from the other side, the property `flw test` exists to hold. The trigger is
+ordinary — a typo, or `source .venv/bin/activate` written where the venv is gone — and
+nothing in the output distinguishes it, because 127 has been claimed by the setup.
+
+WHY IT HAS NEVER FIRED HERE. flw's own repository has no `.flw/config.toml` and therefore no
+`[tests] setup`, so this cannot happen to flw while flw is what is being worked on. It is a
+bug for flw's users and invisible to its author, which is the argument for a test rather
+than for care.
+
+THE GLOBAL CONFIG IS IMPLEMENTED, NOT DELETED. `core/shared/context.md` has documented
+`~/.flw/config.toml` as a global underlay merged key by key with the project file since v3.0,
+and `_local_config` opens only the project file, so a key written in the documented place has
+no effect and no error. The merge is built rather than the claim deleted, for the reason in
+the decision below; with it, `.flw/config.toml`'s keys stop being a documented shape nothing
+honours, and 4.0's deferral of them to this version is discharged.
+
+WHAT THE WORK IS NOT. Not a redesign of the 127 contract. A check that exits 127 *on its own*
+is still reported as unavailable rather than failed, recorded with its rationale at
+`specs/versions/v2.0.toml:90-92`, and that stays exactly as it is — the defect is that the
+setup can steal the signal, not that the signal is wrong. Not a rewrite of `flw test`'s exit
+codes. And not a permission layer over what a check may contain: commands come out of files
+in the project at the same trust level as a Makefile, and refusing a newline is about
+reporting the right exit code, not about restricting what runs.
+
+THE GUARD THAT HAS NEVER BEEN IN FORCE, AND WHY IT GETS NO TEST. `flw-execute` step 5 tells
+an agent applying a `contract_edit` not to restate, reflow or reorder anything the edit did
+not name. Commit `cd4aca9` both added that rule and violated it, repunctuating two clauses of
+`success_criteria.criteria` the edit never mentioned. This version does not add a second copy
+of the rule and does not test it; it removes the condition that let the violation through.
+4.0's own run touched eleven files, the contract among them, and a diff that size is skimmed.
+
+WHAT REVIEW COST TO GET, AND WHY IT IS WORTH FIXING. On 2026-08-23 three of four reviewers
+had their replies dropped by the session mailbox — the work was done and the reports written,
+but they arrived only after being chased and told to write to a file. `flw-review` §4 says to
+record a silent reviewer as `(no report: <reason>)` and carry on; followed literally, that run
+would have discarded three complete reviews including both scout CRITICALs. Every review since
+has been given a delivery contract by hand. This version makes it the skill's.
+
+THE OPEN QUESTION THIS CLOSES. Whether `flw-review` earns its place as a separate skill. It
+does, and the evidence is 2026-08-24: two rounds over the v4.0 spec, the first killing a
+contract property that measurement showed was false, the second killing its replacement and
+catching that a diff-confinement pass would have run against an always-empty diff. Neither
+round found the other's findings, and no round found what the author found. The roadmap had
+this closing at 4.2; it closes here, because this is the version that invests in the skill.
+
+COVERAGE OF THE REPORTS THIS IS SPECCED FROM. `.flw/reports/2026-08-23T1420-quick.md` read
+`run_tests.py` end to end, the `test` handler and subparser in `cli/flw.py`, and
+`tests/test_run_tests.py`; it probed a broken setup, a check exiting 127 on its own, a
+hanging check, an orphan on the pipe, unparseable configs, an empty `checks` list, metacharacters
+and newlines in a command, `yours` covering everything, and running from a subdirectory. It did
+not cover streaming versus `--no-stream` under a slow writer, non-bash environments, or
+concurrent runs; the first is untouched here and the last two are out of scope by the
+contract's own implementation note. Measured there: `_local_config` parses `.flw/config.toml`
+four times per run, instrumented.
+"""
+
+contract_edit = """
+open_questions: delete
+  "Whether review earns its place as a separate skill: only spec and execute see real use in
+   the field version."
+
+The flw CLI component's surfaces array gains, after the ~/.flw/styles entry:
+  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project
+   wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests]
+   setup, checks, yours."
+
+The validation and checks component gains, to its properties array:
+  "A check reported as one this session could not run is one whose own command was missing.
+   A failing [tests] setup fails every check in the run instead, with the setup's own error
+   text attached."
+  "A command that could not be run to completion is never reported as passing: a check whose
+   text spans more than one line is refused at collection time rather than reported by its
+   last line's exit code."
+
+The validation and checks component gains, to its provides array:
+  "A user can declare once, for this machine, which of a project's checks cannot run here,
+   instead of repeating that in every repository they work in."
+"""
+
+[[decisions]]
+topic     = "the documented ~/.flw/config.toml underlay: implement it or delete the claim"
+options   = ["implement the merge", "delete the sentence from core/shared/context.md"]
+chosen    = "implement the merge"
+rationale = "[tests] yours declares a check unrunnable in this session, which is a fact about the machine rather than the repository — 'there is no database here' is true of every checkout on this laptop, and restating it per repo is how such a list goes stale and starts hiding real failures. The contract already treats handing checks back as the normal case. Deleting the claim is cheaper by five lines and makes the normal case harder."
+
+[[decisions]]
+topic     = "how a failing setup is reported"
+options   = [
+  "give the setup its own non-127 exit code so it lands in the fail branch",
+  "run setup and check as two subprocesses and report the setup's failure separately",
+  "stop reading 127 as unavailable",
+]
+chosen    = "give the setup its own non-127 exit code so it lands in the fail branch"
+rationale = "One line in run_one. Two subprocesses cannot work: setup exists to change the shell the check runs in, so a separate process discards it. Dropping the 127 rule would undo a decision recorded at specs/versions/v2.0.toml:90-92 and lose the signal that a check's own command is absent, which is the case the rule was built for."
+
+[[decisions]]
+topic     = "what happens to a multi-line check command"
+options   = ["refuse it at collection time", "report the exit code of the whole block", "leave it"]
+chosen    = "refuse it at collection time"
+rationale = "bash reports the last line's status, so `false\\necho x` is reported as a pass — the version's own defect class, in the one place a user writes the command themselves. Reporting the block's true status would need a shell wrapper around text the user wrote, and a named refusal at collection is both smaller and more honest than guessing what they meant."
+
+[[decisions]]
+topic     = "how the never-enforced contract-edit guard is enforced"
+options   = ["a test", "a second copy of the rule in another skill", "print the contract diff on its own"]
+chosen    = "print the contract diff on its own"
+rationale = "The guard governs an agent reading prose, so there is nothing to unit-test, and a second copy is what 4.0 tried and withdrew. What let cd4aca9 violate it was that the contract was one file of eleven in a single staged diff. A separate, small diff is reviewed; a large one is skimmed."
+
+[[dag]]
+group  = 1
+phase  = "the check runner stops reporting failures as skips"
+tasks  = [
+  { id = "setup-guard", desc = "run_tests.py run_one: build the command so a failing setup exits with a code that is not 127 and lands in the fail branch with its error text attached — `f\"{setup} || exit 125\\n{check.command}\"` when a setup is declared, the bare command otherwise. Result.state keeps mapping 127 to unavailable, which is the check's own command being absent and stays correct." },
+  { id = "contract-guard", desc = "run_tests.py collect: read specs/current.toml through the same named-SystemExit guard _local_config already has. Today a contract that does not parse dies in a traceback and exits 1, which flw-execute's published table calls \"something it ran failed\", so an agent concludes a check failed when nothing ran at all." },
+  { id = "config-underlay", desc = "run_tests.py _local_config: read ~/.flw/config.toml first and update it key by key with <project root>/.flw/config.toml, applying the existing parse guard and the [gates] rename guard to both files. Honour $FLW_HOME for the global path, as every other flw file under it does. The unparseable-config branch that cannot fire through the current caller goes or becomes reachable, whichever the merged shape makes true. cli/flw.py binds the result once rather than calling _local_config twice on consecutive lines — the file is parsed four times per run, instrumented.", depends_on = ["contract-guard"] },
+  { id = "empty-after-yours", desc = "cli/flw.py: decide the nothing-to-run refusal after [tests] yours has been subtracted, not before. A config whose yours covers every declared check currently exits 0 having run nothing, and exit 0 is published as \"everything it ran passed\". Exit 2 when nothing survives the filter and something was skipped, with a message naming that as the reason.", depends_on = ["config-underlay"] },
+  { id = "multiline-refused", desc = "run_tests.py collect: refuse a check whose command contains a newline, naming the check and saying that bash reports the last line's status so the result would be a lie. `false\\necho x` is currently reported as a pass." },
+  { id = "runner-prose", desc = "run_tests.py's module docstring says checks come from four places and the table three lines below lists three; v3.0 deleted the fourth and specs/versions/v3.0.toml:20 records it. Fix the count. The [gates] rename guard at _local_config stays — it guards a config in the user's repo that nothing rewrites for them, and without it a file that plainly declares commands yields {} and an empty green run." },
+  { id = "runner-tests", desc = "Against a fixture: a broken setup fails every check rather than handing them back, and the run exits 1; a check exiting 127 on its own is still unavailable; an unparseable contract gives a named SystemExit and no traceback; a global yours applies where no project config exists and a project key wins over a global one of the same name; a config whose yours covers every check exits 2 rather than 0; a multi-line command is refused by name.", depends_on = ["setup-guard", "contract-guard", "config-underlay", "empty-after-yours", "multiline-refused"] },
+]
+
+[[dag]]
+group  = 2
+phase  = "the validator reports every record it was given"
+tasks  = [
+  { id = "chain-once", desc = "validate_spec.py: check_chain is about the directory, not about one file, and validate_file calls it from inside the per-file branch. While v3.4 was in flight the pair-check message printed eight identical times, each headed with a version filename it has nothing to do with — v1.0.toml through v3.3.toml, for a fact about current.toml. Run it once beside the per-file loop and attribute it to the directory." },
+  { id = "dispatch-returns", desc = "validate_spec.py resolve_schema: return the error rather than raising SystemExit from inside validate_file. One contract declaring an unknown schema_version currently stops the whole run with every version file unchecked and nothing saying they were skipped. The caller in cli/flw.py reports it and carries on to the next target, and the exit code still reflects the failure." },
+  { id = "validator-tests", desc = "A chain error is reported once for a directory rather than once per file in it; a contract with an unknown schema_version is reported and the remaining records are still validated, with the run exiting non-zero.", depends_on = ["chain-once", "dispatch-returns"] },
+]
+
+[[dag]]
+group  = 3
+phase  = "a skill that cannot be silently ignored"
+tasks  = [
+  { id = "review-delivery", desc = "flw-review SKILL.md §3: every dispatched reviewer is given a delivery contract as part of the discipline — write the full report to a named file AND reply with it, because a reply can be dropped and the file is what makes the work survive. §4: before recording a reviewer as (no report: <reason>), ask it for what it has and say that partial and honest beats complete and late; record the absence only after that." },
+  { id = "execute-shows-contract", desc = "flw-execute SKILL.md step 5: after applying the contract_edit, print `git diff specs/current.toml` on its own and paste it into the reply, before the run's overall staged diff. The rule against restating, reflowing or reordering what the edit did not name already sits in that step; what it lacks is a reader, and a contract edit shown as one small diff is reviewed while the same edit inside an eleven-file diff is skimmed. Say in the step that this is the diff to read line by line." },
+]

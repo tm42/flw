@@ -1,0 +1,192 @@
+name    = "install-robustness"
+base    = "release-line"
+summary = "make the install path repairable after an interruption, stop the CLI raising tracebacks and mangling line endings, and record findings at the code they explain instead of in a document"
+
+approach = """
+THE ONE DEFECT AND ITS TWO FACES. `record()` at cli/flw.py:234 is a read-modify-write with
+no lock and no atomic replace, called exactly once, at cli/flw.py:372, after every symlink
+is already on disk. Two failures fall out of that single fact. Two concurrent installs both
+read the same starting state and the second write wins, so the first run's links survive on
+disk with nothing recording them — measured losing the record in 3 of 20 unassisted runs.
+Killing an install partway leaves N symlinks and zero records, after which `uninstall`
+prints "nothing to remove" and `doctor` reports the host as not installed while the skills
+are live and being loaded.
+
+THE ORDER IS THE FIX. Write each entry BEFORE creating the link it describes, through a
+temp file beside links.toml and os.replace, which is atomic. That inverts the failure
+direction: an interruption now leaves a record naming a link that is not there, rather than
+a link nothing names. Over-claiming is repairable and under-claiming is not — a path in the
+record is a path doctor checks and sync can act on, while an unrecorded symlink is invisible
+to `uninstall` forever. This is the whole argument for the order and it is worth more than
+any locking.
+
+TWO THIRDS OF THE MACHINERY ALREADY EXISTS, WHICH IS WHY THIS IS SMALL. `sync` at
+cli/flw.py:1429 already classifies a recorded path with no symlink at it as `missing` and
+repairs it, so the state phase 1 produces on an interruption is not a new case. `doctor` at
+cli/flw.py:1312 already finds the other direction — a symlink in a host root that flw did
+not record but which resolves into the checkout — and prints it. What is missing is only
+that nothing can act on what doctor finds.
+
+WHY NO LOCK. fcntl is POSIX-only and this contract states no platform assumption at all, so
+taking a lock commits flw to POSIX or adds a fallback path harder to test than the thing it
+protects. With phases 1 and 2 the race is detected by doctor and repaired by sync rather
+than prevented, and two deliberate simultaneous installs are rare where an interrupted one
+is not. A lock composes with both phases if it is ever wanted; nothing here forecloses it.
+
+THE TRACEBACKS. `main()` at cli/flw.py:2105 is `return args.handler(args)` with nothing
+around it, and `grep -n "except OSError\\|except Exception" cli/flw.py` returns nothing. A
+hand-edited links.toml missing a key, a corrupt root pointer, a directory where a file was
+expected — every one is a traceback. First-run tracebacks are what make someone abandon a
+tool, and this is a tool whose first action is `flw install`.
+
+A HOST'S LINE ENDINGS DO NOT SURVIVE. read_host_text at cli/flw.py:460 calls
+path.read_text(), which translates newlines on the way in, so a CRLF instructions file is
+written back entirely LF. Every byte of content survives and none of the user's line
+endings do — a whole-file diff in somebody else's repository, caused by flw appending one
+tagged block. Python 3.11 is the floor, so read_text(newline=...) is not available and the
+read goes through path.open(newline="") instead, keeping the UnicodeDecodeError handling
+that names the file.
+
+WHY THE WORKING NOTES ARE IN THE SAME RECORD, AND WHY docs/verified.md GOES WITH THEM.
+git ls-files .flw/ shows eight report files tracked, five carrying absolute paths into a
+particular home directory. They are artifacts of runs already finished. docs/verified.md is
+the same class one level up, and the measurement that settles it is that five of its six
+entries are already recorded at the site of the thing they explain: the `..` collapse at
+core/skills/*/SKILL.md:21, host detection at cli/flw.py:112, $HOME-as-project-root at
+cli/flw.py:1696, the optional contract at core/scripts/run_tests.py:79, the 1-of-8 LSP at
+core/skills/flw-research/SKILL.md:169. Only "two hosts, three covered" has no site record,
+and it is the least surprising of the six.
+
+The site copy is better than the document for a reason that is not tidiness: the person
+about to delete a workaround reads the comment above it and does not open docs/. A comment
+also cannot drift from the code it annotates, because the two move in one diff, while a
+separate document goes stale silently and nothing checks it — which is the failure
+`stale-claims` spent four phases removing everywhere else. What is lost is the belief half
+of each entry, which the site comments mostly carry inverted by saying what breaks without
+the code. That is a small loss and worth taking.
+
+WHAT IS NOT HERE. Any change to `blocked_by` or the additive rule, which is what makes an
+unrecognised symlink safe rather than dangerous and is working as specified. The fold
+opt-out, still deferred. And a second machine with a different host layout, which is the one
+thing that cannot be tested from here at all: a fresh clone installs cleanly into a scratch
+home on this machine, and that is not the same as Codex or OpenCode actually being present.
+"""
+
+contract_edit = """
+1. In the component named "the flw CLI", append to `provides`:
+
+   "An install that is interrupted leaves a state flw can name and repair: the record of a
+    link is written before the link itself, so what is left over is a record with nothing at
+    its path rather than a symlink nothing knows about, and `flw sync` fixes it."
+
+   "A symlink flw made but has no record of — from a run that was interrupted or one that
+    raced another — is adopted back into the record by `flw sync` rather than staying
+    invisible to `flw uninstall`."
+
+   "A command that meets an ordinary filesystem condition — an unreadable record, a corrupt
+    root pointer, a missing directory — says what happened and which path it was reading,
+    rather than printing a traceback."
+
+   "A host's instructions file keeps the line endings it had. flw appending or removing its
+    own tagged block changes the block and nothing else, so the diff in someone else's
+    repository is the size of the change."
+
+2. In the component named "the project surface", DELETE the `provides` entry beginning "A
+   user can read what happened when flw was run against a real host and a real repository"
+   in full, and add an entry to `final_state.removed`:
+
+     statement = "docs/verified.md, the separate record of what running flw against real
+                  hosts and repositories taught. Five of its six findings were already
+                  written at the site of the code each one explains, and a second copy in a
+                  document nobody opens before editing is drift waiting to happen. Findings
+                  are recorded as comments where the workaround is."
+     check     = "test ! -e docs/verified.md" 
+
+Nothing else changes.
+"""
+
+[[dag]]
+group = 1
+phase = "the record is written before the link it describes"
+tasks = [
+  { id = "atomic-write", desc = "cli/flw.py write_links at :221: write through a temp file in the same directory as links.toml and os.replace onto it, so a reader never sees a half-written record and a crash mid-write leaves the previous one intact. The temp file must be beside links.toml, not in the system temp directory, because os.replace is only atomic within one filesystem." },
+  { id = "record-as-you-go", desc = "cli/flw.py install at :305-372: record each link BEFORE creating it, instead of the single record() call at :372 after every symlink exists. record() at :234 keeps its job of preserving entries for roots this run did not touch; what changes is that it is called per link rather than once at the end. After this, an interrupted install leaves a record naming a path with no symlink, which sync at :1429 already classifies as `missing` and repairs. Under --dry-run nothing is written, as now.", depends_on = ["atomic-write"] },
+  { id = "interrupt-test", desc = "tests/test_cli.py: an install interrupted after some links exist leaves a record that is a superset of the disk, never a subset. Simulate the interruption rather than killing a process — make link creation raise partway through and assert the record already names what was created and what was about to be. Then assert `flw sync` brings the two into agreement, and assert the opposite ordering would fail: if the record were written last, the same interruption would leave a symlink absent from the record.", depends_on = ["record-as-you-go"] },
+]
+
+[[dag]]
+group = 2
+phase = "sync adopts a link flw made but never recorded"
+tasks = [
+  { id = "adopt", desc = "cli/flw.py sync at :1396: a symlink in a host root that flw does not have recorded, which resolves into the checkout or a registered bundle, and which sits at the path a known skill belongs at, is flw's — add it to the record and report it as adopted. doctor at :1312 already builds exactly this list; sync should derive it the same way rather than writing a second definition of what an untracked link is. A symlink resolving somewhere else is untouched: that is a user's own file and the additive rule protects it." },
+  { id = "doctor-points-at-the-fix", desc = "cli/flw.py doctor at :1312: the untracked line reads `· <path> — points into flw but was not created by it` and offers nothing to do about it. Add the remedy, as the other doctor faults already do: say `flw sync` will adopt it. Leave it as a note rather than a counted problem, per this record's decision — the exit code stays zero for a hand-made symlink, which the additive rule permits.", depends_on = ["adopt"] },
+  { id = "adopt-test", desc = "tests/test_cli.py: a symlink at a known skill's path pointing into the checkout, with no entry in links.toml, is adopted by sync and afterwards removed by uninstall — the second half is the point, since being unreachable by uninstall is the damage. A symlink at the same path pointing somewhere outside the checkout is left alone by sync and still refused by blocked_by.", depends_on = ["adopt"] },
+]
+
+[[dag]]
+group = 3
+phase = "the CLI stops raising tracebacks at ordinary conditions"
+tasks = [
+  { id = "error-boundary", desc = "cli/flw.py main at :2105: wrap `args.handler(args)` so an OSError becomes a message naming what failed and the path it was reading, and a non-zero exit. Ordinary conditions only — a missing directory, an unreadable file, a bad symlink. Do not catch broad Exception: a bug should still produce a traceback, because a bug reported as a tidy message is a bug nobody can debug." },
+  { id = "uninstall-message", desc = "cli/flw.py:408: uninstall prints `host owns — leaving it in place` for a root the same loop has already emptied. Say what actually happened. The directory is left on disk deliberately — flw did not create it — so the line should say that it is being left because flw did not create it, not that something is still in it." },
+  { id = "error-tests", desc = "tests/test_cli.py: a links.toml that is valid TOML but missing a required key, and a root pointer naming a directory that is not there. Each gives a message naming the path and a non-zero exit, and neither raises. Assert on the absence of a traceback, not merely on the exit code — an exit code alone passes for the wrong reason if the error is caught somewhere else.", depends_on = ["error-boundary", "uninstall-message"] },
+]
+
+[[dag]]
+group = 4
+phase = "a host's own line endings survive being written back"
+tasks = [
+  { id = "keep-line-endings", desc = "cli/flw.py read_host_text at :460: path.read_text() translates newlines on the way in, so a CRLF instructions file is written back entirely LF — every byte of content survives, none of the line endings do. Read through path.open(newline=\"\") instead, which returns the file's own endings untranslated; Path.read_text does not take newline until 3.13 and 3.11 is the floor. Keep the UnicodeDecodeError handling and the message naming the file, which is the reason this function exists rather than a bare read_text. Check every writer on the same path preserves what the reader now returns." },
+  { id = "line-ending-test", desc = "tests/test_cli.py: a host instructions file written with CRLF, with flw's block installed into it and then stripped out again. Assert the file's line endings are unchanged both times and that the bytes outside flw's block are byte-identical to what went in. Assert on bytes, not on text: a test that reads both sides with read_text cannot see this bug at all, because the translation it is testing for happens on both reads." },
+]
+
+[[dag]]
+group = 5
+phase = "the repository stops publishing its working notes"
+tasks = [
+  { id = "untrack-reports", desc = "Add `.flw/reports/` to .gitignore and untrack the eight files `git ls-files .flw/reports/` lists, with git rm --cached so they stay on disk. `.flw/reviews/*.toml` are team configs rather than reports and stay tracked." },
+  { id = "traps-to-their-sites", desc = "Two facts recorded nowhere but a review report, moved to where someone would trip over them. (a) cli/flw.py checkout() at :130 resolves from __file__ rather than from ~/.flw/root; its docstring says why but not the consequence — from a git worktree, `flw` on PATH is main's code and validates against main's schemas. Add that sentence. (b) tests/test_scout_mjs.py:31, the skipif: .venv/ and node_modules/ are gitignored so `git worktree add` does not materialise them, and a fresh worktree silently skips these tests and hands back both declared checks until uv venv and npm install are run. Add that where the skip is defined. A third trap in that file — the git stash stack being shared across worktrees — goes nowhere: it is a fact about git and flw has no business documenting it." },
+  { id = "drop-verified", desc = "Delete docs/verified.md. Five of its six entries are already recorded at the site of the code they explain, and the sixth — two hosts sharing one skills directory — is the least surprising of them and needs no home. Before deleting, confirm each of the five is still present at the line the approach names; if any has been removed since, carry that one to its site as a comment rather than losing it. This is a deletion the contract's final_state.removed must record, which the contract_edit does.", depends_on = ["traps-to-their-sites"] },
+  { id = "readme-line", desc = "README.md: one sentence where it is most likely to be read, saying flw's findings from running it against real hosts and repositories are recorded as comments at the code each one explains. A stranger evaluating the repo currently learns that from docs/verified.md; after this record there is nothing saying it was ever tested against reality, and one sentence is the right size for that rather than a document.", depends_on = ["drop-verified"] },
+]
+
+[[decisions]]
+topic     = "whether to lock links.toml against concurrent writers"
+options   = [
+  "Take an fcntl lock around the read-modify-write, preventing the race outright.",
+  "Do not lock: invert the write order so an interruption is repairable, and let doctor detect and sync repair a race that does happen.",
+  "Lock behind a platform guard, with a fallback path for anywhere fcntl is unavailable.",
+]
+chosen    = "Do not lock."
+rationale = """
+fcntl is POSIX-only and this contract states no platform assumption anywhere, so a lock
+commits flw to POSIX by implication — the kind of silent narrowing that shows up later as a
+bug report from somebody the tool never said it did not support. The guarded third option is
+worse than either: a fallback path that runs only where nobody tests it.
+
+What the lock would buy is prevention of a race between two deliberate simultaneous installs,
+which is a rare thing to do. What it would not buy is anything for the interrupted install,
+which is the common failure and which the write order fixes completely. After phases 1 and 2
+the race still happens and is detected by doctor and repaired by sync; that is a worse
+outcome than prevention and a far better one than today, where it is silent and permanent.
+
+A lock composes with both phases unchanged if it is ever wanted.
+"""
+
+[[decisions]]
+topic     = "whether doctor should count an untracked link as a problem rather than a note"
+options   = [
+  "Count it: it is the signature of a failed concurrent install and should make doctor exit non-zero.",
+  "Keep it a note, and add the remedy to the line so it is actionable rather than decorative.",
+]
+chosen    = "Keep it a note, with the remedy named."
+rationale = """
+The same line fires for a symlink somebody made by hand, which the additive rule explicitly
+permits and which blocked_by exists to protect. Turning a permitted action into a non-zero
+exit would make `flw doctor` fail for a user who did nothing wrong, and doctor's exit code is
+what `flw update` and any scripted use read.
+
+The real defect in the line is not its severity but that it names no remedy while every other
+fault doctor prints does. Once sync can adopt, the line can say so, and a reader who did not
+make that symlink by hand gets told exactly what to run.
+"""

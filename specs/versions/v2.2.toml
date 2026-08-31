@@ -1,0 +1,49 @@
+base         = "2.1"
+spec_version = "2.2"
+name         = "2.2"
+summary      = "extensions become a real mechanism: one path, read by name, and checkable"
+
+approach = """
+Extensions were described and never wired. `context.md` documented them two
+contradictory ways — a `[extensions]` table in config mapping a name to a path, and a
+`.flw/extensions/<skill>.md` convention — and nothing read either. `<skill>` was itself
+ambiguous: the config example said `spec.md`, the skills are named `flw-spec`.
+
+The table goes. Not for tidiness: the only thing worth building here is `doctor` catching
+an extension file that no skill will ever read, because a mistyped name sits in a repo
+forever, looks fine, and does nothing. That check needs a deterministic filename. A
+config-mapped path can point anywhere, so it cannot be checked — the table and the orphan
+check are mutually exclusive features, and the checkable one wins.
+
+So the path is `<root>/.flw/extensions/<skill name>.md`, and each skill names its own file
+literally rather than describing a pattern for the reader to substitute into. Three
+skills, three exact filenames, nothing to compute.
+
+This is a MINOR bump although it deletes the `[extensions]` config key. The key was
+documentation only — no code ever read it, no repo could have depended on it. Deleting a
+described capability that never existed is a correction, not a removal.
+
+What is deliberately not built: no schema for extension files, no ordering or merge rules
+between them, no precedence policy beyond one sentence. An extension is prose a skill
+reads. The moment it acquires a shape it needs a validator, and prose that needs a
+validator is a plugin API with extra steps.
+
+Two contract corrections ride along, because the contract of record was claiming machinery
+this repo deleted — the exact drift flw exists to prevent. The schemas component listed a
+delta record and a ledger; both schemas are gone and a review team took their place.
+`success_criteria` still asked for tests that an amendment is byte-preserving and that a
+refused amendment writes nothing; the amendment engine went in v2.0. Its replacement names
+the three properties whose failure is actually silent now.
+"""
+
+[[decisions]]
+topic     = "how a skill finds its extension"
+options   = ["a [extensions] table in .flw/config.toml mapping skill to path", "a fixed path derived from the skill's own name"]
+chosen    = "a fixed path derived from the skill's name"
+rationale = "A configurable path cannot be verified, so doctor could never tell a live extension from one nothing reads. The table and the orphan check cannot both exist; the orphan check is the part that catches a real, silent failure."
+
+[[decisions]]
+topic     = "where doctor reports extensions"
+options   = ["in doctor, alongside links and hosts", "a separate per-project command"]
+chosen    = "in doctor"
+rationale = "doctor is already the command that answers 'is this actually wired'. Extensions are per-project and doctor is global, so the section appears only when a project root resolves from the working directory and the directory exists — silent otherwise, rather than a new command that only sometimes has anything to say."

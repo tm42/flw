@@ -1,0 +1,154 @@
+base         = "4.6"
+spec_version = "5.0"
+name         = "5.0"
+summary      = "identify a version record by a name it keeps, and put the order in the contract instead of in a chain of numbers"
+
+approach = """
+WHY THE NUMBER FAILS. `specs/versions/` is one numbered line. Each record's `base` names the
+record before it and `check_chain` walks that line expecting exactly one predecessor each, so
+the number is a global counter. Two people speccing in parallel from 4.6 both write
+`v4.7.toml`: the filenames collide, the `base` values collide, and the second to merge has to
+renumber a file that was already reviewed. Renumbering at merge is the thing to avoid, because
+a version record is the durable account of how a change came about and rewriting its identity
+means the file in git is not the file anyone agreed to.
+
+WHAT REPLACES IT. The identity is a name, chosen at spec time and never changed. Order moves to
+`specs/current.toml` as `applied`, an ordered list of the record names whose runs finished,
+appended by `flw-execute` in the step that already applies `contract_edit`. That writes the
+order once, where the work landed, instead of inferring it from pointers only one branch can
+hold. `spec_version` stays on the contract as a release number a human sets, which is the half
+of the numbering worth keeping.
+
+WHAT SURVIVES WITH A SMALLER JOB. `base` stops ordering anything and becomes a note of which
+contract state the version was specced against, so validation can say a record was written
+against a contract that has since moved. The one real bit the number carried — whether the
+change deletes or replaces something — becomes `kind`, "additive" or "replacing", legible where
+a digit position was not.
+
+MIGRATION IS ONE LINE PER RECORD, AND NO RENAME. The seventeen existing records keep their
+filenames and each gains `name`, matching the stem it already has. `v4.6` is a fine
+name; it was only a bad counter. `applied` lists them in the order their numbers already imply,
+so no file is renamed and every reference to a version in a commit message, a review report or
+a design document still resolves. New records take kebab-case names.
+
+THE PRECONDITION THAT WAS FIXED FIRST. `check_chain` sorted with `int()` on both halves of every
+stem, so any filename that was not `v<int>.<int>` raised `ValueError` out of the sort and took
+the missing-record, misnumbered-file and contract-ahead checks with it, silently. That is what
+this change would have triggered on every file. It was found by the 2026-08-25 correctness review
+and fixed in `12b74fc`, before this version was written.
+
+WHAT THIS IS NOT. Not a change to what a contract or a record says — only to how a record is
+addressed and where the order is kept. Not a git integration: flw still runs no VCS commands and
+still proposes commits rather than making them. Not automatic contract merging. Two branches
+editing the same contract sentence is a text conflict and git already reports those; nothing here
+tries to resolve one.
+
+WHAT WAS NOT EXAMINED. Whether two people actually working in parallel find the name collision
+tolerable in practice, which needs two people. Whether `applied` should record anything beyond
+the name — a timestamp, the commit — was not settled, and the answer is no for now because
+neither is knowable from inside the run that appends it. The review that preceded this version
+covered `cli/flw.py`, `core/scripts/`, the tests and the prose; it did not cover `flw update`'s
+git handling or `scout.mjs`, and neither is touched here.
+"""
+
+contract_edit = """
+1. In the component named "validation and checks", replace the `provides` entry beginning
+   "A break in the version chain":
+
+   from  "A break in the version chain — a missing record, a file numbered against its own
+          contents, a dag that cannot be walked — is named rather than found later."
+
+   to    "A break in the record set — a name the contract says was applied with no file to
+          match, a record whose name disagrees with its filename, a dag that cannot be walked
+          — is named rather than found later."
+
+2. In the same component, replace the `provides` entry beginning "A contract level with its
+   newest version record":
+
+   from  "A contract level with its newest version record validates clean, and so does one
+          behind it; only one ahead is an error."
+
+   to    "A contract whose applied list names only records that exist validates clean; a record
+          no applied list names is a version in flight rather than an error."
+
+3. In the component named "the skills", replace the `provides` entry beginning "A user reads a
+   contract that records what shipped":
+
+   from  "... so a version still in flight shows as a gap between the contract and its newest
+          record."
+
+   to    "... so a version still in flight is a record the contract's applied list does not yet
+          name."
+
+4. In the component named "the skills", append to `provides`:
+
+   "A user can spec two changes at once on separate branches without either having to be
+   renumbered when it lands, because a version record is addressed by a name it keeps and the
+   order they landed in is recorded by the contract rather than by the records."
+
+5. At the top level of the contract, after `spec_version`, add:
+
+   applied = [
+     "4.0", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "5.0",
+   ]
+
+   listing every record whose run has finished, oldest first. The eight 4.x and 5.0 entries are
+   the records that exist at this version; earlier records predate the list and are not
+   backfilled, because nothing read them as an order and inventing one now would assert
+   something no run recorded.
+
+Nothing else changes.
+"""
+
+[[decisions]]
+topic     = "what carries the order once records are named"
+options   = [
+  "keep `base` as a pointer chain and walk it",
+  "an index file listing the records in order",
+  "an `applied` list in the contract, appended when a run finishes",
+]
+chosen    = "an applied list in the contract"
+rationale = "A pointer chain is what fails under parallel work — two branches both point at 4.6 and neither is wrong. An index file is the ledger v3.0 deleted, and `final_state.removed` still carries the check that it stays deleted. The contract is already the thing flw-execute edits when a run completes, so appending there adds no new write and puts the order where the work actually landed."
+
+[[decisions]]
+topic     = "whether the seventeen existing records are renamed"
+options   = ["rename them all to kebab-case names", "leave the filenames as they are"]
+chosen    = "leave them"
+rationale = "`v4.6` is a valid name; it was only a bad counter. Renaming would break every reference in commit messages, review reports and design documents for no gain, and the whole point of the change is that a record's identity does not move."
+
+[[decisions]]
+topic     = "what happens to the MAJOR/MINOR signal"
+options   = ["drop it", "a `kind` field of \"additive\" or \"replacing\""]
+chosen    = "a kind field"
+rationale = "The digit position carried exactly one bit — whether the change deletes or replaces something — and that bit is worth keeping. A word says it where a position had to be decoded, and it stays legible once no number is being assigned."
+
+[[decisions]]
+topic     = "whether `spec_version` survives on the contract"
+options   = ["remove it, since nothing orders by it any more", "keep it as a release number a human sets"]
+chosen    = "keep it"
+rationale = "The user asked for names on the branches and versions preserved in main. A release number that a human assigns to a contract state is the useful half of numbering; the harmful half was using it as a per-record identity."
+
+[[dag]]
+group = 1
+phase = "shape"
+tasks = [
+  { id = "version-schema", desc = "version.schema.json: add `name` (the record's identity, matching its filename) and `kind` (\"additive\" or \"replacing\"); make `spec_version` optional and describe it as the release number this record was specced against rather than an identity; keep `base` but redescribe it as the contract state specced against, not the predecessor in a chain." },
+  { id = "contract-schema", desc = "spec-v4.schema.json: add an optional top-level `applied`, an array of record names, ordered oldest first, described as the order runs finished." },
+  { id = "backfill-names", desc = "Add `name` to all eighteen existing records in specs/versions/, each matching its own filename stem. No file is renamed and no other field moves.", depends_on = ["version-schema"] },
+]
+
+[[dag]]
+group = 2
+phase = "validate"
+tasks = [
+  { id = "chain", desc = "Rewrite check_chain: every name in the contract's `applied` has a file in specs/versions/; names are unique across the directory; a record no applied list names is in flight and not an error; a record whose `name` disagrees with its filename is an error. Delete the numeric sort and the single-predecessor walk. Keep the malformed-filename report from 12b74fc only where it still means something.", depends_on = ["version-schema", "contract-schema", "backfill-names"] },
+  { id = "chain-tests", desc = "Extend tests/test_validate_spec.py's lineage section to the new rules, replacing the tests that pin the numeric chain. Each new test checked against the mutation it exists to catch, as the existing ones were.", depends_on = ["chain"] },
+]
+
+[[dag]]
+group = 3
+phase = "describe"
+tasks = [
+  { id = "skills", desc = "flw-spec: name a version rather than number it, and say the name never changes. flw-execute: pick the version the user named or the one no applied list names; append the name to `applied` in step 5 beside the contract_edit, instead of setting spec_version. core/shared/context.md: describe naming where it describes numbering.", depends_on = ["chain"] },
+  { id = "docs", desc = "README.md and docs/: update wherever they describe versions as a numbered chain.", depends_on = ["skills"] },
+]

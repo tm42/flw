@@ -1,0 +1,255 @@
+name         = "shape-independence"
+base         = "validate-the-move"
+spec_version = "0.7.4"
+summary      = "stop inferring an unrunnable check from an exit code, fold a release number for a project with no history, edge an import to the module it named, and say what a scout did not read"
+
+approach = '''
+WHAT THIS IS. Four reviewers each built a repository unlike flw's own — a twelve-package
+Python monorepo, four Python service repos with one feature spanning three of them, a
+TypeScript frontend with tsconfig aliases and barrels, and a Rust service with Python
+tooling — and ran flw inside it. 3 CRITICAL, 8 MAJOR, 9 MINOR. The consolidation is at
+.flw/reports/2026-08-27T-adopt.md and the four raw reports beside it. This version closes
+all twenty.
+
+Three of the findings are one shape. A mechanism is correct in exactly this repository and
+silent everywhere else, because this repository is the only long-running subject flw has
+ever been tested against.
+
+  exit 127 as "cannot run here"   works because flw's checks are absolute paths
+  the release fold                works because applied opens with a legacy 4.0 anchor
+  resolving an import by name     works because flw has 17 collisions across 383 names
+
+Measured, not reasoned: a missing binary exits 127, `cargo <bad-subcommand>` exits 101, and
+`npm run <script>` exits 127 when a devDependency is absent — so the same code means "yours"
+and "failed" in one project. expected_release returns None for any applied list with no
+legacy entry, including one whose first record declares a release_line, so no repository
+adopting flw today has its version checked at all. Across four service repos with zero
+cross-repo imports, 5 of 54 name edges cross a repository boundary; in a twelve-package
+monorepo `packages/gateway` imports four things and scout prints seven package edges, a
+cycle over all twelve, and ten identical `Config 33 files` rows.
+
+WHAT THIS IS NOT.
+
+Not a change to the ranking model. PageRank, uniform edge weights, damping as the only
+constant — all of it stands. What changes is which file an edge lands on when more than one
+defines the name, and the fallback to every definer stays, because that is what keeps a
+re-export barrel taking none of the score. A prototype of exactly this change ran flw's own
+40 scout tests green and printed 18 package edges matching grep one for one.
+
+Not a third scout. Python's ast ships with the interpreter and the TypeScript compiler sits
+in the target repo's node_modules; Rust has no equivalent short of a runtime dependency the
+contract refuses. The scouts learn to count what they did not read, which is a file count
+and costs nothing per language.
+
+Not a multi-root or per-package project model. nearest_project keeps its single-root rule
+and `flw test` gains no selector. What changes is that a run says which root it resolved,
+so a command issued from the wrong directory is visible instead of being answered by an
+ancestor.
+
+Not a fix for a service already in production. A repository shipping 2.4.0 can declare line
+2 and become 2.0.0, or keep line 0 and become 0.2.5, and neither is what it ships. The fold
+opt-out that would settle it stays deferred; this version makes the fold run at all, which
+is what turns that from invisible into a question worth asking, so it becomes an open
+question in the contract rather than a task here.
+
+WHAT WAS NOT REVIEWED. No reviewer ran flw-spec or flw-execute end to end — both are
+interviews and need a human. `flw install` was run only as --dry-run and nothing was written
+outside the scratch trees. A mixed Python/TypeScript monorepo was not tested, and neither
+was Windows or any host but claude-code, the only one on the machine.
+'''
+
+contract_edit = '''
+In [[final_state.components]] "validation and checks":
+
+REPLACE the provides sentence beginning "A check this session cannot run is handed back"
+with:
+  "A check this session cannot run is handed back as the user's to run when the project
+  declared it so, and a full run that had to hand one back does not report success, because
+  the definition of done was not demonstrated. Nothing is inferred from a check's exit
+  code: no code distinguishes a command that is absent from one that ran and failed."
+
+ADD to the same provides list:
+  "A project that has never carried a legacy version number folds its release from its
+  first record, so the check is live on the day flw is adopted rather than only in a
+  repository with history."
+  "A run of the full definition of done in a directory with no contract to read says so
+  rather than reporting success."
+  "A scout says what it did not read: files in languages neither scout parses are counted
+  and named, so a ranking of the minority language in a mixed repository is never mistaken
+  for the repository."
+  "A user is told which project root a command resolved to before it runs, so one issued
+  from the wrong directory is visible rather than silently answered by an ancestor."
+
+REPLACE the properties sentence beginning "A check reported as one this session could not
+run is one whose own command was missing." with:
+  "A check reported as one this session could not run is one the project named in [tests]
+  yours."
+Keep the sentence that follows it about a failing [tests] setup, unchanged.
+
+REPLACE the properties sentence beginning "Both scouts rank the file that defines an
+imported name" with:
+  "Both scouts rank the file that defines an imported name rather than the file a specifier
+  names. Where more than one file defines that name, the edge goes to the definer in the
+  module the import actually named, and to every definer only when no module resolves — so
+  a re-export barrel still takes none of the score, and a name defined once per package
+  does not edge to every package."
+
+ADD to properties:
+  "The release fold is computed for any applied list, including one naming no legacy
+  numbered record, so a declared release number is checked from a project's first record
+  onward."
+
+In [[final_state.components]] "the flw CLI", surfaces:
+
+REPLACE the exit-code line with:
+  "Exit codes: 0 success, 1 something failed or was refused. `flw test` also uses 2 for a
+  run that proved nothing — nothing declared to run, nothing left runnable here, a full run
+  with a check the project handed back, or a full run with no contract to read. `flw
+  validate` uses 2 for a file it was given and could not check, and 0 for a project that
+  has no contract yet, which is a state and not a fault."
+
+In assumptions:
+
+REPLACE "Some of a project's checks cannot run in an agent's session — no network, no
+database, no browser. Handing those back is the normal case, not a degraded one." with the
+same sentence plus:
+  "Which ones is the project's to declare, because no exit code identifies them."
+
+In open_questions, ADD:
+  "Whether a project already in production can express the release number it actually
+  ships. Declaring a line restarts major and minor at zero, so a service at 2.4.0 becomes
+  either 2.0.0 or 0.2.5, and neither is true; the fold opt-out that would settle it is
+  deferred."
+'''
+
+[[dag]]
+group = 1
+phase = "the check runner stops guessing"
+tasks = [
+  { id = "delete-unavailable", desc = "core/scripts/run_tests.py: delete UNAVAILABLE (:33) and the 127 branch in Result.state (:51-54), so state is pass or fail. Every reader of the unavailable state goes with it: the mark table at :167, the blank seconds at :170, the message at :172-173, and the count at :185. The [yours] rows printed from the declared skipped list stay exactly as they are — that is the surviving mechanism, not a casualty of this task." },
+  { id = "test-exit-codes", desc = "cli/flw.py test(): with no result ever unavailable, re-derive the exit codes from what remains and make them agree with the surface sentence this version rewrites. A failure is 1. The full-run hand-back that returns 2 now fires only from checks the project declared in [tests] yours. Read the whole block before editing it; two of the three exit-2 paths are in the handler and one is in the collector.", depends_on = ["delete-unavailable"] },
+  { id = "execute-127-prose", desc = "core/skills/flw-execute/SKILL.md:179-180 says two kinds of check are handed back automatically, one of them being exit 127. Delete the 127 half. What replaces it: nothing is inferred from an exit code, and a check the session cannot run is proposed for [tests] yours, which the step below it already tells the agent to do.", depends_on = ["delete-unavailable"] },
+  { id = "guard-127-is-failure", desc = "tests/: a check whose command does not exist is reported as failed and counted as a failure, not handed back. This is the mutation guard for the phase — reinstating the 127 branch must fail it by name.", depends_on = ["delete-unavailable"] },
+]
+
+[[dag]]
+group = 2
+phase = "a run says where it is"
+tasks = [
+  { id = "test-prints-root", desc = "cli/flw.py test(): print the resolved project root before running anything. Two findings collapse into this one line — a repo with no specs/ and no .flw/ silently running an ancestor's checks, and `flw test -A packages/billing` walking up from that path and running the whole tree. flw validate already gives itself away by printing each target's absolute path; test prints none at any verbosity." },
+  { id = "test-a-needs-contract", desc = "cli/flw.py test(): refuse --all when specs/current.toml does not exist, naming the path, exit 2. -A is the contract's full definition of done and currently returns 0 having never looked for a contract. Plain `flw test` is untouched, so a repo flw-research configured with local checks and no specs/ keeps working — that case is deliberate and run_tests.py:79 records it.", depends_on = ["test-exit-codes"] },
+  { id = "validate-no-contract", desc = "cli/flw.py validate(): with no path argument and no specs/current.toml, say the project has no contract yet and exit 0. See the decision in this record. The same message names the loop that validates a tree split by service, because flw validate reads one specs/ and a monorepo split as plans/design-v3.md:568 prescribes has no repository-wide validate." },
+  { id = "guard-root-and-contract", desc = "tests/: the resolved root appears in flw test output; --all in a directory with .flw/ and no specs/ exits 2; validate in the same directory exits 0 and says so.", depends_on = ["test-prints-root", "test-a-needs-contract", "validate-no-contract"] },
+]
+
+[[dag]]
+group = 3
+phase = "an import edges to the module it named"
+tasks = [
+  { id = "py-source-roots", desc = "core/scripts/scout.py:201 _source_roots scans one directory level below the scan root, so a monorepo has none and every module ends up known as libs.core.src.mono_core — a name no import can spell, which is why every absolute import falls to the name branch. Derive the roots from the files instead: walk up from each source file while __init__.py exists and add the parent of the topmost package. The scan root stays in the list." },
+  { id = "py-import-target", desc = "core/scripts/scout.py:338-350 computes target for an ImportFrom and then discards it for the name case, writing seen[alias.name] += 1. Carry it: key facts.imports by (target, name) so the edge loop knows which module the import named. The submodule branch just above, which routes `from . import config` into mods, is unchanged.", depends_on = ["py-source-roots"] },
+  { id = "py-prefer-target", desc = "core/scripts/scout.py:443-449 edges to every file in definers[name]. Prefer the definer whose module is the target the import named, and fall back to every definer only when none matches. The fallback is not a convenience — it is what keeps the re-export barrel property, because a barrel defines nothing, so the intersection is empty there and the score still reaches the definition.", depends_on = ["py-import-target"] },
+  { id = "mjs-import-target", desc = "core/scripts/scout.mjs:211 already computes target: resolveSpec(...) into specs, and the definers loop at :263-273 ignores it, using names alone. Carry the target alongside each name into importsOf so the same preference is available.", depends_on = [] },
+  { id = "mjs-prefer-target", desc = "core/scripts/scout.mjs:263-273: same preference and same fallback as py-prefer-target. In TypeScript the collision arrives through `export interface Props` per component, which is ordinary React, so twenty components sharing the name rank within 3% of each other whether or not anything imports them.", depends_on = ["mjs-import-target"] },
+  { id = "mjs-tsconfig-paths", desc = "core/scripts/scout.mjs:143-156 resolveSpec treats a bare specifier as internal only when its first segment names a top-level directory, so @/lib/types resolves to nothing and :212-221 then counts @/lib as a package. Read compilerOptions.paths through the compiler already loaded — ts.readConfigFile — and consult it in both places. v4.3 recorded this as fixed and tests/test_scout_mjs.py:138 asserts it using shared/util, the baseUrl-relative form, which never exercises @/; that test stays and a new one covers the alias.", depends_on = ["mjs-import-target"] },
+  { id = "guard-collisions", desc = "tests/: a fixture where one name is defined in several packages edges only to the package the import named; the barrel fixture still ranks the definition and never the barrel; an aliased import produces an edge and does not appear under external dependencies. Run the whole scout suite — the prototype of this change passed all 40 unchanged, and the only movement in flw's own output was cli/flw.py leaving MOST DEPENDED ON, which is its own collision being corrected.", depends_on = ["py-prefer-target", "mjs-prefer-target", "mjs-tsconfig-paths"] },
+]
+
+[[dag]]
+group = 4
+phase = "the scouts say what they did not read"
+tasks = [
+  { id = "scout-unread", desc = "cli/flw.py scout(): count the files under root that neither scout reads, using the same directory pruning the engine uses, group them by extension, and print one line when the count is non-zero. In a Rust service with four Python files under tools/, scout today prints those four, says BUILT ON stdlib only for a service built on axum and sqlx, names a fixture loader as what the repository rests on, and exits 0. The pure-Rust case is already honest — `flw scout src` exits 2 and names the aider fallback — so this is the mixed case learning what the empty case already knows. No parser: a file count is what keeps the work per language at zero." },
+  { id = "scout-help-sections", desc = "cli/flw.py scout epilog (~:2150) documents ENTRY POINTS, BUILT ON, PACKAGES, DEPENDS ON, CYCLES, MOST DEPENDED ON. The TypeScript scout prints PACKAGES, EXTERNAL DEPENDENCIES, DEPENDS ON, CYCLES, MOST IMPORTANT EXPORTS — three names differ and ENTRY POINTS has no counterpart at all. The epilog also says PACKAGES is ordered by rank; scout.mjs:337 sorts by file count and prints no rank. Say which scout prints what, or converge the two; do not leave the help describing one of them." },
+  { id = "scout-no-ts-message", desc = "cli/flw.py:1939-1944 and core/scripts/scout.mjs:165: the no-typescript message names npm install in a repo that may use pnpm or yarn, where it creates a competing node_modules and a second lock file; suggests scouting the Python side in a repo with no Python; and quotes a noop.js path that does not exist, being a createRequire artefact. Name the package manager from the lock file present, drop the Python sentence when the tree holds none, and keep the module-resolution error without the fictional path." },
+]
+
+[[dag]]
+group = 5
+phase = "the fold works for a project that is not flw"
+tasks = [
+  { id = "fold-from-empty", desc = "core/scripts/validate_spec.py:400-408: seed major, minor = 0, 0 and drop `or major is None` from the guard, keeping the records.get(entry) is None half. Today the fold returns None for any applied list with no legacy <major>.<minor> entry, the caller skips the comparison on None, and flw-spec writes only named records — so no project adopting flw has ever had its release number checked. The release_line branch sits two lines below the guard, so a first record declaring a line returns None as well, which is the documented way to start at 1.0.0." },
+  { id = "fold-one-line", desc = "core/scripts/validate_spec.py check_chain: a second record declaring release_line silently overwrites the first, because expected_release takes the last it sees. Two packages in a monorepo reaching new lines is two ordinary records, and the contract is then forced to assert a number false for every other package. Make the second declaration an error naming both records — one comparison.", depends_on = ["fold-from-empty"] },
+  { id = "fold-schema-scope", desc = "core/schemas/spec-v4.schema.json: the spec_version description says nothing about scope, and version.schema.json describes release_line as the line this record moves the product to, which reads as this record's own line. Say that one contract carries one release line, so a tree whose parts release independently needs one contract per part — which is what nearest_project already does and what plans/design-v3.md:568 prescribes." },
+  { id = "guard-fold", desc = "tests/: a new project with one minor record folds to 0.0.1; a first record declaring release_line = 1 folds to 1.0.0; two records declaring a line is an error; flw's own applied list still folds to 0.7.4 and matches the declared spec_version.", depends_on = ["fold-one-line"] },
+]
+
+[[dag]]
+group = 6
+phase = "the residue"
+tasks = [
+  { id = "strip-ansi", desc = 'core/scripts/run_tests.py report(): strip ANSI colour escapes from a result output before printing. cargo fmt --check colours its diff on a pipe, so --no-stream output is escape-laden, and that is the mode agents use and the text that lands in .flw/reports/. pytest and ruff drop colour on a non-tty, which is why flw own suite never produces it.' },
+  { id = "research-examples", desc = "core/skills/flw-research/SKILL.md:87-93: both worked examples of a test invocation are Python, and the probe offered as costing nothing, pytest --collect-only -q, exists only in pytest. Line 93 enumerates the answer for the two covered languages and stops, so a Cargo.toml has no route into it. Make one example non-Python and give the enumeration a way to end at the project manifest. core/shared/context.md:66 is the same thing one level up: the canonical [tests] setup example is source .venv/bin/activate, in the file every skill reads once per run." },
+  { id = "readme-move-note", desc = "README.md:60 gives the ln -s that puts flw on PATH. Moving the checkout afterwards dangles that symlink and the four skill symlinks with it, and the repair cannot be printed by the tool because the tool is what is unreachable. One sentence at that instruction saying so and naming the fix. flw doctor already catches the softer case where the pointer is stale but the CLI resolves." },
+]
+
+[[decisions]]
+topic = "whether a check's exit code may identify one this session cannot run"
+options = [
+  "Keep exit 127 and guard it: classify unavailable only when the command own first token does not resolve, which fixes npm run and leaves cargo misreported.",
+  "Delete automatic detection. A check this session cannot run is one the project declared in [tests] yours, and nothing is read from an exit code.",
+  "Keep it as it stands and narrow the contract claim to match.",
+]
+chosen = "Delete automatic detection."
+rationale = """
+Measured: a missing binary exits 127, `cargo <bad-subcommand>` exits 101, `npm run <script>`
+exits 127 when a devDependency is absent. So the same code carries both meanings inside one
+project — tsc was installed so its failure is a failure, vitest was not so its 127 is
+"yours" — and cargo returns 101 for a missing subcommand and a compile failure alike, which
+no guard can separate. 127 identifies an unrunnable check only when the check is a bare
+binary path, which is what flw's own checks are and what almost nothing else is.
+
+This reverses a recorded decision. specs/versions/v2.0.toml:93 reads "Exit 127 detects it
+automatically; [gates] yours declares it when it is known in advance." The declaring half
+was right and stands. The automatic half never fires outside this repository's shape, and
+its failure mode is the worst available: `flw test` exits 0 while a test suite did not run.
+
+The guarded variant was the tempting one and it buys a half-fix. It corrects npm and leaves
+cargo, go, mvn, gradle and dotnet reporting a check that cannot run as one that failed,
+which is the direction that at least fails loudly — but it keeps a mechanism whose contract
+claim would have to be narrowed to a sentence about bash's exit conventions. A declaration
+is one line in a file the project already has. An automatic answer that is wrong is a green
+run that proved nothing.
+"""
+
+[[decisions]]
+topic = "what flw validate does in a repository that has flw configuration and no contract"
+options = [
+  "Exit 0, saying the project has no contract yet.",
+  "Keep exit 2 and improve the message — a run that proved nothing is what 2 means.",
+]
+chosen = "Exit 0."
+rationale = """
+run_tests.py:79-81 already calls local [tests] checks with no specs/ a normal, supported
+state, and records fixing the same crash for flw test. flw validate is the second of four
+commands the README puts in front of a newcomer, and a repository flw-research just
+configured is exactly where they will run it.
+
+Exit 2 is defensible — the run did prove nothing — and it reads as failure to anything that
+checks the code, which is what a newcomer's CI does. Nothing is wrong in that repository, so
+nothing is reported. The surface sentence gains the distinction rather than losing it: 2
+still means a file that was given and could not be checked.
+"""
+
+[[decisions]]
+topic = "whether the scouts grow a third language"
+options = [
+  "Add a Rust scout.",
+  "Decline to run when the majority language is unsupported.",
+  "Run, and print what was not read.",
+]
+chosen = "Run, and print what was not read."
+rationale = """
+The two shipped scouts cost nothing because the parser is already there: Python's ast ships
+with the interpreter flw already requires, and the TypeScript compiler sits in the target
+repo's own node_modules. Rust has no equivalent — rustc exposes no stable AST to a script —
+so a third scout means syn or tree-sitter, a runtime dependency the contract refuses.
+specs/versions/v3.0.toml:93 drew this line already: "these two because they cost nothing,
+everything else defers to aider."
+
+Declining in the mixed case throws away a correct result. The ranking of four Python files
+under tools/ is accurate about tools/, and an engineer working there is well served by it.
+What makes it dangerous is not that it is wrong but that it is unlabelled, while
+flw-research makes scout step 1 and says to read its output before opening any file. A file
+count fixes that, holds for every language that will ever exist, and adds no parser.
+"""

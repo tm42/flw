@@ -1,0 +1,171 @@
+base         = "3.4"
+spec_version = "4.0"
+name         = "4.0"
+summary      = "a schema v4 whose contract can state how a component works and what it exposes, and the two places knowledge was living badly: a status list that rots and a review report nobody throws away"
+
+approach = """
+WHAT THE CONTRACT CANNOT DO TODAY. It says what a user can do and never how anything works, so two
+things are impossible. It cannot be rebuilt from — hand it to a cold agent and the result is a
+different program that satisfies the same sentences. And its algorithmic claims cannot be tested,
+because a `provides` sentence is about a person and a test is about a function. Both were
+demonstrated on 2026-08-23: 20 of 23 mutants of the scout survived, because nothing anywhere in the
+repository states what its ranking guarantees. The `implementation` field that should have carried
+it is optional, appears on one component of five, and in three versions has produced no test.
+
+WHAT THE WORK IS NOT. Not a rewrite of the contract — Rule 2 holds and the diff is still the review
+surface, which matters more here than usual because a technical contract is larger and regenerating
+it is more tempting than editing it. Not an interface dump: a surface is declared because changing
+it breaks someone else. Not a design document. And not a migration: flw ships none, and the old
+schema stays only so that a v3 contract elsewhere keeps validating rather than failing on a key it
+has never heard of.
+
+WHAT 4.0 POPULATES. One worked example of each field, and the components most in need of them are
+not the ones that get them. `surfaces` goes on the CLI, covering what flw writes under `$FLW_HOME`
+— the part of its surface no later version is already committed to touching. `properties` goes on
+validation and checks, carrying the pair-check statement 3.4 made true four commits ago. Everything
+else waits for the version that touches it: the CLI's subcommands, flags, exit codes and its writes
+into a host's own directories all belong to 4.2, and `.flw/config.toml`'s keys to 4.1.
+
+WHAT TWO ROUNDS OF REVIEW TOOK OFF THIS VERSION, AND WHERE IT WENT. Three things, each wrong here
+rather than merely large. The scout's `properties` and `implementation` text moves to 4.3, which
+fixes and re-measures the ranking. The diff-confinement pass moves to 4.1, where the rule it would
+enforce already lives. What flw writes into a host's own directories moves to 4.2, with the flags.
+The reasoning for each is in the decisions below; the reports are
+`.flw/reports/2026-08-24T1151-eng.md` and `.flw/reports/2026-08-24T1338-eng.md`, and the roadmap
+holds what each receiving version now owes.
+
+THE RULE BEHIND THE TWO DOCUMENTATION CHANGES: events do not rot, status does. A list of what has
+not been tested yet is unbounded, always incomplete, invisible when incomplete, and wrong the moment
+someone tests one of its entries — `docs/verified.md` carried four such bullets and two went false
+inside two days. A record of what happened when something was run does not go stale, because the
+event stays what it was. That is why the status section goes and the event sections stay, why the
+header has to state the scope those sections actually have rather than the tidier scope someone
+would like them to have, and why a review report is scaffolding whose findings belong in the
+committed version file that acts on them.
+
+The measurement half of that is the part most easily lost, and this version is its own live case.
+`docs/verified.md` says the scout is untested above 1,780 files. That is false, and the true number
+— 81.61s at 20,000 files against 1.20s at 1,780, which is what makes the contract's "in about a
+second" wrong above roughly 2,000 — currently exists only in an untracked report and an untracked
+roadmap. Deleting the false claim without a rule that moves the real one would leave the contract
+overstating the scout with nothing tracked to contradict it. 4.3 restates the timing sentence and
+carries the number; this version builds the instruction that makes that the normal path rather than
+a thing someone remembers.
+
+THE OPEN QUESTION THIS CLOSES. Whether `flw-execute` survives a cold reader on a version file it did
+not write. It does, twice: v3.3 on 2026-08-23, whose work was Python, and v3.4 on 2026-08-24, whose
+work was almost entirely prose in the skill files the running agent was itself following. Both runs
+found real defects afterwards, and neither defect was the skill failing to be followed.
+"""
+
+contract_edit = """
+schema_version: 3 becomes 4.
+
+open_questions: delete
+  "Whether flw-execute survives a cold reader on a version file it did not write. It is the last
+   skill never run end to end by an agent that was not its author."
+
+The flw CLI component gains, after its provides array:
+
+  surfaces = [
+    "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
+    "~/.flw/root — one line, the absolute path of the checkout every skill resolves through.",
+    "~/.flw/links.toml — [[link]], keys: path, skill, target.",
+    "~/.flw/bundles.toml — [[bundle]], keys: name, path.",
+    "~/.flw/ambient.toml — [[host]], keys: host, path, created. Which instructions files flw wrote a block into, and whether flw created the file; uninstall reads it to decide what it may delete.",
+    "~/.flw/style.toml — [[host]], keys: host, name, source, path, previous, installed_sha, created, settings_created, selected. `previous` is the user's own outputStyle, restored on uninstall.",
+    "~/.flw/styles/<name>.md — a style of the user's own, installed by name.",
+    "<!-- flw:begin --> / <!-- flw:end --> and <!-- flw:style:begin --> / <!-- flw:style:end --> — the marker pairs bounding flw's skills block and its style block in a host's instructions file. What lies between a pair is flw's to rewrite; what lies outside is the user's and is never touched.",
+  ]
+
+The validation and checks component gains, before its implementation field:
+
+  properties = [
+    "A contract level with its newest version record validates clean, and so does one behind it; only one ahead is an error.",
+  ]
+
+success_criteria.criteria: delete the second paragraph entire, the one beginning "Three properties
+  are worth testing directly" and ending "never counted as one that passed." Its pair-check claim is
+  now a property on validation and checks; the other two are already stated as capabilities on the
+  components that own them and are not re-added anywhere. The first paragraph, about the manual
+  three-host exercise, stays unchanged — it is what tests cannot express.
+
+The project surface component's provides sentence
+  "A user can read what was verified by running flw against a real host and a real repo, separately
+   from what its design intends, so an untested claim is never mistaken for a measured one."
+becomes
+  "A user can read what happened when flw was run against a real host and a real repository, each
+   finding paired with what was believed beforehand, separately from what its design intends. It
+   records events and not a standing list of what is still untested, because such a list is wrong the
+   moment something is tested and nothing notices."
+"""
+
+[[decisions]]
+topic     = "where an externally visible surface is declared"
+options   = [
+  "an array on the component that owns it",
+  "one top-level surfaces list for the whole contract",
+  "prose inside the existing implementation field",
+]
+chosen    = "an array on the component that owns it"
+rationale = "A component already carries paths, so nothing extra has to say where a surface lives, and a component with none omits the key. A top-level list is a second index of the component list and drifts from it. Prose cannot be diffed for a breaking change, which is the only reason to declare a surface at all."
+
+[[decisions]]
+topic     = "whether the testable property gets its own field"
+options   = ["one implementation string carrying both halves", "properties[] beside implementation"]
+chosen    = "properties[] beside implementation"
+rationale = "One string invites writing either half and calling it done — which is what happened: implementation is populated on the component holding the scout, and the scout still has no falsifiable statement anywhere, so 20 of 23 mutants survived. Two fields make the missing half visible, and an array is what a test file can be read against."
+
+[[decisions]]
+topic     = "which component gets the properties worked example"
+options   = ["the scout's ranking, which is the untested claim that motivated the field", "the pair check, which 3.4 made true and testable"]
+chosen    = "the pair check, which 3.4 made true and testable"
+rationale = "Three drafts of the scout property were each falsified by measurement — false outright, then conditioned on import count where the code divides by summed edge weight, then describing a name-to-definer graph that scout.py builds and scout.mjs does not. The ranking is not in a state where a true statement about it can be written, which is what 4.3 exists to change. A worked example whose job is to show the field's shape should not also be the hardest claim in the repository; the pair check is already tested and uncontested."
+
+[[decisions]]
+topic     = "where the diff-confinement pass lives"
+options   = ["references/spec-critic.md, the semantic-judgment pass", "flw-execute step 5, where the contract diff is made", "nowhere in this version"]
+chosen    = "nowhere in this version"
+rationale = "After 3.4 a flw-spec run writes one new file under specs/versions/ and does not touch the contract, so a pass in spec-critic.md would compare an empty diff every run and report clean. The rule already exists at core/skills/flw-execute/SKILL.md:188-192, and commit cd4aca9 both added it and violated it, so what it needs is a test rather than a second copy. That belongs with 4.1's other cases of a tool misreporting its own work."
+
+[[decisions]]
+topic     = "whether .flw/config.toml's keys are declared at 4.0"
+options   = ["declare them with the rest of the CLI's surface", "wait for 4.1"]
+chosen    = "wait for 4.1"
+rationale = "core/shared/context.md documents ~/.flw/config.toml as a global underlay merged key by key with the project file, and nothing reads it — _local_config opens only the project file. 4.1 settles whether that gets implemented or the claim deleted. Declaring the shape now would put a promise in the contract that the code does not keep, which is the failure a declared surface exists to prevent."
+
+[[decisions]]
+topic     = "what happens to the three property-shaped sentences already in success_criteria.criteria"
+options   = ["leave them", "move all three into properties", "move the one with no other home and delete the two already stated as capabilities"]
+chosen    = "move the one with no other home and delete the two already stated as capabilities"
+rationale = "All three are tested today and the schema defines criteria as what the tests cannot express, so the paragraph goes either way. But the CLI's provides already says a user can see which extensions a skill will actually read, and validation's already says an unrunnable check is handed back distinguishable from a failure — re-adding those as properties moves the duplication to a new address rather than ending it, and the second restatement is weaker than the provides sentence it would sit beside."
+
+[[decisions]]
+topic     = "whether schema_version 3 stays supported"
+options   = ["rename spec-v3.schema.json to v4 and drop 3", "add spec-v4.schema.json and keep 3 in the dispatch table"]
+chosen    = "add spec-v4.schema.json and keep 3 in the dispatch table"
+rationale = "SCHEMA_BY_VERSION exists to dispatch on the contract's own declaration and this is the first thing it was built for. Dropping 3 makes every contract flw did not write fail on a key it never heard of, and tests/conftest.py declares schema_version = 3, so the whole fixture suite is a live v3 consumer after this version — the file is not dead weight, it is in use by the test suite."
+
+[[decisions]]
+topic     = "what happens to the two still-true bullets under Still unverified"
+options   = ["keep a shortened status list", "rewrite what has an event home as an event and drop the rest"]
+chosen    = "rewrite what has an event home as an event and drop the rest"
+rationale = "A shortened status list rots exactly as the long one did — the failure is the list, not its length. The Codex-and-OpenCode caveat is not in section 6 today and is load-bearing, since the contract promises all three hosts, so it is rewritten into that section rather than assumed to be there. The untested [tests] yours path is a missing test, and recording it in prose is what let it stay missing for three versions."
+
+[[dag]]
+group  = 1
+phase  = "the schema grows two fields"
+tasks  = [
+  { id = "schema-v4", desc = "core/schemas/spec-v4.schema.json, from v3 with schema_version const 4 and two optional keys on the component definition. `properties`: an array of falsifiable statements about what the component does — the description says what disqualifies an entry, which is anything that cannot be false, and warns against restating a `provides` sentence, since a capability and an invariant read alike. `surfaces`: an array of things that break someone outside this project when they change — subcommands and flags, exit codes, state files and their keys, config keys, tagged-block markers, install locations — and says a private helper is not one however visible. Neither is required; a component with nothing to declare omits both. Also rewrite the `implementation` description, which v3 states as constraints whose violation needs a re-spec: it is the mechanism that makes the component reconstructable. Distinguish the three fields by what each sentence is about — what a user can do, what the component guarantees, how it is built — and not by whether a test could reach it, because a mechanism value like a damping constant is perfectly testable and still belongs in `implementation`. spec-v3.schema.json stays untouched on disk." },
+  { id = "schema-dispatch", desc = "validate_spec.py SCHEMA_BY_VERSION gains 4 and keeps 3. cli/flw.py `_schema_for` returns spec-v4.schema.json for current.toml — a rename for accuracy, not a behaviour change, since resolve_schema redirects on the document's own schema_version and would validate a v4 contract either way. Fix the two prose copies of the old filename that no other task reaches: core/shared/context.md:15, the artifacts table every skill reads at the top of a run, and core/skills/flw-spec/references/spec-critic.md:22. The copies in specs/versions/v1.0.toml and v2.0.toml are committed records of work that happened and stay; plans/design-v3.md carries a schema_version = 3 sample under a heading that says schema v3, and is left alone. Two things in resolve_schema: make the unknown-version message name the type it got, because with two entries in the table `unknown schema_version '4' (known: 3, 4)` sends the reader to the table rather than to the quote marks; and refuse a schema_version that is not an int, because `SCHEMA_BY_VERSION.get(4.0)` hits the `4` key and `4.0 != 4` is false, so a float validates as v4 while `spec_version = \"4.0\"` sits one line below it in every contract.", depends_on = ["schema-v4"] },
+  { id = "schema-tests", desc = "A v4 contract carrying properties and surfaces validates; a v3 contract still validates through the same entry point and names the schema it used; a component declaring an unknown key is still refused. Two existing tests hardcode the old filename and keep passing through the redirect while checking the wrong schema: test_the_contract_schema_does_not_describe_deleted_architecture at tests/test_validate_spec.py:177, and test_flw_own_specs_validate at tests/test_direct_run.py:59, which is documented as flw validating flw through the command line a skill uses. Both read spec-v4.schema.json after this. tests/test_direct_run.py:40 stays on v3 — its fixture declares schema_version = 3.", depends_on = ["schema-dispatch"] },
+  { id = "spec-interview", desc = "flw-spec SKILL.md: the amend interview gains the two questions the new fields answer — what about this component would still be true if it were rewritten by someone who never saw the code, and what would break someone else if it changed. Say where each answer goes and what does not belong: a mechanism nobody outside touches is not a surface, a statement that cannot be false is not a property, and a property that restates a provides sentence is a duplicate rather than a second reader's version of it. First-contract mode's step 3 gets the same two questions, its reference to spec-v3.schema.json at line 74 becomes spec-v4.schema.json, and it says a first contract declares schema_version = 4.", depends_on = ["schema-v4"] },
+]
+
+[[dag]]
+group  = 2
+phase  = "where knowledge lives"
+tasks  = [
+  { id = "reports-disposable", desc = "flw-spec SKILL.md: when a version is specced from a review report, carry that report's coverage line — what was read and what was not — and any measurement it made into the version file's approach. A number is the part of a report that cannot be re-derived by reading, so it is the part most worth carrying. flw-review SKILL.md: §4 says the report is scaffolding rather than an artifact to keep, and that what survives is the version file specced from it. §5's line 265, \"The report is the artifact; repeating it here doubles the reading\", is about not duplicating findings in the reply and collides head-on with that wording — reword it to say the same thing without calling the report an artifact." },
+  { id = "verified-scope", desc = "docs/verified.md: delete the Still unverified section, but first rewrite its Codex-and-OpenCode bullet as an event appended to the `## Two hosts, three covered` section — that section is about which link sets flw install creates and never says whether either host has loaded a skill, and the contract promises all three, so the caveat has to survive somewhere. The other three bullets go, two of them because they are now false. The header states the scope the six remaining sections actually have: events where running flw contradicted what was believed beforehand. Not `paired Believed and Measured`, which only three of the six use, and not `about hosts and tools flw does not control`, which is false of three of them — sections 2, 3 and 4 are flw's own defects. A header claiming either would license deleting half the file." },
+]

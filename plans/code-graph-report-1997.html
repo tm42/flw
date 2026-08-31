@@ -1,0 +1,340 @@
+<meta charset="utf-8">
+<title>~ Dave's CODE GRAPH Page ~</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,700&display=swap');
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Comic Sans MS", "Comic Neue", cursive;
+  font-size: 16px;
+  color: #FFFF00;
+  background-color: #000044;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255,0,255,.10) 0 12px, transparent 12px 24px),
+    repeating-linear-gradient(-45deg, rgba(0,255,255,.10) 0 12px, transparent 12px 24px),
+    radial-gradient(circle at 10% 20%, rgba(255,255,255,.25) 0 1px, transparent 2px),
+    radial-gradient(circle at 70% 60%, rgba(255,255,255,.25) 0 1px, transparent 2px),
+    radial-gradient(circle at 40% 85%, rgba(255,255,255,.2) 0 1px, transparent 2px);
+  background-size: 48px 48px, 48px 48px, 120px 120px, 90px 90px, 140px 140px;
+}
+
+.page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 12px;
+}
+
+/* ---- the obligatory 3D-bevel table look ---- */
+.box {
+  background: #000088;
+  border: 4px ridge #FF00FF;
+  padding: 14px;
+  margin: 18px 0;
+}
+.box.lime   { border-color: #00FF00; }
+.box.cyan   { border-color: #00FFFF; }
+.box.red    { border-color: #FF0000; background: #440000; }
+.box.silver { border-color: #C0C0C0; background: #000066; }
+
+h1 {
+  font-size: 46px;
+  text-align: center;
+  margin: 10px 0;
+  color: #FF00FF;
+  text-shadow: 3px 3px 0 #00FFFF, 6px 6px 0 #000000;
+  letter-spacing: 2px;
+  animation: wobble 2s ease-in-out infinite;
+}
+@keyframes wobble { 0%,100%{transform:rotate(-1.5deg)} 50%{transform:rotate(1.5deg)} }
+
+h2 {
+  font-size: 26px;
+  color: #00FF00;
+  text-shadow: 2px 2px 0 #000000;
+  border-bottom: 3px dashed #FFFF00;
+  padding-bottom: 4px;
+}
+
+h3 { color: #FF9900; font-size: 19px; text-shadow: 1px 1px 0 #000; }
+
+a { color: #00FFFF; }
+a:visited { color: #FF00FF; }
+
+.blink { animation: blink 0.9s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+
+.rainbow {
+  background: linear-gradient(90deg,#FF0000,#FF9900,#FFFF00,#00FF00,#00FFFF,#0066FF,#FF00FF,#FF0000);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: slide 3s linear infinite;
+  font-weight: bold;
+}
+@keyframes slide { to { background-position: -200% 0; } }
+
+hr.rain {
+  height: 6px;
+  border: 0;
+  background: linear-gradient(90deg,#FF0000,#FFFF00,#00FF00,#00FFFF,#FF00FF,#FF0000);
+  background-size: 200% 100%;
+  animation: slide 2s linear infinite;
+  margin: 20px 0;
+}
+
+/* ---- CAT ENGINE (no hotlinks, all local) ---- */
+.cat { display: inline-block; font-size: 34px; line-height: 1; }
+.cat.bounce { animation: bounce 0.6s ease-in-out infinite; }
+.cat.spin   { animation: spin 1.4s linear infinite; }
+.cat.throb  { animation: throb 0.8s ease-in-out infinite; }
+.cat.shake  { animation: shake 0.3s linear infinite; }
+.cat.big    { font-size: 60px; }
+@keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)} }
+@keyframes spin   { to { transform: rotate(360deg); } }
+@keyframes throb  { 0%,100%{transform:scale(1)} 50%{transform:scale(1.35)} }
+@keyframes shake  { 0%,100%{transform:translateX(-3px)} 50%{transform:translateX(3px)} }
+
+.catbar { text-align: center; margin: 14px 0; }
+.catbar .cat { margin: 0 6px; }
+
+.parade {
+  overflow: hidden;
+  white-space: nowrap;
+  background: #220044;
+  border: 3px inset #FF00FF;
+  padding: 6px 0;
+}
+.parade span { display: inline-block; animation: walk 12s linear infinite; font-size: 30px; }
+@keyframes walk { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+
+/* ---- under construction ---- */
+.construction {
+  background: repeating-linear-gradient(45deg,#FFCC00 0 18px,#000000 18px 36px);
+  border: 3px solid #000;
+  padding: 8px;
+  text-align: center;
+  color: #000;
+  font-weight: bold;
+  text-shadow: none;
+}
+.construction span {
+  background: #FFCC00;
+  padding: 4px 12px;
+  display: inline-block;
+  border: 2px solid #000;
+}
+
+/* ---- counter ---- */
+.counter {
+  display: inline-block;
+  background: #000;
+  border: 3px inset #888;
+  padding: 4px 8px;
+  font-family: "Courier New", monospace;
+  font-size: 26px;
+  font-weight: bold;
+  color: #00FF00;
+  letter-spacing: 4px;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  background: #000066;
+  border: 3px outset #00FFFF;
+}
+table.data th {
+  background: #FF00FF;
+  color: #FFFF00;
+  border: 2px outset #FF66FF;
+  padding: 6px;
+  font-size: 14px;
+}
+table.data td {
+  border: 2px inset #6666AA;
+  padding: 7px;
+  font-size: 14px;
+  color: #FFFFFF;
+}
+table.data td.hit { color: #FF6666; font-weight: bold; }
+table.data td.win { color: #66FF66; font-weight: bold; }
+
+.marq {
+  background: #000000;
+  border: 3px inset #00FF00;
+  padding: 5px;
+  color: #00FF00;
+  font-weight: bold;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.marq span { display: inline-block; padding-left: 100%; animation: scroll 18s linear infinite; }
+@keyframes scroll { to { transform: translateX(-200%); } }
+
+.quote {
+  background: #330033;
+  border-left: 8px solid #FF00FF;
+  padding: 10px 14px;
+  font-style: italic;
+  color: #FFCCFF;
+}
+
+.award {
+  display: inline-block;
+  background: #000;
+  border: 3px ridge #FFD700;
+  color: #FFD700;
+  padding: 6px 10px;
+  margin: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.foot { text-align: center; font-size: 12px; color: #AAAAFF; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; }
+}
+</style>
+
+<div class="page">
+
+<div class="construction">
+  <span>&#128679; THIS PAGE IS UNDER CONSTRUCTION &#128679;</span>
+</div>
+
+<h1>~ CODE GRAPH RESEARCH ~</h1>
+
+<div class="catbar">
+  <span class="cat bounce">&#128570;</span>
+  <span class="cat spin">&#128571;</span>
+  <span class="cat throb">&#128572;</span>
+  <span class="cat bounce">&#128573;</span>
+  <span class="cat shake">&#128576;</span>
+  <span class="cat spin">&#128575;</span>
+  <span class="cat throb">&#128049;</span>
+</div>
+
+<p style="text-align:center" class="rainbow">*** WELCOME 2 MY RESEARCH DOSSIER!!! ***</p>
+
+<p style="text-align:center">
+  <span class="blink" style="color:#FF0000;font-weight:bold">&#9733; NEW &#9733;</span>
+  Last updated: <b>21 AUG 2026</b> &nbsp;|&nbsp;
+  <span class="blink" style="color:#00FF00">4 AGENTS &#183; 15 THREADS</span>
+</p>
+
+<div class="marq"><span>&#128049; HOT NEWS &#128049; SERENA TOOK 11 HOURS 2 INDEX LLVM &#128049; CODEGRAPH DIED AT 44% &#128049; AIDER WENT 16X OVER BUDGET &#128049; NOBODY HAS EVER EVALUATED ANY OF THIS &#128049;</span></div>
+
+<hr class="rain">
+
+<div class="box lime">
+  <h2>&#128571; THE VERDICT &#128571;</h2>
+  <p><b class="rainbow">BUILD IT. ADOPT NOTHING.</b></p>
+  <p>No tool off the shelf does <b>build a graph &#8594; rank it &#8594; summarize it</b>. Every single one has a documented scale failure, zero independent evidence, or a star count u cannot verify!!!</p>
+  <p>Meanwhile <b style="color:#00FF00">structural retrieval beats dense embeddings in EVERY published head-to-head we found</b>, and 120 lines of stdlib python scouted repos nobody had ever opened in under a second. <span class="cat throb">&#128570;</span></p>
+</div>
+
+<div class="parade"><span>&#128049;&#128570;&#128571;&#128572;&#128573;&#128574;&#128575;&#128576;&#128049;&#128570;&#128571;&#128572;&#128573;&#128574;&#128575;&#128576;</span></div>
+
+<div class="box red">
+  <h2>&#128576; THE SCALE WALL &#128576;</h2>
+  <p>every number here is from a GITHUB ISSUE not a blog!!! <span class="cat shake">&#128576;</span></p>
+  <table class="data">
+    <tr><th>TOOL</th><th>WHAT HAPPENED</th><th>CAT VERDICT</th></tr>
+    <tr><td>Serena</td><td class="hit">11 HOURS to index LLVM (7,749 files)</td><td><span class="cat shake">&#128576;</span></td></tr>
+    <tr><td>Serena</td><td class="hit">~30GB RAM, froze the machine, 3x</td><td><span class="cat shake">&#128576;</span></td></tr>
+    <tr><td>CodeGraph</td><td class="hit">OOM crash at 44% on 137,699 files</td><td><span class="cat spin">&#128575;</span></td></tr>
+    <tr><td>CodeGraph</td><td class="hit">1.3% of edges WRONG after 80 commits</td><td><span class="cat shake">&#128576;</span></td></tr>
+    <tr><td>aider</td><td class="hit">asked for 1,024 tokens, got 16,419</td><td><span class="cat spin">&#128575;</span></td></tr>
+    <tr><td>grepai</td><td class="hit">ZERO independent reports. ever.</td><td><span class="cat throb">&#128584;</span></td></tr>
+    <tr><td><b>OUR THING</b></td><td class="win">1,780 files in 9.4 SECONDS, 0 deps</td><td><span class="cat bounce">&#128571;</span></td></tr>
+  </table>
+  <p style="font-size:13px;color:#FFCCCC">(not apples 2 apples — serena builds a full semantic index. but we didnt ask for one!!)</p>
+</div>
+
+<div class="box cyan">
+  <h2>&#128572; 4 THINGS THAT CHANGED THE PLAN &#128572;</h2>
+
+  <h3><span class="cat bounce">&#128570;</span> #1 &#8212; REPO OVERVIEWS MIGHT NOT EVEN WORK</h3>
+  <p><b>N=438 tasks.</b> Static prose repo overviews did NOT reduce steps-to-first-file and did NOT improve resolution. LLM-generated ones <b class="blink" style="color:#FF6666">MADE IT WORSE</b> by 0.5&#8211;2%!!!</p>
+  <p>&#8658; so: <b>cache the COMMAND, not the MAP.</b> it runs in 0.34s. why store it.</p>
+
+  <h3><span class="cat spin">&#128571;</span> #2 &#8212; STRUCTURE BEATS EMBEDDINGS</h3>
+  <table class="data">
+    <tr><th>WHO</th><th>RESULT</th></tr>
+    <tr><td>DyCoder (ASE 2026)</td><td class="win">graph 43.06% vs dense 23.60% Pass@1</td></tr>
+    <tr><td>LocAgent (ACL 2025)</td><td class="win">+10pp file &#183; +19pp function</td></tr>
+    <tr><td>4 hybrid studies</td><td class="win">hybrid wins by 9&#8211;30% relative</td></tr>
+  </table>
+
+  <h3><span class="cat throb">&#128572;</span> #3 &#8212; BARREL FILES: NOBODY HAS SOLVED THIS</h3>
+  <p>when index.ts re-exports everything, EVERY import points at the barrel and ur ranking dies. dependency-cruiser? no. skott? no. grimp? pydeps? NO!!! <span class="cat shake">&#128576;</span></p>
+  <p>the algorithm exists inside NEXT.JS as a bundler transform. nobody ever applied it 2 ranking.</p>
+
+  <h3><span class="cat bounce">&#128573;</span> #4 &#8212; WE ACCIDENTALLY REBUILT AIDER EXACTLY</h3>
+  <p>every constant matches repomap.py VERBATIM. and NOBODY HAS EVER EVALUATED IT.</p>
+  <div class="quote">&#8220;No other agent in the corpus uses graph-theoretic relevance ranking.&#8221;<br><span style="font-size:12px">&#8212; Inside the Scaffold, arXiv:2604.03515</span></div>
+  <p>so theres no state of the art 2 be behind!!! <span class="cat spin">&#128570;</span></p>
+</div>
+
+<div class="parade"><span>&#128576;&#128575;&#128574;&#128573;&#128572;&#128571;&#128570;&#128049;&#128576;&#128575;&#128574;&#128573;&#128572;&#128571;&#128570;&#128049;</span></div>
+
+<div class="box silver">
+  <h2>&#128584; THE NUMBER THAT HURTS &#128584;</h2>
+  <p style="text-align:center;font-size:22px">
+    <span class="cat big throb">&#128576;</span><br>
+    <b class="blink" style="color:#FF0000">p = 0.087</b>
+  </p>
+  <p>adding an index gave <b>+7.9pp</b> resolve rate over NO index... but measured against a strong <b>grep agent</b>, the gain was <b>NOT STATISTICALLY SIGNIFICANT</b>.</p>
+  <p>translation: the case that ANY of this beats a competent agent with grep is <u>not yet made</u>. <span class="cat shake">&#128576;</span></p>
+</div>
+
+<div class="box">
+  <h2>&#128570; THE DECISION &#128570;</h2>
+  <ol>
+    <li><b>Generate on demand.</b> persist the recipe not the orientation</li>
+    <li><b>Rank over IMPORTS</b> (names give u <code>get()</code> and <code>close()</code>, useless!!) + linguist vendor exclusions</li>
+    <li><b>Add the top rung</b> &#8212; what is this project FOR</li>
+    <li><b>ts.resolveModuleName</b> + resolution cache. the cache is MANDATORY</li>
+  </ol>
+  <p><b style="color:#FF9900">NOT BUILDING:</b> barrel collapse (checked ur repos &#8212; zero TS barrels!) and monorepo machinery (microservices!!) <span class="cat bounce">&#128571;</span></p>
+</div>
+
+<hr class="rain">
+
+<div style="text-align:center">
+  <div class="award">&#127942; BEST VIEWED IN NETSCAPE NAVIGATOR 4.0</div>
+  <div class="award">&#127942; 800x600 OR BETTER</div>
+  <div class="award">&#127942; CAT LOVERS WEBRING MEMBER</div>
+  <div class="award">&#127942; 100% HAND-CODED CATS</div>
+</div>
+
+<p style="text-align:center;margin-top:20px">
+  YOU ARE VISITOR NUMBER<br>
+  <span class="counter">0000437</span>
+</p>
+
+<p style="text-align:center">
+  <span class="cat bounce">&#128571;</span>
+  <a href="#">SIGN MY GUESTBOOK!</a> &#183;
+  <a href="#">EMAIL ME</a> &#183;
+  <a href="#">&#9664; WEBRING &#9654;</a>
+  <span class="cat bounce">&#128571;</span>
+</p>
+
+<div class="marq"><span>&#127925; NOW PLAYING: canon_in_d.mid &#127925; &#128049; thx 4 visiting my page!!! &#128049; dont forget 2 bookmark &#128049; &#127925;</span></div>
+
+<div class="construction" style="margin-top:18px">
+  <span>&#128679; MORE CATS COMING SOON &#128679;</span>
+</div>
+
+<p class="foot">
+  every finding on this page is real and sourced.<br>
+  the sober version lives at <code>plans/code-graph-report.html</code><br>
+  full citations: held outside this repository.<br><br>
+  <span class="cat">&#128049;</span> made with NOTEPAD.EXE <span class="cat">&#128049;</span>
+</p>
+
+</div>

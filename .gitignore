@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+node_modules/
+package-lock.json
+.flw/reports/
+.flw/reviews/publish.toml

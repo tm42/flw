@@ -1,0 +1,146 @@
+base         = "4.4"
+spec_version = "4.5"
+name         = "4.5"
+summary      = "the posture an agent works by: reach for what exists, leave one check behind, never cut the guards, fix the cause not the symptom, and say what you did not look at"
+
+approach = """
+WHAT IS ALREADY THERE. `core/shared/ambient.md` has a `## Posture` section (`:28-45`) that
+says most of this already: effort is asymmetric, name what breaks without a new artifact,
+one caller is not an abstraction, minimal is not partial, search for the helper that exists
+under another name. The plan behind this version — `plans/design-posture.md` — audited that
+section line by line against an external skill with a published benchmark and found roughly
+half of what looked adoptable was already present in flw's own words. What follows is only the remainder.
+
+TWO SOURCES DISAGREED ABOUT WHAT MATTERS, AND THE RECORD WON. The external benchmark supports
+the part flw lacks about reaching for what already exists: every large cut it measured is one
+rung, a native primitive replacing a hand-built component, and it is flat on irreducible
+backend work. flw's own defect record supports something else. No finding in it is of that
+kind — a hand-built component where a primitive existed — in either review report, in
+docs/verified.md, or in any version file. The `footprint` lens in `2026-08-22T1434-styling.md` went looking to delete and
+returned dead code instead: unreachable `BEGIN`/`END` defaults (`:186`), a return value with no
+reader (`:188`). What flw has actually shipped is the opposite failure. `.flw/reports/2026-08-22T1959-final.md:18` is a CRITICAL
+where the previous review's two-part fix went in half-done — "Only the first half shipped, and
+it is the half with a test" — and `2026-08-22T1434-styling.md` carries four separate findings
+where a mutation survived. So the check rule leads and the reach-for-what-exists rule follows,
+which is the reverse of how the external source ranks them.
+
+THE FOURTH RUNG, BACKED THE SAME WAY AS THE FIRST. Root cause, not symptom: grep every caller of
+the function you are about to touch, because one guard in the shared function is a smaller diff than
+a guard in every caller, and patching only the path a report names leaves every sibling caller
+broken. flw's own record backs it twice. `.flw/reports/2026-08-22T1959-final.md:97-98` — the fix for
+`shadowing_style` "moved the path off `~/.claude`, where the last review found it, and stopped one
+step short", closing the case the finding named while the sibling case stayed broken. And
+`docs/verified.md:89` — asked for every reference to a function reached through `sys.path.insert`,
+the language server returned 1 of 8 real call sites, which is why the rule says grep rather than use
+the reference tool.
+
+THE ONE COLLISION, WHICH MUST BE RESOLVED IN THE SAME COMMIT. `flw-execute/SKILL.md:272-273`
+lists "write tests the contract did not ask for" under what that skill does not do. Adding
+the check rule to the always-on block without touching it leaves ambient and execute
+contradicting each other inside every execute run. The reconciling sentence — a change's own
+check is part of the change, not a test the contract did not ask for — lands in the same
+commit or the tree carries the contradiction.
+
+THE PROSE HALF, ONE RULE IN ONE FILE. `core/styles/terse_prose.md` gains this and nothing else:
+when you are relaying another agent's findings, you are the filter, not the pipe — give what
+changed, the one thing you verified yourself, and where the rest is; a review is already a written
+artifact, and reproducing it inline is refusing to do the job. The observed failure was the same
+review written once at forty lines and once at eight, neither usable. Decision 4 records why the
+rest of the drafted style change did not survive.
+
+WHAT THE BLOCK DOES NOT DO, WHICH THE REASONING BELOW LEANS ON. `install_ambient` is reached only
+from `flw install --ambient` (`cli/flw.py:367`); `sync`, `update` and `doctor` never mention the
+block, and its record carries no digest, unlike the style entry's `installed_sha`. So this payload
+reaches an existing install only when the user re-runs that command, and nothing reports the block
+as behind — which strains `specs/current.toml:47`, "what a host holds as a copy is reported and
+offered for refresh in the same run". Real gap, and it belongs to the parked `flw sync` work: a
+hook layer would not have closed it either, so it does not reopen the decision below.
+
+WHAT THE WORK IS NOT. Not a delivery mechanism. An earlier draft proposed SessionStart,
+SubagentStart and a write-time hook to re-establish the block, and all three are dropped: the
+payload is ten lines into a block that already installs on every host; a tagged block sits in
+a system prompt that is rebuilt every request, so a compaction changes its salience and not
+its presence; a PreToolUse hook intercepts tool calls, which the contract's own assumption
+rules out and which resembles the post-edit hook already in `final_state.removed`; and on
+Codex the mechanism arrives through plugin packaging, the first entry in that same list. Not
+an ordered ladder — the rungs flw already carries are not reordered, and §1.6 of the plan
+records why. Not a second home for anything: v3.2 deleted the one duplicated rule flw had, and
+this edit does not recreate it, so each rule lands in exactly one file.
+
+WHAT THE MEASUREMENTS ACTUALLY SUPPORT, since they cannot be re-derived by reading. The
+external skill's headline claim was measured against a bare chatty model and did not survive a
+fair agentic baseline. An independent replication over 80 paired A/B tests then found a code
+reduction that was not statistically significant and a cost reduction that was, with no
+significant quality difference on an underpowered sample. In that same work a seven-word prompt
+beat the whole skill on cost and on time, losing only on lines of code and on one dropped
+path-traversal guard in twenty. And no arm in either study resembles
+flw's existing Posture, so the marginal effect of this edit is measured nowhere. Nothing here
+is justified by a percentage; the check rule is justified by flw's own shipped defects and the
+rest by being cheap and naming real gaps.
+
+ONE IDEA REJECTED ON MEASURED ADHERENCE. The external skill marks a deliberate corner-cut with
+a comment naming its ceiling and upgrade path, and harvests those into a debt ledger. The
+independent replication measured the model emitting that marker once across 80 trials. A convention that depends on the model
+remembering to emit it is not adopted; if flw wants a deferral ledger, the marker has to come
+out of `flw-execute`'s proposal path rather than out of prose asking for it.
+
+WHAT THE PLAN COVERED AND WHAT IT DID NOT. Read: the external skill in full, its benchmark
+harness run offline to confirm the instruments self-validate, flw's ambient block, style file,
+four skills, contract, every version record, docs/verified.md and both review reports. Two
+independent reviews, one on delivery and one on content. Not covered: whether the block reaches
+subagents or how much salience it loses across a compaction, both measurable with a probe and
+both unmeasured; whether the check rule is adhered to, which that harness computes and has
+never published; and how any of this behaves in a repo with an established design system,
+where flw is better placed than a rule file alone because
+`flw-research` writes conventions into `.flw/extensions/`, but better placed is not tested.
+"""
+
+contract_edit = """
+1. In the component named "the skills", append to `provides`:
+
+   "A user can install a build posture alongside the skills that requires one runnable check
+   behind the non-trivial logic an agent writes, and requires saying what was not done rather
+   than implying a completeness the work does not have."
+
+2. In the component named "the project surface", replace the last entry of `paths`:
+
+   from  "plans/design-v3.md"
+   to    "plans/"
+
+   The component already promises a reader can find "why flw is shaped the way it is,
+   including what was deliberately not built", and design documents are that material. Naming
+   one plan by filename left every other plan uncovered, which is why plans/handoff-v3.2.md
+   was deleted rather than kept.
+
+Nothing else in the contract changes. No assumption moves: a tagged block in an instructions
+file is what flw already installs, and the hook layer this version declines is the reason
+"flw does not intercept, wrap, or police host operation" needed no revision.
+"""
+
+[[decisions]]
+topic     = "where the build discipline reaches the agent"
+options   = [
+  "a second file in core/styles/, installed like the writing style",
+  "the ambient tagged block, which already installs on all three hosts",
+  "the block plus lifecycle hooks on the hosts that support them",
+]
+chosen    = "the ambient tagged block"
+rationale = "`outputStyle` is singular on Claude Code, so prose and build discipline cannot both be selected and would have to become one file in a slot that costs on every turn. Hooks were drafted and dropped: ten lines do not justify the mechanism, the decay premise behind them was wrong because a tagged block is in a system prompt rebuilt every request, a PreToolUse hook intercepts tool calls in a way the contract's assumption rules out, and on Codex the mechanism arrives through the plugin packaging already in final_state.removed."
+
+[[decisions]]
+topic     = "ordered ladder with a stop condition, or keep the existing bullets"
+options   = ["reorder Posture into a ladder that stops at the first rung that holds", "add only what is missing and leave the form alone"]
+chosen    = "add only what is missing"
+rationale = "Three of the drafted rungs are already present in ambient.md's own words — smallest change that satisfies the ask, follow what is already there, and root cause not symptom — so the ladder is re-arrangement rather than content, and there is no evidence in either direction that ordered form changes behaviour. The one weak data point runs against it: facing the same problem in the same week, `9cb9255` chose a two-part test over a ladder for the writing style, and the result is shorter and covers a case the ladder missed."
+
+[[decisions]]
+topic     = "the agent-side rule about empty results, against v4.1 which fixed the tool side"
+options   = ["drop it as redundant with v4.1", "keep it as the agent-side complement"]
+chosen    = "keep it as the complement"
+rationale = "v4.1 fixed the instances in flw's own tools — run_tests.py now separates a failing setup from a missing command — and states no rule for an agent working in someone else's repo. The four instances in flw's record become the argument for the rule rather than live defects."
+
+[[decisions]]
+topic     = "how much of the drafted writing-style change survives"
+options   = ["the full evidence stop-condition plus the relay rule", "the relay rule alone"]
+chosen    = "the relay rule alone"
+rationale = "`9cb9255` already shipped the stop-condition as a stricter two-part test — a fact earns its place if the reader acts on it or could not otherwise believe a claim they must act on — and carries something the draft did not, that whether a fact is evidence depends on what was asked. What remains unwritten is relaying another agent's findings, where the observed failure was the same review written once at forty lines and once at eight, neither usable."

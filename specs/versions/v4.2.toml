@@ -1,0 +1,135 @@
+base         = "4.1"
+spec_version = "4.2"
+name         = "4.2"
+summary      = "flw sync brings an install back into line with the checkout, and the CLI's own surface stops being a thing only the parser knows"
+
+approach = """
+WHAT DOCTOR CAN SEE AND NOTHING CAN FIX. `flw doctor` distinguishes seven fault kinds at
+`cli/flw.py:1207-1240`: a link recorded but gone, a link pointing somewhere else, a dangling
+target, an orphan whose bundle was deregistered, a stale link to a path flw now resolves
+differently, a skill linked nowhere, and a style copy that no longer matches its source.
+Three of those tell the user to re-run `flw install`, which is the wrong instruction: install
+links into every host it finds, so the remedy for a drifted install is an action with a wider
+blast radius than the drift. `flw sync` is that remedy at the right width — it re-links,
+unlinks and refreshes only inside roots `links.toml` already records.
+
+THE TWO THINGS SYNC MUST NOT DO, AND ONE IT MUST. It must not widen an install, and it must
+not prompt for a removal that costs the user nothing — both settled below. What it must do is
+the third thing doctor reports and nothing repairs: a host that lists a skill whose symlink
+resolves to nowhere, which fails when something tries to load it rather than when anyone is
+looking.
+
+WHAT THE WORK IS NOT. Not a replacement for `flw install`: install is how a host is chosen
+for the first time and stays the only command that widens coverage. Not a second permission
+model — sync reads `links.toml` and does nothing a host has not already been told to do. And
+not a fix for `flw update` refusing to run without an upstream; that refusal is correct, and
+what changes is that it now names the command that does the local half.
+
+WHAT MOVES OUT OF UPDATE, AND WHAT STAYS. The style-refresh loop becomes sync's, because it
+is the local half of what update does and update is pull plus the local half. The refusal to
+run without an upstream stays exactly as it is — inventing a pull would be worse — and gains
+a pointer to the command that still works.
+
+WHY THE CLI'S SURFACE IS DECLARED HERE, AND WHY IT IS TESTED. 4.0 deferred the subcommands,
+flags and exit codes to the version that touches all of them, and this is it — sync adds one
+and update changes another. A declared surface that nobody checks is a list that goes stale
+the first time someone adds a flag, so the declaration comes with a property and a test
+asserting the two agree in both directions. That needs the parser out of `main`, where it is
+built inline at `cli/flw.py:1715` and cannot be introspected; extracting `build_parser()` is
+the enabling change and nothing else about the CLI moves.
+
+THE BOOTSTRAP. A version cannot both assert a property of the contract and be the version
+that puts it there — 4.2 is the first to reach that limit, and the decision below says why
+each way out was refused. So the `surfaces` half of this version's contract edit is applied
+by hand at spec time and recorded here, the way 3.4's own bootstrap was. Everything else
+moves normally through `contract_edit`. Verbatim, as applied — one entry per subcommand, in the shape the test
+parses, followed by the three host-directory writes 4.0 withdrew:
+
+  flw install [hosts...] [-n|--dry-run] [--ambient] [-y|--yes]
+  flw uninstall [hosts...] [-n|--dry-run]
+  flw style install [name] [-y|--yes] [-H|--host] [-n|--dry-run]
+  flw style uninstall [-H|--host] [-n|--dry-run]
+  flw sync [-n|--dry-run] [-y|--yes]
+  flw update [-y|--yes] [-n|--dry-run]
+  flw doctor [-v|--verbose]
+  flw add <path> [--name]
+  flw remove <name>
+  flw list
+  flw test [path] [-A|--all] [--timeout] [--no-stream]
+  flw scout [path] [-n|--budget]
+  flw validate [path]
+  flw version
+  Exit codes: 0 success, 1 something failed or was refused. `flw test` and `flw validate`
+  also use 2 for nothing declared to run, which is not a pass.
+  Skill symlinks into ~/.claude/skills, ~/.agents/skills and ~/.config/opencode/skills.
+  The outputStyle key in ~/.claude/settings.json.
+  ~/.claude/output-styles/<name>.md.
+
+COVERAGE OF WHAT THIS IS SPECCED FROM. No review report — the material is `flw doctor`'s own
+fault taxonomy, read at `cli/flw.py:1195-1245`, and v3.3's style-state machinery at
+`style_state` and `refresh_style`. Not covered and not attempted here: whether two `flw sync`
+runs can safely overlap, which is the same single-user assumption the check runner makes.
+"""
+
+contract_edit = """
+The flw CLI component gains, to its provides array:
+  "A user can bring an install back into line with the checkout — relinking what moved,
+   removing what no longer exists, refreshing a style copy that fell behind — without
+   re-running install and without linking into a host they never chose."
+
+The flw CLI component gains a properties array, before its surfaces array:
+  properties = [
+    "Every subcommand and flag the CLI accepts is declared in surfaces, and every declared
+     one exists: the parser and the contract cannot drift apart unnoticed.",
+    "flw sync never creates a link in a directory links.toml does not already record, so it
+     can repair an install and can never widen one.",
+  ]
+"""
+
+[[decisions]]
+topic     = "what flw sync does with a link whose skill no longer exists"
+options   = ["remove it without prompting", "prompt per link", "report only and never unlink"]
+chosen    = "remove it without prompting"
+rationale = "flw created the link and links.toml records it as flw's, so removing is inside the additive rule rather than an exception to it. Nothing of the user's is lost, which is the difference from the style refresh: a style copy may carry their edits and a dead symlink carries nothing. Reporting only would leave doctor naming a fault with no command that fixes it, which is the gap sync exists to close."
+
+[[decisions]]
+topic     = "how wide sync's reach is"
+options   = ["every host present on the machine, like install", "only roots links.toml already records"]
+chosen    = "only roots links.toml already records"
+rationale = "The recorded roots are the user's earlier answer to which hosts they wanted. Covering every present host would make sync install by stealth and re-ask a question already answered, and the additive rule is the one flw has broken and fixed twice."
+
+[[decisions]]
+topic     = "how the CLI's declared surface is kept from going stale"
+options   = ["declare it as prose like the state files", "declare it and test that it matches the parser"]
+chosen    = "declare it and test that it matches the parser"
+rationale = "The nine state-file entries are prose and none is tested, which is tolerable because they change once a year. Subcommands and flags change whenever someone adds one, and a surface that silently stops describing the program is worse than no surface. The test costs extracting build_parser() from main, which is the only reason the parser is unreachable today."
+
+[[decisions]]
+topic     = "how a test can assert a contract property the same version adds"
+options   = [
+  "apply the surfaces by hand at spec time and record it",
+  "drop the test and declare the surfaces as untested prose",
+  "declare in this version and test in the next",
+  "make flw-execute edit the contract before the checks rather than after",
+]
+chosen    = "apply the surfaces by hand at spec time and record it"
+rationale = "Under 3.4 the contract moves only after flw test passes, so the test would run against a contract that does not yet declare anything, fail, and stop the run before the edit — a deadlock this is the first version to reach. Splitting across two versions leaves one whose only content is a test for the other. Editing the contract before the checks would undo 4.1's decision four commits after it was made, and recording what shipped before knowing whether it shipped is the mistake 3.4 exists to remove. One recorded exception leaves the model intact for every version after."
+
+[[dag]]
+group  = 1
+phase  = "sync repairs what doctor can only report"
+tasks  = [
+  { id = "sync-command", desc = "`flw sync` with -n/--dry-run and -y/--yes, matching install's spelling. It walks links.toml and, for each recorded root: re-links a link that is missing, points elsewhere, or is stale against what flw now resolves; links a known skill that is absent from that root; removes a link whose target is gone or whose bundle was deregistered. Then it offers the style refresh update already offers, through the same refresh_style and the same [y/N] prompt, because that is the one action that can discard the user's own edit. It creates no link in a directory links.toml does not already record — not even for a host present on the machine — and it says so when it declines. Prints what it did per root, and nothing when there is nothing to do." },
+  { id = "update-syncs", desc = "update becomes pull, then sync: the style-refresh loop moves out of update into sync and update calls it, so the two cannot drift. The no-upstream error keeps refusing to invent a pull and now names `flw sync` as the command that does the local half — this checkout has no upstream, so the refresh v3.3 built has been unreachable through its own front door since it shipped.", depends_on = ["sync-command"] },
+  { id = "doctor-points-at-sync", desc = "The three `Re-run `flw install`` remedies in doctor — the stale link at cli/flw.py:1226, the unlinked skill at :1238, and the empty-record line at :1200 — become `Run `flw sync``, except the last, which is correct as it stands: with nothing recorded there is no root to sync into and install is genuinely the command. Check each of the three against what sync can actually repair before changing its wording.", depends_on = ["sync-command"] },
+  { id = "digest-adoption", desc = "Where a style entry has no installed_sha and the held body still equals the source body, sync records the digest. Nothing has drifted yet, so the value is certain, and without it every install predating v3.3 gets `which one moved is unknown` on its first real drift — the least useful of the three verdicts and the one every existing machine qualifies for. An entry whose bodies already differ is left alone: guessing a digest there would invent the verdict the record exists to avoid.", depends_on = ["sync-command"] },
+  { id = "sync-tests", desc = "Against the fake HOME fixture: a missing link is restored; a link pointing elsewhere is repointed; a dangling link and an orphaned one are removed; a known skill absent from a recorded root is linked; a host present on the machine but absent from links.toml is left untouched and said so; --dry-run writes nothing; a style behind its source is offered and refreshed; declining leaves it byte-identical; an entry with no digest and a matching body gains one, and an entry with no digest and a differing body does not.", depends_on = ["sync-command", "update-syncs", "doctor-points-at-sync", "digest-adoption"] },
+]
+
+[[dag]]
+group  = 2
+phase  = "the CLI's surface cannot drift from the parser"
+tasks  = [
+  { id = "parser-extracted", desc = "Extract the parser out of main into build_parser() returning the configured ArgumentParser; main calls it, parses and dispatches. Nothing else about the CLI moves — this exists so a test can introspect the parser, which it cannot while the parser is built inline and thrown away." },
+  { id = "surface-test", desc = "A test asserting both directions: every subcommand and flag build_parser() accepts appears in the contract's flw CLI surfaces, and every one declared there exists in the parser. The declared entries begin `flw <name>` with flags in brackets, which is the shape to parse; -h/--help is excluded, being argparse's rather than flw's. The failure message names the specific command or flag and which side it is missing from, because `the surface does not match` sends a reader to read both lists.", depends_on = ["parser-extracted"] },
+]

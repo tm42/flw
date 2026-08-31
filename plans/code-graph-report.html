@@ -1,0 +1,657 @@
+<meta charset="utf-8">
+<title>Scouting Unknown Code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+:root {
+  --paper:      #EEF1EC;
+  --surface:    #FFFFFF;
+  --sunk:       #E4E9E3;
+  --ink:        #171A16;
+  --muted:      #5B645A;
+  --faint:      #8B948A;
+  --rule:       #D6DDD4;
+  --hair:       #E5EAE3;
+
+  --accent:     #235244;
+  --accent-ink: #235244;
+  --accent-bg:  #DCE9E3;
+
+  --alarm:      #9C4227;
+  --alarm-bg:   #F4E2DA;
+  --caution:    #7E6414;
+  --caution-bg: #F0E9D2;
+  --neutral-bg: #E3E6E2;
+
+  --display: "Fraunces", Georgia, serif;
+  --body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #0D0F0D;
+    --surface:    #161A16;
+    --sunk:       #11150F;
+    --ink:        #E6E9E3;
+    --muted:      #98A296;
+    --faint:      #6B756A;
+    --rule:       #262D25;
+    --hair:       #1E241D;
+
+    --accent:     #7FBBA0;
+    --accent-ink: #9FD0B7;
+    --accent-bg:  #14251E;
+
+    --alarm:      #DE9375;
+    --alarm-bg:   #2A1913;
+    --caution:    #CBA84E;
+    --caution-bg: #241E0F;
+    --neutral-bg: #1C211B;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:      #0D0F0D;
+  --surface:    #161A16;
+  --sunk:       #11150F;
+  --ink:        #E6E9E3;
+  --muted:      #98A296;
+  --faint:      #6B756A;
+  --rule:       #262D25;
+  --hair:       #1E241D;
+
+  --accent:     #7FBBA0;
+  --accent-ink: #9FD0B7;
+  --accent-bg:  #14251E;
+
+  --alarm:      #DE9375;
+  --alarm-bg:   #2A1913;
+  --caution:    #CBA84E;
+  --caution-bg: #241E0F;
+  --neutral-bg: #1C211B;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 24px 120px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+main { max-width: 50rem; margin: 0 auto; }
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  padding: 5rem 0 2rem;
+  border-bottom: 3px double var(--ink);
+  margin-bottom: 3rem;
+}
+
+.slug {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.4rem;
+  margin-bottom: 1.6rem;
+}
+
+h1 {
+  font-family: var(--display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: clamp(2.6rem, 8vw, 4.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.028em;
+  margin: 0 0 1.2rem;
+  text-wrap: balance;
+}
+
+.deck {
+  font-family: var(--display);
+  font-size: clamp(1.1rem, 2.4vw, 1.32rem);
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.42;
+  color: var(--muted);
+  margin: 0;
+  max-width: 34rem;
+}
+
+/* ---------- structure ---------- */
+
+section { margin-bottom: 3.5rem; }
+
+h2 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 3.6vw, 2.05rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.4rem;
+  text-wrap: balance;
+}
+
+.h2-rule {
+  height: 1px;
+  background: var(--ink);
+  margin: 0 0 1.5rem;
+  opacity: 0.85;
+}
+
+h3 {
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.005em;
+  margin: 2rem 0 0.6rem;
+}
+
+p { margin: 0 0 1rem; max-width: 40rem; }
+p:last-child { margin-bottom: 0; }
+
+a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+strong { font-weight: 700; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--sunk);
+  padding: 0.12em 0.38em;
+  border-radius: 3px;
+}
+
+ul { margin: 0 0 1rem; padding-left: 1.15rem; }
+li { margin-bottom: 0.45rem; max-width: 39rem; }
+li::marker { color: var(--faint); }
+
+/* ---------- evidence chips: the dig's own taxonomy ---------- */
+
+.chip {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 0.22em 0.5em;
+  border-radius: 2px;
+  white-space: nowrap;
+  vertical-align: 0.12em;
+}
+.chip.peer   { color: var(--accent);  background: var(--accent-bg); }
+.chip.indep  { color: var(--ink);     background: var(--neutral-bg); }
+.chip.vendor { color: var(--caution); background: var(--caution-bg); }
+.chip.none   { color: var(--alarm);   background: var(--alarm-bg); }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.1rem;
+  align-items: center;
+  padding: 0.9rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-size: 0.83rem;
+  color: var(--muted);
+  margin-bottom: 1.6rem;
+}
+.legend .item { display: flex; align-items: center; gap: 0.42rem; }
+
+/* ---------- verdict ---------- */
+
+.verdict {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  padding: 1.5rem 1.6rem;
+  margin-bottom: 2rem;
+}
+.verdict.warn { border-left-color: var(--alarm); }
+.verdict .lede {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.24rem;
+  line-height: 1.25;
+  letter-spacing: -0.012em;
+  margin: 0 0 0.7rem;
+  text-wrap: balance;
+}
+.verdict p { font-size: 0.96rem; color: var(--muted); }
+.verdict p strong { color: var(--ink); }
+
+/* ---------- findings ---------- */
+
+.finding {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr;
+  gap: 0 1.3rem;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--hair);
+}
+.finding:first-of-type { border-top: 1px solid var(--rule); }
+.finding .rank {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+.finding .title {
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 1.08rem;
+  line-height: 1.3;
+  margin: 0 0 0.5rem;
+}
+.finding .body { grid-column: 2; }
+.finding .body p { font-size: 0.95rem; }
+
+/* ---------- bars ---------- */
+
+.chart {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1.4rem 1.5rem;
+  margin: 1.5rem 0;
+}
+.chart .cap {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 1.1rem;
+}
+.row { margin-bottom: 1rem; }
+.row:last-child { margin-bottom: 0; }
+.row .lbl {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  font-size: 0.87rem;
+  margin-bottom: 0.32rem;
+}
+.row .lbl .who { font-weight: 600; }
+.row .lbl .val {
+  font-family: var(--mono);
+  font-size: 0.83rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.track { height: 9px; background: var(--sunk); border-radius: 2px; overflow: hidden; }
+.fill { height: 100%; border-radius: 2px; }
+.fill.bad  { background: var(--alarm); }
+.fill.good { background: var(--accent); }
+.fill.mid  { background: var(--caution); }
+.row .note { font-size: 0.8rem; color: var(--faint); margin-top: 0.3rem; }
+
+/* ---------- tables ---------- */
+
+.tw { overflow-x: auto; margin: 1.4rem 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+th {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  text-align: left;
+  padding: 0 0.8rem 0.5rem 0;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+td { padding: 0.62rem 0.8rem 0.62rem 0; border-bottom: 1px solid var(--hair); vertical-align: top; line-height: 1.45; }
+tr td:last-child, tr th:last-child { padding-right: 0; }
+td.num { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
+
+/* ---------- pull quote ---------- */
+
+blockquote {
+  margin: 1.8rem 0;
+  padding: 0 0 0 1.4rem;
+  border-left: 2px solid var(--accent);
+}
+blockquote p {
+  font-family: var(--display);
+  font-size: 1.16rem;
+  font-style: italic;
+  line-height: 1.42;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
+}
+blockquote cite {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+/* ---------- decision ---------- */
+
+.decision {
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  padding: 1.8rem;
+}
+.decision .lede {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.55rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+}
+.steps { list-style: none; padding: 0; margin: 1.2rem 0 0; counter-reset: s; }
+.steps li {
+  counter-increment: s;
+  position: relative;
+  padding-left: 2.2rem;
+  margin-bottom: 0.7rem;
+  font-size: 0.95rem;
+}
+.steps li::before {
+  content: counter(s);
+  position: absolute;
+  left: 0;
+  top: 0.05rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.foot {
+  margin-top: 3.5rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.83rem;
+  color: var(--faint);
+}
+.foot a { color: var(--muted); }
+
+@media (max-width: 640px) {
+  body { font-size: 16px; padding: 0 18px 80px; }
+  .masthead { padding-top: 3rem; }
+  .finding { grid-template-columns: 1fr; gap: 0.4rem; }
+  .finding .body { grid-column: 1; }
+}
+</style>
+
+<main>
+
+<header class="masthead">
+  <div class="slug">
+    <span>flw · research dossier</span>
+    <span>21 Aug 2026</span>
+    <span>4 agents · 15 threads</span>
+  </div>
+  <h1>Scouting Unknown Code</h1>
+  <p class="deck">What it takes to hand an agent the shape of a repository it has never opened — and why almost everything sold for the job falls over.</p>
+</header>
+
+<section>
+  <div class="verdict">
+    <p class="lede">Build it. Adopt nothing. Change what you write to disk.</p>
+    <p>No off-the-shelf tool does <strong>build a graph, rank it, summarise it</strong>. Every one we examined has a documented scale failure, no independent evidence, or a popularity signal that can't be checked. Meanwhile structural retrieval beats dense embeddings in <strong>every published head-to-head we found</strong>, and a 120-line stdlib prototype produced usable orientation to repos nobody had opened, in under a second.</p>
+    <p>The one real surprise: the single published A/B test of repository overviews found <strong>they don't help</strong>. That changes the artifact, not the plan.</p>
+  </div>
+</section>
+
+<section>
+  <h2>How to read the evidence</h2>
+  <div class="h2-rule"></div>
+  <p>The hardest part of this research wasn't finding tools. It was separating measurement from marketing. A large share of what search returns for this category is AI-generated content restating vendor numbers as independent review.</p>
+  <p>One claim made it into an earlier draft of this research as independent before being caught: grepai's <em>"97% fewer input tokens"</em> is hosted on the tool author's own documentation site. Every claim below carries its provenance.</p>
+
+  <div class="legend">
+    <span class="item"><span class="chip peer">peer-reviewed</span> accepted at a venue</span>
+    <span class="item"><span class="chip indep">independent</span> third party, no stake</span>
+    <span class="item"><span class="chip vendor">vendor</span> author measuring themselves</span>
+    <span class="item"><span class="chip none">none found</span> no evidence exists</span>
+  </div>
+</section>
+
+<section>
+  <h2>The scale wall</h2>
+  <div class="h2-rule"></div>
+  <p>Every claim in this section comes from a GitHub issue with numbers in it, not from a review.</p>
+
+  <div class="chart">
+    <div class="cap">Time to index · lower is better</div>
+
+    <div class="row">
+      <div class="lbl"><span class="who">Serena — LLVM, 7,749 files</span><span class="val">≈ 11 hours</span></div>
+      <div class="track"><div class="fill bad" style="width:100%"></div></div>
+      <div class="note">Reporter states the machine was not compute-bound. <span class="chip indep">independent</span></div>
+    </div>
+
+    <div class="row">
+      <div class="lbl"><span class="who">Our scout — same file count, extrapolated</span><span class="val">≈ 41 seconds</span></div>
+      <div class="track"><div class="fill good" style="width:0.1%"></div></div>
+      <div class="note">Measured 9.4s at 1,780 files, roughly linear. Not like-for-like — see below.</div>
+    </div>
+  </div>
+
+  <p>That bar is honest but the comparison is not like-for-like, and it matters. Serena builds a full semantic symbol index supporting precise navigation and refactoring. The scout builds an import graph supporting orientation. Serena is paying for something real — it just isn't the thing being asked for here.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Tool</th><th>What broke</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Serena</td>
+          <td>~30GB RAM across three incidents, machine frozen; suspected unbounded cache</td>
+          <td><span class="chip indep">independent</span></td>
+        </tr>
+        <tr>
+          <td>Serena</td>
+          <td>A TypeScript lib file with 2,660 symbols crashed the terminal at 82%: <em>"I have to reboot windows"</em></td>
+          <td><span class="chip indep">independent</span></td>
+        </tr>
+        <tr>
+          <td>CodeGraph</td>
+          <td>Out-of-memory at 44% on a 137,699-file repo — <code>Fatal process out of memory: Zone</code></td>
+          <td><span class="chip indep">independent</span></td>
+        </tr>
+        <tr>
+          <td>CodeGraph</td>
+          <td>Vendor's own changelog: after 80 commits of incremental sync, <strong>5.7% of graph edges were wrong</strong>; now 1.3%</td>
+          <td><span class="chip vendor">vendor</span></td>
+        </tr>
+        <tr>
+          <td>aider</td>
+          <td><code>--map-tokens 1024</code> produced <strong>16,419 actual tokens</strong> on a 552-file repo — 16× over</td>
+          <td><span class="chip indep">independent</span></td>
+        </tr>
+        <tr>
+          <td>grepai</td>
+          <td>No reports at any scale. Every source is the vendor or a content farm restating it</td>
+          <td><span class="chip none">none found</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>That CodeGraph staleness figure is the most credible number in the whole dig, precisely because it's an admission against interest. Even after the fix, <strong>1.3% of edges are wrong after 80 commits</strong>.</p>
+</section>
+
+<section>
+  <h2>Four findings that changed the plan</h2>
+  <div class="h2-rule"></div>
+  <p>Ordered by how much each moved the decision.</p>
+
+  <div class="finding">
+    <div class="rank">1</div>
+    <div class="body">
+      <p class="title">Repository overviews may not help at all <span class="chip peer">peer-reviewed</span></p>
+      <p><em>Evaluating AGENTS.md</em>, N = 438 tasks, A/B-tested static prose repo overviews against no overview. They did <strong>not</strong> reduce steps-to-first-relevant-file and did <strong>not</strong> improve resolution rate. LLM-generated overviews <em>hurt</em> resolution by 0.5–2%.</p>
+      <p>It tested prose, not ranked structural maps — so our artifact type is untested rather than disproven. But the failure mechanism transfers: an overview costs context on every request whether or not it's relevant. Which is exactly what aider users report.</p>
+      <p><strong>What it changes:</strong> cache the command, not the map. The scout runs in a third of a second. Persisting its output buys staleness <em>and</em> a permanent context tax; regenerating on demand costs nothing worth counting.</p>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="rank">2</div>
+    <div class="body">
+      <p class="title">Structure beats embeddings, everywhere it's been measured <span class="chip peer">peer-reviewed</span></p>
+      <p>This began as an unjustified omission — the research went straight to symbol graphs without arguing against semantic retrieval. The head-to-heads all point one way.</p>
+    </div>
+  </div>
+
+  <div class="chart" style="margin-left:0">
+    <div class="cap">DevEval Pass@1 · dense embeddings vs graph</div>
+    <div class="row">
+      <div class="lbl"><span class="who">Graph-only</span><span class="val">43.06%</span></div>
+      <div class="track"><div class="fill good" style="width:86%"></div></div>
+    </div>
+    <div class="row">
+      <div class="lbl"><span class="who">Pure dense embeddings (AlignCoder)</span><span class="val">23.60%</span></div>
+      <div class="track"><div class="fill bad" style="width:47%"></div></div>
+      <div class="note">DyCoder, ASE 2026. Dense retrieval is nearly 2× worse at scale.</div>
+    </div>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Study</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>LocAgent, ACL 2025</td><td class="num">+10pp file-level · +19pp function-level</td></tr>
+        <tr><td>RANGER / DyCoder / SpIDER / RepoGraph</td><td class="num">hybrid beats either alone by 9–30% relative</td></tr>
+        <tr><td>Agent Retrieval Bench</td><td>tested as separate arms, no fusion: no single family dominates</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:0.88rem;color:var(--muted)">Caveat that applies to all of it: this is <strong>targeted</strong> retrieval against a known query. Query-free scouting has no dedicated benchmark at all.</p>
+
+  <div class="finding">
+    <div class="rank">3</div>
+    <div class="body">
+      <p class="title">Barrel files are unsolved in every existing tool <span class="chip indep">independent</span></p>
+      <p>When <code>index.ts</code> re-exports everything, every import resolves to the barrel and a file-level ranking collapses onto it. No import-graph tool sees through it — not dependency-cruiser, not skott, not grimp or pydeps on the Python side. CPython's semantics <em>guarantee</em> the distortion: <code>from pkg import name</code> always edges to <code>pkg</code> first.</p>
+      <p>The algorithm exists, in a bundler. Next.js's <code>optimize_barrel</code> transform walks re-export chains, bails at the first file doing real work, and reattributes. Verified across 10,000 modules; cut one bundle from 552kB to 64kB. <strong>Nobody has published it applied to ranking.</strong></p>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="rank">4</div>
+    <div class="body">
+      <p class="title">We reimplemented aider exactly — and nobody has ever evaluated it <span class="chip none">none found</span></p>
+      <p>Source-verified against <code>repomap.py</code>: every constant matches verbatim. The prototype is aider's own cold-start configuration, independently re-derived from its blog post.</p>
+      <p>The 2023 post contains zero benchmark numbers. No paper evaluates the technique; those that mention it cite it only as related work.</p>
+    </div>
+  </div>
+
+  <blockquote>
+    <p>No other agent in the corpus uses graph-theoretic relevance ranking.</p>
+    <cite>Inside the Scaffold — a 13-scaffold survey, arXiv:2604.03515</cite>
+  </blockquote>
+
+  <p>So the technique is simultaneously <strong>unvalidated</strong> and <strong>unique to aider</strong>. There is no state of the art to be behind.</p>
+</section>
+
+<section>
+  <h2>The industry disagrees with itself</h2>
+  <div class="h2-rule"></div>
+  <p>The two most-used coding agents reached opposite conclusions, and both are still shipping their answer.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th></th><th>Claude Code</th><th>Cursor</th></tr></thead>
+      <tbody>
+        <tr><td>Approach</td><td>Removed its RAG pipeline, May 2025. Grep-based agentic search</td><td>Custom-trained embedding model over Turbopuffer</td></tr>
+        <tr><td>Claimed result</td><td><em>"it outperformed everything, by a lot"</em></td><td class="num">+12.5% avg accuracy · +2.6% retention on 1000+ file repos</td></tr>
+        <tr><td>Evidence</td><td><span class="chip vendor">vendor</span></td><td><span class="chip vendor">vendor</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="verdict warn">
+    <p class="lede">And the most uncomfortable number in the dig</p>
+    <p><em>Code Isn't Memory</em> found that adding an index gave <strong>+7.9pp</strong> resolve rate over no index at all. But measured against a strong <strong>grep-agent</strong> comparator, the gain was <strong>not statistically significant — p = 0.087</strong>.</p>
+    <p>Which is to say: the case that any of this beats a competent agent with grep is not yet made.</p>
+  </div>
+</section>
+
+<section>
+  <h2>What we measured ourselves</h2>
+  <div class="h2-rule"></div>
+  <p>A ~120-line stdlib Python prototype, plus a Node equivalent that loads <code>typescript</code> out of the target repo's own <code>node_modules</code> so it installs nothing.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Repository</th><th>Files</th><th>Time</th></tr></thead>
+      <tbody>
+        <tr><td>Two-project Python tree</td><td class="num">108</td><td class="num">0.34s</td></tr>
+        <tr><td>Plugin codebase</td><td class="num">77</td><td class="num">0.23s</td></tr>
+        <tr><td>Python standard library</td><td class="num">1,780</td><td class="num">9.4s</td></tr>
+        <tr><td>TypeScript plugin</td><td class="num">15</td><td class="num">0.15s</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Rank over imports, never over names</h3>
+  <p>The first attempt ranked by how often a defined name appeared anywhere. The top results were a pytest fixture with 313 hits, then <code>close()</code>, then <code>_utcnow()</code>. Useless — because <code>.get()</code> on a dictionary is not a reference to your class's <code>get</code> method, and no weight multiplier repairs a parsing problem.</p>
+  <p>Switching the edges to <strong>imports</strong> — explicit, unambiguous, resolvable — surfaced the real architecture instead: <code>SearchConfig</code>, <code>StorageDB</code>, <code>RawListing</code>, <code>ProfileSource</code>.</p>
+  <p>This is the one place the prototype diverges from aider deliberately. Aider ranks over name references because tree-sitter across 130 languages cannot resolve imports uniformly. Python's <code>ast</code> and TypeScript's compiler API both can — so copying aider here would import a workaround for a problem we don't have.</p>
+
+  <h3>Vendored code, fixed with a borrowed list</h3>
+  <p>On one real repo, half the top ten was a vendored copy of <code>tomlkit</code> — its modules import each other heavily, which is indistinguishable from a well-factored core. Applying GitHub <code>linguist</code>'s <code>vendor.yml</code> patterns removed all six entries and promoted the actual abstractions in their place. Borrowed, not invented: that list runs against every repository on GitHub.</p>
+</section>
+
+<section>
+  <h2>The decision</h2>
+  <div class="h2-rule"></div>
+
+  <div class="decision">
+    <p class="lede">Build the scout. Ship nothing else.</p>
+    <p style="color:var(--muted);font-size:0.96rem">Four changes from what was about to be written, each traceable to a finding above.</p>
+    <ol class="steps">
+      <li><strong>Generate on demand.</strong> Persist the recipe for orientation, never the orientation itself.</li>
+      <li><strong>Rank over imports</strong>, with linguist's vendor exclusions applied before ranking.</li>
+      <li><strong>Add the missing top rung.</strong> A study of professional auditors found they want global → local: what the project is <em>for</em>, then structure, then symbols. The current output has the bottom two.</li>
+      <li><strong>Use <code>ts.resolveModuleName</code></strong> with a resolution cache for TypeScript aliases. The cache is mandatory at scale, not an optimisation.</li>
+    </ol>
+  </div>
+
+  <h3>Deliberately not built</h3>
+  <p><strong>Barrel collapse.</strong> Unsolved everywhere, and the algorithm to port is known — but a check across the actual target repositories found no TypeScript barrels at all and single-line <code>__init__.py</code> re-exports. Recorded as a known limitation rather than engineered against a problem that isn't there.</p>
+  <p><strong>Monorepo machinery.</strong> Workspaces, project references, cross-package aliases. Not the deployment shape in question.</p>
+</section>
+
+<div class="foot">
+  <p>Four research agents across fifteen threads. One thread returned nothing and is recorded as returning nothing. Two claims made it into interim drafts before being caught: a fabricated arXiv identifier, and a vendor benchmark relayed as independent — both corrected in the record.</p>
+  <p>The full sourced report this summarises, with every citation, is held outside this repository.</p>
+</div>
+
+</main>

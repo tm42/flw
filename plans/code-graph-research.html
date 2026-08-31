@@ -1,0 +1,528 @@
+<meta charset="utf-8">
+<title>Code Graphs for flw Research</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --paper:   #F4F7F7;
+    --surface: #FFFFFF;
+    --ink:     #13181A;
+    --muted:   #5C6A6D;
+    --rule:    #D9E2E2;
+    --rule-soft: #E8EEEE;
+    --accent:  #1B5765;
+    --accent-soft: #E1EDEF;
+    --strike:  #8A473B;
+    --strike-soft: #F3E5E2;
+    --warn:    #86651F;
+    --warn-soft: #F3ECD9;
+    --code-bg: #EAF0F0;
+
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:   #0F1416;
+      --surface: #161D20;
+      --ink:     #E4EAEA;
+      --muted:   #93A3A6;
+      --rule:    #273235;
+      --rule-soft: #1E282B;
+      --accent:  #74B6C3;
+      --accent-soft: #17292E;
+      --strike:  #D08D7C;
+      --strike-soft: #2A1E1B;
+      --warn:    #D6B25E;
+      --warn-soft: #262013;
+      --code-bg: #1C2528;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:   #0F1416;
+    --surface: #161D20;
+    --ink:     #E4EAEA;
+    --muted:   #93A3A6;
+    --rule:    #273235;
+    --rule-soft: #1E282B;
+    --accent:  #74B6C3;
+    --accent-soft: #17292E;
+    --strike:  #D08D7C;
+    --strike-soft: #2A1E1B;
+    --warn:    #D6B25E;
+    --warn-soft: #262013;
+    --code-bg: #1C2528;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 24px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  main { max-width: 48rem; margin: 0 auto; display: flex; flex-direction: column; gap: 2.25rem; }
+
+  header {
+    padding: 4.5rem 0 1.75rem;
+    display: flex; flex-direction: column; gap: 0.9rem;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .eyebrow {
+    font-family: var(--display); font-size: 0.7rem; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin: 0;
+  }
+
+  h1 {
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(2.1rem, 5.5vw, 2.9rem); line-height: 1.08;
+    letter-spacing: -0.02em; margin: 0; text-wrap: balance;
+  }
+
+  .standfirst { font-size: 1.13rem; color: var(--muted); margin: 0; max-width: 34rem; }
+
+  section { display: flex; flex-direction: column; gap: 1rem; }
+
+  h2 {
+    font-family: var(--display); font-weight: 700; font-size: 1.45rem;
+    letter-spacing: -0.012em; margin: 1.5rem 0 0; padding-top: 1.5rem;
+    border-top: 1px solid var(--rule); text-wrap: balance;
+  }
+
+  section:first-of-type h2 { border-top: none; padding-top: 0; margin-top: 0.5rem; }
+
+  h3 {
+    font-family: var(--display); font-weight: 600; font-size: 1.02rem;
+    margin: 0.75rem 0 0;
+  }
+
+  p { margin: 0; max-width: 42rem; }
+
+  code, .path {
+    font-family: var(--mono); font-size: 0.855em; background: var(--code-bg);
+    padding: 0.1em 0.36em; border-radius: 3px; white-space: nowrap;
+  }
+
+  ul, ol { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; }
+  li { padding-left: 0.2rem; }
+  li::marker { color: var(--muted); }
+
+  .table-wrap { overflow-x: auto; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+
+  th {
+    font-family: var(--display); font-weight: 600; font-size: 0.66rem;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted);
+    text-align: left; padding: 0 0.75rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+
+  td {
+    padding: 0.6rem 0.75rem 0.6rem 0; border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top; line-height: 1.42;
+  }
+
+  tr td:last-child, tr th:last-child { padding-right: 0; }
+
+  .tool { font-family: var(--display); font-weight: 600; white-space: nowrap; }
+
+  .verdict {
+    background: var(--surface); border-left: 3px solid var(--accent);
+    border-top: 1px solid var(--rule); border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule); border-radius: 0 4px 4px 0;
+    padding: 1.15rem 1.3rem; display: flex; flex-direction: column; gap: 0.6rem;
+  }
+
+  .verdict.caution { border-left-color: var(--warn); }
+
+  .verdict .headline { font-family: var(--display); font-weight: 700; font-size: 1.08rem; letter-spacing: -0.005em; }
+  .verdict p { font-size: 0.96rem; }
+
+  .tag {
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 500;
+    padding: 0.12em 0.42em; border-radius: 3px; white-space: nowrap;
+  }
+  .tag.good { color: var(--accent); background: var(--accent-soft); }
+  .tag.warn { color: var(--warn); background: var(--warn-soft); }
+  .tag.bad  { color: var(--strike); background: var(--strike-soft); }
+
+  /* layered diagram */
+  .layers { display: flex; flex-direction: column; gap: 0.6rem; }
+  .layer {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 0.95rem 1.15rem; display: grid;
+    grid-template-columns: 5.5rem 1fr; gap: 0.2rem 1.1rem; align-items: baseline;
+  }
+  .layer .n {
+    font-family: var(--display); font-weight: 700; font-size: 0.68rem;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent);
+  }
+  .layer .what { font-family: var(--display); font-weight: 600; font-size: 1rem; }
+  .layer .desc { grid-column: 2; font-size: 0.9rem; color: var(--muted); }
+
+  .term { display: block; overflow-x: auto; background: var(--code-bg); border-radius: 4px;
+          padding: 0.9rem 1.1rem; font-family: var(--mono); font-size: 0.8rem;
+          line-height: 1.6; white-space: pre; }
+
+  @media (max-width: 620px) {
+    body { font-size: 16px; padding: 0 18px 72px; }
+    .layer { grid-template-columns: 1fr; }
+    .layer .desc { grid-column: 1; }
+  }
+</style>
+
+<main>
+
+<header>
+  <p class="eyebrow">flw · research skill</p>
+  <h1>Code Graphs for flw Research</h1>
+  <p class="standfirst">What exists for building a queryable map of a repo, what it costs, and what I'd actually use.</p>
+</header>
+
+<section>
+  <div class="verdict">
+    <div class="headline">Short answer: yes, and there's proven prior art. One caveat.</div>
+    <p>A ranked symbol map is a real win. Aider has shipped one for three years and fits a whole repo in a <strong>1,000-token</strong> default budget. That's the cheap high-level read you described.</p>
+    <p>The caveat: a reference graph is precise where it's precise and <em>silently blind</em> where it isn't. I proved that on this repo in three tool calls.</p>
+  </div>
+</section>
+
+<section>
+  <h2>The caveat, measured</h2>
+
+  <p>I asked your host's LSP for every reference to <code>run_one</code> in <span class="path">core/scripts/gates.py</span>.</p>
+
+  <span class="term">LSP findReferences  →  1 reference:  core/scripts/gates.py:100:5
+grep -rn "run_one"  →  8 call sites:  cli/flw.py:799  +  7 in tests</span>
+
+  <p>Zero of eight real callers. The cause: <span class="path">cli/flw.py</span> reaches gates through <code>sys.path.insert</code> then <code>import gates</code>. Pyright can't resolve that, so the edge doesn't exist in the graph.</p>
+
+  <p>A second one in the same session: <code>workspaceSymbol("collect")</code> returned four hits, all from <span class="path">plugins/flow/</span> — a different project. The workspace root was a parent directory.</p>
+
+  <p><strong>What this means.</strong> Dynamic imports, plugin registries, DI containers, string-keyed dispatch, anything resolved at runtime — those edges are missing and nothing tells you. Big enterprise Python is full of them. A graph that returns zero looks the same as a symbol nobody calls.</p>
+
+  <p>It doesn't kill the idea. It sets the rule: <strong>a graph is a fast first pass, not an authority.</strong> Any "nobody uses this" conclusion needs a grep to confirm.</p>
+</section>
+
+<section>
+  <h2>Two layers, not one</h2>
+
+  <p>The mistake would be building one thing. A whole-repo symbol graph is hundreds of thousands of tokens — you never want it in context. The high-level skeleton is a page and you always want it.</p>
+
+  <div class="layers">
+    <div class="layer">
+      <span class="n">Layer 1</span>
+      <span class="what">The skeleton — write it down</span>
+      <span class="desc">Packages, entry points, the most-referenced symbols, ranked. ~1k tokens for a whole repo. Durable enough to commit. Gives an agent the nouns.</span>
+    </div>
+    <div class="layer">
+      <span class="n">Layer 2</span>
+      <span class="what">The graph — query it, don't store it</span>
+      <span class="desc">Who calls what, who implements what, where a type is defined. Huge, rots fast, answered on demand.</span>
+    </div>
+  </div>
+
+  <p>They depend on each other. <code>findReferences</code> needs a symbol name, so you can't ask "who calls X" until you know X exists. Layer 1 tells you. Layer 2 answers.</p>
+</section>
+
+<section>
+  <h2>The landscape</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Tool</th><th>Gives you</th><th>Languages</th><th>Install</th><th>License</th><th>State</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="tool">Serena</td>
+          <td>Symbols, references, type hierarchy, symbol-level edits. Real LSPs underneath.</td>
+          <td>40+</td>
+          <td><code>uv tool install serena-agent</code></td>
+          <td>MIT</td>
+          <td><span class="tag good">active</span> 24.8k★, Jun 2026</td>
+        </tr>
+        <tr>
+          <td class="tool">Host LSP tool</td>
+          <td>Same operations. Already in Claude Code.</td>
+          <td>whatever's configured</td>
+          <td>none</td>
+          <td>—</td>
+          <td><span class="tag good">tested</span> works, with the holes above</td>
+        </tr>
+        <tr>
+          <td class="tool">multilspy</td>
+          <td>Python library wrapping LSP servers. You build the tool.</td>
+          <td>8</td>
+          <td><code>pip install multilspy</code></td>
+          <td>MIT</td>
+          <td><span class="tag warn">research code</span> Microsoft Research</td>
+        </tr>
+        <tr>
+          <td class="tool">tree-sitter + tags</td>
+          <td>Definitions and references per file. No cross-file resolution.</td>
+          <td>130+</td>
+          <td><code>pip install tree-sitter</code></td>
+          <td>MIT</td>
+          <td><span class="tag good">active</span> what aider uses</td>
+        </tr>
+        <tr>
+          <td class="tool">SCIP</td>
+          <td>Portable index file. Defs + refs. <code>expt-convert</code> dumps to SQLite.</td>
+          <td>~10 via indexers</td>
+          <td>brew / GitHub releases</td>
+          <td>Apache-2</td>
+          <td><span class="tag warn">CLI stale</span> last release Jun 2024</td>
+        </tr>
+        <tr>
+          <td class="tool">universal-ctags</td>
+          <td>Definitions only, JSON output. No edges.</td>
+          <td>~150</td>
+          <td><code>brew install universal-ctags</code></td>
+          <td>GPL-2</td>
+          <td><span class="tag good">active</span></td>
+        </tr>
+        <tr>
+          <td class="tool">ast-grep</td>
+          <td>Structural search and rewrite. A query tool, not an index.</td>
+          <td>tree-sitter's</td>
+          <td><code>brew install ast-grep</code></td>
+          <td>MIT</td>
+          <td><span class="tag good">active</span> v0.43</td>
+        </tr>
+        <tr>
+          <td class="tool">Joern</td>
+          <td>Code property graph — AST + control flow + data flow. Query language.</td>
+          <td>C/C++, Java, JS, Py, Kotlin, binaries</td>
+          <td>JVM</td>
+          <td>Apache-2</td>
+          <td><span class="tag warn">heavy</span> security-oriented</td>
+        </tr>
+        <tr>
+          <td class="tool">CodeQL</td>
+          <td>Relational database of the code, queried in QL.</td>
+          <td>many</td>
+          <td><code>gh</code></td>
+          <td><span class="tag bad">restricted</span></td>
+          <td>Free for public repos only; private needs a paid GitHub licence</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>CodeQL is out</strong> for many teams. The licence blocks private commercial repos without a per-committer seat.</p>
+</section>
+
+<section>
+  <h2>Build once, query many — the CLI model</h2>
+
+  <p>An index on disk queried by a CLI is a better fit for flw than an MCP server. MCP is a running process with per-host config. flw is host-agnostic and its whole model is a file plus a command. An index file <em>is</em> that shape.</p>
+
+  <p>Three of the four things you'd expect from it hold up. One doesn't.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Expectation</th><th>Verdict</th><th>Why</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Reusable</td>
+          <td><span class="tag good">yes</span></td>
+          <td>It's a file. Commit it, diff it, share it, query it from CI or any tool. A warm server can't be any of those.</td>
+        </tr>
+        <tr>
+          <td>Faster</td>
+          <td><span class="tag good">across sessions</span></td>
+          <td>SQLite answers cold in milliseconds. Pyright takes minutes to index a monorepo before it answers anything. Within one long session they converge.</td>
+        </tr>
+        <tr>
+          <td>Cheaper in tokens</td>
+          <td><span class="tag warn">marginally</span></td>
+          <td>The saving comes from not reading files, and both models give you that. The real CLI edge is that you can pipe — <code>| head -20</code>, <code>| jq</code> — and control result size exactly.</td>
+        </tr>
+        <tr>
+          <td>More precise</td>
+          <td><span class="tag bad">no, a wash</span></td>
+          <td>Static indexers <em>are</em> the language servers. <code>scip-python</code> is pyright. <code>rust-analyzer --output scip</code> is rust-analyzer. Same analyzer, same blind spots. Tree-sitter indexers are <em>less</em> precise — no type resolution.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>The build-then-query options</h3>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Tool</th><th>Index</th><th>Query</th><th>Precision</th><th>State</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="tool">GNU GLOBAL</td>
+          <td><span class="path">GTAGS</span> / <span class="path">GRTAGS</span></td>
+          <td><code>global -r sym</code>, <code>global -x</code></td>
+          <td>Parser-level. Tracks references, which ctags does not.</td>
+          <td><span class="tag good">stable</span> since 1996, in every package manager, GPL</td>
+        </tr>
+        <tr>
+          <td class="tool">CodeGraph</td>
+          <td>SQLite + FTS5</td>
+          <td><code>callers</code>, <code>callees</code>, <code>impact</code>, <code>query</code></td>
+          <td>Tree-sitter level</td>
+          <td><span class="tag warn">young</span> MIT, 67.6k★, but created Jan 2026</td>
+        </tr>
+        <tr>
+          <td class="tool">SCIP + indexers</td>
+          <td>protobuf → SQLite via <code>expt-convert</code></td>
+          <td>Write the SQL yourself</td>
+          <td>Compiler-grade</td>
+          <td><span class="tag warn">stale CLI</span> last release Jun 2024; converter marked EXPERIMENTAL</td>
+        </tr>
+        <tr>
+          <td class="tool">ctags + readtags</td>
+          <td>tags file</td>
+          <td><code>readtags</code></td>
+          <td>Definitions only, no edges</td>
+          <td><span class="tag good">stable</span> ~150 languages</td>
+        </tr>
+        <tr>
+          <td class="tool">Joern</td>
+          <td>Code property graph, persisted</td>
+          <td><code>joern --script</code>, CPGQL</td>
+          <td>Deepest open one — AST + control flow + data flow</td>
+          <td><span class="tag warn">heavy</span> Apache-2, JVM</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>On CodeGraph.</strong> Verified through the GitHub API rather than the page: 67,590 stars, 4,288 forks, created 2026-01-18, last push 2026-08-20, MIT. Real growth — but a seven-month-old project with 439 open issues and 157 watchers. A 430:1 star-to-watcher ratio is a hype signature, not a stability one. Its token-saving claims are self-reported. npm-distributed, which may matter in a locked-down environment.</p>
+
+  <p><strong>GNU GLOBAL is the unhyped one</strong> that does exactly what you described. <code>gtags</code> builds, <code>global -r symbol</code> queries references. Thirty years of doing one thing.</p>
+</section>
+
+<section>
+  <h2>The infra tier — what Meta actually had</h2>
+
+  <p>You're remembering <strong>Glean</strong>. Meta open-sourced it in 2021 and it's still maintained. It's the real thing: typed, schema-defined facts about source code in a queryable database, with <strong>Angle</strong>, a Datalog-style query language.</p>
+
+  <p>An Angle query looks like this:</p>
+
+  <span class="term">FunctionDeclaration { name = "parseJson", namespace = "folly" }</span>
+
+  <p>It answers questions like "all classes inheriting from <code>exception</code> that have a <code>what</code> method overriding a base" in milliseconds. Facts live in RocksDB. Incremental indexing is O(files changed), not O(repository).</p>
+
+  <h3>The numbers are genuinely good</h3>
+  <p>Simon Marlow — a Glean author — indexed all of Hackage outside Meta and published the comparison against <code>hiedb</code>:</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>Glean</th><th>hiedb</th></tr></thead>
+      <tbody>
+        <tr><td>Index time</td><td>470s</td><td>1,021s</td></tr>
+        <tr><td>Database size</td><td>0.8 GB</td><td>5.2 GB</td></tr>
+        <tr><td>Find references</td><td>0.03s</td><td>2.3s</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="verdict caution">
+    <div class="headline">And it's the wrong tool for one repo on a Mac</div>
+    <p><strong>Linux only.</strong> The docs say the build is "only tested on Linux so far." macOS is absent.</p>
+    <p><strong>Haskell</strong>, GHC 9.6.7, plus folly and RocksDB built from source because the distro packages are too old. Marlow's own words: <em>"Glean is not the easiest thing in the world to build."</em></p>
+    <p>He positions his own experiment as <em>"an exploratory project demonstrating potential rather than production-ready technology"</em> for outside-Meta use.</p>
+  </div>
+
+  <p><strong>Why it felt like infra is that it is infra.</strong> Glean works at Meta because Meta's build system emits index data as a by-product of compilation, across a monorepo, for thousands of engineers. Outside that, you hand-roll the pipeline that fed it.</p>
+
+  <p>Google's equivalent, <strong>Kythe</strong>, is the same story with a worse ending.</p>
+
+  <h3>The part worth stealing</h3>
+  <p>Glean <strong>ingests SCIP and LSIF</strong>. That's the tell. The valuable half of "AST infra" is the <em>indexer</em> — the thing that turns code into accurate facts. The Datalog engine is what makes it feel like infra, and it earns its keep at billions of facts and thousands of concurrent users.</p>
+  <p>At one-repo scale, with an agent asking a handful of questions, SQL over SQLite answers the same questions. Same facts, from the same indexers, minus the Haskell.</p>
+</section>
+
+<section>
+  <h2>What I'd pick</h2>
+
+  <h3>Layer 2 — the graph</h3>
+  <p><strong>GNU GLOBAL first</strong>, because it's boring, installs anywhere, and is exactly build-then-query. <strong>CodeGraph</strong> if you want the agent-shaped one and can accept a seven-month-old dependency.</p>
+  <p><strong>Serena</strong> stays the answer if you decide MCP is acceptable after all — MIT, 24.8k stars, 40+ languages, real language servers. But it's MCP-only, and that's a genuine mismatch with how flw is built.</p>
+
+  <h3>Layer 1 — the skeleton</h3>
+  <p>Parse with tree-sitter, extract definitions and references, rank by how often a symbol is referenced elsewhere, print the top N within a token budget. A function called by 20 others outranks a private helper called once. This is aider's approach and it's the part worth writing to disk.</p>
+
+  <div class="verdict">
+    <div class="headline">Test before choosing</div>
+    <p>There's a ground-truth case in this repo already. <code>run_one</code> has <strong>8</strong> real callers. The host LSP found <strong>1</strong>.</p>
+    <p>Any candidate that returns 8 is decisively better. One that returns 1 carries the same blind spot under a different name. That's a twenty-minute test and it beats any table on this page.</p>
+  </div>
+</section>
+
+<section>
+  <h2>What flw itself ships</h2>
+
+  <p><strong>None of it.</strong> flw stays stdlib-only, zero dependencies, language-agnostic. Bundling tree-sitter or an LSP client breaks all three, and it would put flw in the business of maintaining an indexer.</p>
+
+  <p>The dependency belongs in your repo and your environment, not in flw. Which also means your environment decides what's possible, not us.</p>
+
+  <p>So research does three things:</p>
+  <ol>
+    <li><strong>Probe</strong> what's available — Serena, host LSP, ctags, an existing index.</li>
+    <li><strong>Verify</strong> it. Pick one known call edge, ask the graph, confirm with grep. Record whether it agreed.</li>
+    <li><strong>Record</strong> the working recipe and its blind spots in <span class="path">.flw/extensions/flw-spec.md</span>.</li>
+  </ol>
+
+  <p>Step 2 is the one I'd have skipped a week ago. Today's test is why it's in the list.</p>
+</section>
+
+<section>
+  <h2>What I could not confirm</h2>
+  <ul>
+    <li>Whether Serena precomputes an index or queries on demand, and its startup cost on a large repo. The docs don't say. Worth a 20-minute trial on a real repo before committing.</li>
+    <li>Whether <code>scip-python</code> is still maintained. SCIP moved from Sourcegraph to independent governance with a steering committee, but the CLI's last release was June 2024.</li>
+    <li>Any independent measurement of the token saving. Aider's 1k default is a design choice, not a benchmark.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sources</h2>
+  <ul>
+    <li><a href="https://github.com/oraios/serena">oraios/serena</a> — MCP toolkit, MIT</li>
+    <li><a href="https://oraios.github.io/serena/01-about/000_intro.html">Serena documentation</a></li>
+    <li><a href="https://github.com/microsoft/multilspy">microsoft/multilspy</a> — LSP client library</li>
+    <li><a href="https://aider.chat/2023/10/22/repomap.html">Building a better repository map with tree-sitter</a> — aider</li>
+    <li><a href="https://aider.chat/docs/repomap.html">aider repo map docs</a> — the 1k token default</li>
+    <li><a href="https://deepwiki.com/Aider-AI/aider/4.1-repository-mapping-system">Aider repository mapping system</a></li>
+    <li><a href="https://scip-code.org/">SCIP Code Intelligence Protocol</a> and <a href="https://github.com/scip-code/scip">scip-code/scip</a></li>
+    <li><a href="https://sourcegraph.com/blog/the-future-of-scip">The future of SCIP</a> — governance move</li>
+    <li><a href="https://github.com/ast-grep/ast-grep">ast-grep/ast-grep</a></li>
+    <li><a href="https://github.com/joernio/joern">joernio/joern</a> — code property graphs</li>
+    <li><a href="https://konvu.com/compare/semgrep-vs-codeql">CodeQL licensing comparison</a></li>
+    <li><a href="https://glean.software/">Glean</a> and <a href="https://glean.software/docs/building">its build requirements</a></li>
+    <li><a href="https://engineering.fb.com/2024/12/19/developer-tools/glean-open-source-code-indexing/">Indexing code at scale with Glean</a> — Engineering at Meta</li>
+    <li><a href="https://simonmar.github.io/posts/2025-05-22-Glean-Haskell.html">Indexing Hackage: Glean vs. hiedb</a> — Simon Marlow, the outside-Meta account</li>
+    <li><a href="https://kythe.io/docs/kythe-overview.html">Kythe</a></li>
+    <li><a href="https://github.com/colbymchenry/codegraph">colbymchenry/codegraph</a></li>
+    <li><a href="https://www.gnu.org/software/global/manual/global.html">GNU GLOBAL manual</a></li>
+    <li><a href="https://github.com/scip-code/scip/blob/main/docs/CLI.md">scip CLI reference</a> — including <code>expt-convert</code></li>
+  </ul>
+</section>
+
+</main>

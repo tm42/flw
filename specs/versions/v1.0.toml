@@ -1,0 +1,80 @@
+spec_version = "1.0"
+name         = "1.0"
+summary      = "flw's first contract: a host-agnostic, language-agnostic spec-driven workflow, published MIT"
+
+approach = """
+Greenfield, but not from nothing: v2 is a working Claude Code plugin and most of
+what survives is carried rather than rewritten. What does not survive is
+everything coupled to that host — the plugin manifest, the hook layer, the
+language registry — and the scaffold and validate commands, whose jobs dissolve
+into declared gates and reviewer perspectives.
+
+The order is set by one dependency: nothing can be verified until the schemas and
+the validator exist, and the skills cannot be written until the file shapes they
+produce are settled. So schemas first, then the checks, then the prose, then the
+CLI that installs the prose, then the hosts that load it.
+
+Groups 5 and 6 are deliberately last and deliberately separable. The two skills in
+daily use are spec and execute; review, design and research are real but nobody is
+blocked on them, and the host verification depends on three third-party tools this
+project does not control.
+"""
+
+[[dag]]
+group = 1
+phase = "engine"
+tasks = [
+  { id = "schema-v3", desc = "Write core/schemas/spec-v3.schema.json against the hand-written contract, bending the schema and never the contract. Acceptance is specs/current.toml validating unchanged." },
+  { id = "record-schemas", desc = "Rewrite delta and ledger schemas for the v3 kinds: spec | re-spec | quick_fix, an optional base and ops on a delta, inline ops on a quick_fix ledger entry, and `changed` on a modify op.", depends_on = ["schema-v3"] },
+  { id = "vocabulary", desc = "Retarget _amendment_ops.py: components keyed by name, finer-grained singletons, the product trigger moved from behaviour to provides, and ops_errors refusing a modify that records no `changed`." },
+  { id = "engine", desc = "Adapt amend_spec.py — dotted-target resolution, derived `changed`, kind-dependent artifacts (a re-spec writes a delta, a quick_fix records ops inline), and the re-spec/quick_fix version rule.", depends_on = ["record-schemas", "vocabulary"] },
+  { id = "validator", desc = "Adapt validate_spec.py — drop the language registry, reduce semantic_check to component-name uniqueness, move the dag checks into validate_delta, and re-derive every ledger fact from the ops that produced it.", depends_on = ["record-schemas", "vocabulary"] },
+  { id = "resolver", desc = "Adapt resolve_delta.py for the three kinds and their artifacts, with a uniform ahead-of-contract gate on the pending entry.", depends_on = ["validator"] },
+]
+
+[[dag]]
+group = 2
+phase = "tests"
+tasks = [
+  { id = "dev-env", desc = "A dev venv and the configuration the two declared gates read: ruff excluding the vendored copy, pytest finding the core package." },
+  { id = "property-tests", desc = "The three properties whose failure is silent: an amendment leaves every untouched byte identical, a refused amendment writes nothing at all, and a script run directly rather than imported still resolves its own imports.", depends_on = ["dev-env", "engine"] },
+  { id = "vocabulary-tests", desc = "Classification and refusal: any remove is a re-spec, provides is what makes a change product, a modify with no recorded `changed` is refused, and kind must match the artifacts the amendment produced.", depends_on = ["dev-env", "engine"] },
+  { id = "lineage-tests", desc = "Ledger and delta lineage: monotonicity, the chain, out-of-order refusal, ahead-of-contract refusal, and the ledger-runs-ahead recovery message.", depends_on = ["dev-env", "resolver"] },
+]
+
+[[dag]]
+group = 3
+phase = "skills"
+tasks = [
+  { id = "skill-shape", desc = "Settle the SKILL.md bundle shape once — superset frontmatter carrying every host's optional keys, and the shared fragments a skill includes rather than restates.", depends_on = ["property-tests"] },
+  { id = "skill-spec", desc = "The spec skill: interview to a contract, re-spec at the level of requirements and design, quick_fix as a small stated change. Thrifty mode inline. Token-frugal and probing rather than verbose — this is one of the two skills in real daily use.", depends_on = ["skill-shape"] },
+  { id = "skill-execute", desc = "The execute skill: resolve the pending work order, walk it phase by phase, surface every gap as a spec-change proposal, run the declared gates and mark applied only once they pass. The other skill in real daily use.", depends_on = ["skill-shape", "lineage-tests"] },
+]
+
+[[dag]]
+group = 4
+phase = "cli"
+tasks = [
+  { id = "cli-install", desc = "flw install and uninstall: symlink the skills into each host's discovery path and remove them exactly, leaving no trace in host configuration.", depends_on = ["skill-shape"] },
+  { id = "cli-doctor", desc = "flw doctor: every link resolves, no bundle silently overrides a core skill, no orphan remains from a removed bundle.", depends_on = ["cli-install"] },
+  { id = "cli-bundles", desc = "flw add, list and remove for local bundles of extra skills, installing and uninstalling exactly like flw's own.", depends_on = ["cli-doctor"] },
+  { id = "cli-update", desc = "flw update: fetch and rebase, preserving local changes, so every installed host picks the change up with no per-host step.", depends_on = ["cli-install"] },
+]
+
+[[dag]]
+group = 5
+phase = "skills-rest"
+tasks = [
+  { id = "skill-review", desc = "The review skill: a configurable reviewer team, config as data rather than code, honouring design.md when present.", depends_on = ["skill-execute"] },
+  { id = "skill-design", desc = "The design skill: author durable project principles, with the machine-checkable ones declared as gates rather than run by a command of their own.", depends_on = ["skill-execute"] },
+  { id = "skill-research", desc = "The research skill: repo reconnaissance into a regenerable map, so a spec builds on what exists instead of duplicating it.", depends_on = ["skill-execute"] },
+]
+
+[[dag]]
+group = 6
+phase = "hosts"
+tasks = [
+  { id = "adapters", desc = "Per-host install paths and capability notes for Claude Code, Codex and OpenCode — what each supports, stated before installing rather than discovered by a skill silently not working.", depends_on = ["cli-install"] },
+  { id = "first-install", desc = "Install into a real Claude Code, Codex and OpenCode and confirm each loads the skills through the symlink. Manual by necessity: it depends on three tools this project does not control.", depends_on = ["adapters", "cli-doctor", "skill-spec", "skill-execute"] },
+  { id = "docs", desc = "Record the first-install results, and write enough that a stranger can install flw and author their own skill without reading the author's mind.", depends_on = ["first-install"] },
+]

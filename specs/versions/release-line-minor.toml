@@ -1,0 +1,92 @@
+name    = "release-line"
+base    = "stale-claims"
+summary = "prefix the release number with a line a record declares, and let a run skip its checks when the user says so"
+
+approach = """
+WHY THE LEADING DIGIT. flw's contract reads 7.1 for a package that has never run in
+production. The number is folded from records and says how much the contract has moved,
+which is not what a reader takes it for. A leading digit the user owns separates the two:
+0 while it is not real, 1 when it is, and the folded major and minor keep counting behind
+it. This is the 0.x convention and nothing more clever than that.
+
+WHERE THE LINE LIVES, AND THE FIELD THAT IS NOT BEING ADDED. It was going to be a new
+`release_line` key in `specs/current.toml`. It is not, because `spec_version` already has a
+place for it: the number becomes three parts and the line is the first. A separate field
+would hold the same fact twice — the contract would carry the line and a number that begins
+with it — and one of them would eventually disagree. So the contract gains no key. What
+gains one is the *record*: an optional `release_line` a record declares when it moves the
+line, which is how the user defines and pushes for it, in the file they are already writing.
+The fold restarts at that record, so the release after `release_line = 1` is 1.0.0, then
+1.0.1 for a minor and 1.1.0 for a major.
+
+WHY A RECORD AND NOT A HAND-SET CONTRACT FIELD. A hand-set field needs a second field
+saying which record the line started at, or the fold cannot know where to restart. That is
+one fact in two places, which is the failure `version-bump` removed when it deleted `kind`.
+Declaring it on the record puts the fact where the classification already lives, and
+`applied` already gives the position.
+
+THE RULE THIS RECORD FIXES FIRST. `stale-claims` shipped a classification rule this morning
+that makes a capability arriving a major. That is not what a release number is for: under it
+every new flag flw grows costs a whole integer, and `--yolo` below would be 8.0. The cut
+that was meant is semver's — major when a behaviour someone relied on now works differently,
+minor when a capability arrives and nothing that worked before changed. Phase 1 replaces the
+wording, and it goes first because this record's own suffix is judged by it.
+
+WHAT --YOLO IS AND IS NOT. It skips step 4. It does not relax Rule 3 or Rule 4, because it
+changes what a run *executes*, not what it may *claim*: a run that skipped its checks may
+never print the completion block, which reads as verified. It is for a suite that runs fine
+and is too slow to sit through right now. It is not the answer to "these checks cannot run
+in this session" — that is `[tests] yours` in `.flw/config.toml`, which outlives any single
+run, and the flag's own text has to say so or it will be used for both and the config will
+never get written.
+
+WHAT A --YOLO RUN LEAVES BEHIND. Not a moved contract. Step 5 moves `spec_version` on a run
+that finished with `flw test` passing, and there was no such run. The version is built and
+unrecorded, the report says so and names the command that finishes it. A flag for fast local
+iteration must not be able to write "this version shipped" into the durable record.
+
+WHAT IS NOT HERE. The fold opt-out for a project that wants to set its number by hand or
+carry none, which `validate_spec.py` still refuses. Deferred again for the same reason: the
+repositories that need it are not on this machine, and an opt-out with no real case to test
+against is a guess about what the switch should do.
+"""
+
+contract_edit = """
+1. In the component named "validation and checks", append to `provides`:
+
+   "A release number carries a line its author declares — 0 until the work is real, 1 when it
+    is — and the folded major and minor restart from it, so the number a reader sees says how
+    far along the product is and not only how often the contract moved."
+
+2. In the component named "the skills", append to `provides`:
+
+   "A user can run a version's work without waiting for its checks, and gets a report that
+    says the version was built and not verified rather than one that reads as finished."
+
+Nothing else changes.
+"""
+
+[[dag]]
+group = 1
+phase = "the classification rule matches what a release number is for"
+tasks = [
+  { id = "classification", desc = "core/skills/flw-spec/SKILL.md step 5: replace the suffix rule. It currently reads `-major` when what a user can do changes — a capability arrives, or a behaviour they relied on now works differently. Split those two: `-major` when a behaviour someone relied on now works differently, `-minor` when a capability arrives and nothing that worked before changed, along with corrections, refinements and internal deletion. Keep the judge-this-change-not-the-contract sentence and the two paragraphs after it — the default-not-law note and the name-it-for-what-it-does note — untouched." },
+]
+
+[[dag]]
+group = 2
+phase = "the release number carries a line"
+tasks = [
+  { id = "schema-line", desc = "core/schemas/version.schema.json: add an optional `release_line`, a non-negative integer, described as the line this record moves the product to and the point the fold restarts from; a record that does not move the line omits it. The schema sets additionalProperties false, so without this a record declaring one is refused. core/schemas/spec-v4.schema.json: widen `spec_version`'s pattern from `^[0-9]+\\.[0-9]+$` to accept three parts, and replace its description, which still reads `MAJOR.MINOR. A re-spec bumps major, a quick_fix bumps minor` — `quick_fix` is terminology from before named records and describes nothing that exists." },
+  { id = "fold-the-line", desc = "core/scripts/validate_spec.py: expected_release(applied, records) returns `<line>.<major>.<minor>`. The line starts at 0 and becomes whatever the most recent applied record declaring `release_line` set it to; that record also restarts the major and minor at 0.0, so a record declaring release_line = 1 produces 1.0.0 regardless of what preceded it. Records are already read to classify them, so read `release_line` in the same pass rather than opening them twice. A legacy numbered record keeps setting the number directly as it does now, and gains the line as a prefix. MIGRATE THE ONE EXISTING VALUE IN THE SAME CHANGE: specs/current.toml still reads spec_version = \"7.1\", two parts, and the moment the fold returns three the two disagree and every flw validate in this run fails, step 4 included. Set it to \"0.7.1\" as part of this task. That is a format migration of the number already there, not the version move — step 5 still moves it to 0.7.2 when the run finishes.", depends_on = ["schema-line"] },
+  { id = "line-tests", desc = "tests/test_validate_spec.py: four cases. A fold with no record declaring a line gives 0.x.y. A record declaring release_line = 1 gives 1.0.0 and not 1.<whatever preceded>. A minor after it gives 1.0.1 and a major gives 1.1.0. A contract whose spec_version disagrees with the folded three-part number is still named as an error, which is the existing check and must not regress to comparing two parts.", depends_on = ["fold-the-line"] },
+  { id = "declaring-a-line", desc = "core/skills/flw-spec/SKILL.md step 5: one paragraph on `release_line` — a record declares it when the product moves to a new line, 1 being whatever reached production; it restarts the count, so the release after it is 1.0.0; a record that is not moving the line omits the field entirely. Say that the contract carries no separate key for it because the line is the first part of `spec_version`, so there is one place it can be read and nothing to disagree with.", depends_on = ["fold-the-line"] },
+]
+
+[[dag]]
+group = 3
+phase = "a run can skip its checks"
+tasks = [
+  { id = "yolo", desc = "core/skills/flw-execute/SKILL.md: add `--yolo`. Frontmatter argument-hint becomes \"[version] [--auto] [--yolo]\". In step 4, say the flag skips the step entirely and that Rules 3 and 4 are unaffected, because it changes what the run executes and not what it may claim. Say plainly what it is for — a suite that runs fine and is too slow to sit through — and that a check which cannot run in this session is `[tests] yours` in .flw/config.toml instead, which outlives any single run. It composes with --auto; neither implies the other." },
+  { id = "yolo-record", desc = "core/skills/flw-execute/SKILL.md step 5 and step 6: a --yolo run does not move the contract, because step 5 moves it only on a run that finished with flw test passing. Give the run its own report shape rather than the completion block, which reads as verified — it says which phases ran, that the checks were skipped by the flag and not by failing, that the contract did not move, and the one command that finishes the version. Name it something that cannot be mistaken for done at a glance.", depends_on = ["yolo"] },
+]

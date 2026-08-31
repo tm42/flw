@@ -1,0 +1,104 @@
+base         = "4.5"
+spec_version = "4.6"
+name         = "4.6"
+summary      = "replace the writing style with one that aims at first-read comprehension instead of maximum information per word"
+
+approach = """
+WHAT IS WRONG WITH THE FILE BEING REPLACED. `core/styles/terse_prose.md` opens with "Goal:
+maximum information per word." That target has no end point, because there is always another
+word to remove, so the writer keeps compressing until the prose stops sounding like language.
+Every rule under it subtracts: cut the sentence, cut the word, say it once, give the conclusion
+and not the derivation, stop when the content stops. Nothing in the file tells the writer to put
+words back. The one exception is rule 10, name the thing in full before using a short handle.
+
+THE EVIDENCE IS THE OUTPUT, NOT AN ARGUMENT. Five sentences written to the user under this
+guide, inside one hour, all of which the user rejected as unreadable: "This is the 5.0 you
+parked." / "It half-holds, and the half that holds is already shipped." / "Efficient. Nobody
+talks like that." / "Right direction. The thing to get right is where the number lives, and the
+obvious answer is wrong." / "The examples are the bug." Each one obeys the file's stated rules
+and each one is a compressed aphorism. The user's report, after a year of daily use, is that
+this has got worse as coding ability has improved.
+
+THE MECHANISM, WHICH DECIDES THE SHAPE OF THE REPLACEMENT. A style file is copied as a voice
+before it is obeyed as a set of rules. `terse_prose.md` is itself written in compressed
+aphorisms — "Say it once.", "Assert.", "Length follows content." — and its three GOOD examples
+are long ornate sentences held up as correct. So the ornateness is what gets reproduced. The
+replacement is written in the register it asks for, and every one of its bad examples is a real
+sentence from the record above, with a plain rewrite beside it. A reviewer rated those paired
+examples the strongest lever in the file, above any abstract rule.
+
+WHAT A SECOND READER CHANGED. An independent review of the first draft found that it had cut
+too much. The old file contains rules aimed at the opposite failure — hedging, qualifier stacks,
+participle tails, refuting objections nobody raised — and those are not compression rules. The
+draft had dropped all of them, along with the section on what the reply is organised around, and
+the licence to join clauses with because, if, unless and so that. Without that licence the
+sentence rules produce strings of short disconnected declaratives, which is simple without being
+coherent, and coherent is half of what the user asked for. All were restored.
+
+THE HEADLINE TEST WAS WRONG AND IS NOW A HINT. The first draft led with "would you say this out
+loud to a colleague". People do say "Efficient. Nobody talks like that." out loud, and "This is
+the 5.0 you parked" works in speech with someone holding the context, so the test passes several
+of the sentences it was written to catch. What breaks them on the page is a reference the reader
+cannot resolve plus the dropped words, and the file already covers both. A model applying the
+out-loud test also has only itself to ask, so it drifts toward its own idea of casual register.
+The test that leads now is that every reference must resolve for a colleague who missed the last
+hour of the conversation.
+
+WHAT THE WORK IS NOT. Not a rename. The file keeps its path and the installed style keeps the
+name `flw-terse`, because `~/.flw/style.toml` keys on that name and the review at
+`.flw/reports/2026-08-22T1959-final.md:14` found that a rename leaves a host selecting a style
+file that is no longer there. The cost is accepted: a filename that no longer describes its
+contents. Not a second style file either — one file governs every piece of text, because the
+user rejected splitting session replies from written reports as a false distinction. Not an
+install: this version changes the source, and a host keeps its existing copy until someone runs
+`flw style install`.
+
+WHAT WAS NOT EXAMINED. Whether the new file changes what a model writes, which nobody has
+measured and which cannot be measured from inside the session that wrote it. Whether 203 lines
+stays in mind while writing, against the old file's 113. Whether the reference test survives
+contact with a model any better than the out-loud test did, given that both ask the writer to
+simulate a reader. The reviewer judged the length workable and flagged about fifteen lines of
+restatement between the goal section and the length section, and recommended against trimming
+it, because repetition in an instruction file reinforces rather than costs.
+"""
+
+contract_edit = """
+In the component named "the skills", replace the `provides` entry that begins "A user gets the
+same terse":
+
+  from  "A user gets the same terse, hard-wrapped prose out of every reviewer and every report
+         whether or not the style is installed in the host, because the skills read it themselves."
+
+  to    "A user gets the same plain, hard-wrapped prose out of every reviewer and every report
+         whether or not the style is installed in the host, because the skills read it themselves."
+
+Nothing else changes. No path moves, because the file keeps its name; no capability is added or
+withdrawn, because the promise is still one style read by every skill.
+"""
+
+[[decisions]]
+topic     = "rewrite the file in place, or add a new one and delete the old"
+options   = [
+  "core/styles/plain_prose.md as a new file, with terse_prose.md deleted",
+  "rewrite core/styles/terse_prose.md in place, keeping the path and the installed name",
+]
+chosen    = "rewrite in place"
+rationale = "A rename breaks every host that already has the style installed. The per-host record in ~/.flw/style.toml keys on the name flw-terse, and the CRITICAL at .flw/reports/2026-08-22T1959-final.md:14 is exactly this failure: after a rename, uninstall selects a style flw has just deleted and the host points at a file that is not there. Renaming would mean fixing that path first. The price of keeping the name is a filename that describes the old contents."
+
+[[decisions]]
+topic     = "how much weight the out-loud test carries"
+options   = ["lead the sentence rules with it", "demote it to a closing hint and lead with the reference test"]
+chosen    = "demote it"
+rationale = "Speech is elliptical and leans on context both people are holding, so the test passes sentences like \"Efficient. Nobody talks like that.\" that it was written to catch. The real defects in those sentences are an unresolvable reference and dropped words, and both have concrete rules of their own. A model applying the test can only consult itself as the listener, so it converges on its own idea of casual speech. It survives as a last check because it still catches sentences no person would say."
+
+[[decisions]]
+topic     = "one file for every kind of text, or split replies from written artifacts"
+options   = ["separate rules for session replies and for reports, commits and files", "one file for all of it"]
+chosen    = "one file"
+rationale = "The user rejected the split: there is no separate register for talking and writing, because it is all writing. The reader of a report differs from the reader of a reply, but the failure being fixed is the same in both, and two files would need the same rules twice."
+
+[[decisions]]
+topic     = "the version number for a change that replaces a file's contents"
+options   = ["5.0, because replacing something bumps the major number", "4.6, because nothing the contract promises is withdrawn"]
+chosen    = "4.6"
+rationale = "The numbering rule judges the change, not the file. This withdraws no capability, removes no component and moves no path — one file's contents are rewritten and one contract word changes. 5.0 stays free for the change that does delete something, which is replacing numbered versions with names."

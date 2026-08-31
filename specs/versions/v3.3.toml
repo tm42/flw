@@ -1,0 +1,103 @@
+base         = "3.2"
+spec_version = "3.3"
+name         = "3.3"
+summary      = "flw update offers to refresh a style that has fallen behind, instead of only reporting it"
+
+approach = """
+THE GAP IS AGAINST A SENTENCE THE CONTRACT ALREADY CARRIED. The CLI component promised
+that updating flw leaves no host needing a per-host step. Four skills are symlinks, so a
+pull is live in every host the moment it lands. The writing style is not: `flw style
+install` writes a generated copy, because Claude Code needs a YAML frontmatter block that
+`core/styles/terse_prose.md` deliberately does not carry — the same bytes are injected raw
+into the instructions file on Codex and OpenCode, which have no output-style slot. So the
+one thing a pull cannot make live is the one thing the contract said it could. This
+version makes the promise true by changing both halves: `flw update` offers the refresh,
+and the sentence now states the guarantee rather than the mechanism, so a host that later
+grows a real style slot moves to a symlink without the contract needing an edit.
+
+WHAT THE WORK IS NOT. Not a silent refresh. `flw doctor`'s drift check compares the
+installed body against the source body and nothing else, so it cannot distinguish "the
+source moved on" from "you hand-edited the installed copy" — a refresh that assumed the
+first would destroy the second without asking. The prompt is what resolves that ambiguity,
+and it is the reason this is worth a version rather than three lines. Not a re-selection:
+the refresh rewrites the style body and never touches `outputStyle` in the host's settings,
+because selecting a style is a decision the user made once and re-asking it on every pull
+is the noise this change exists to remove. Not a new source of truth: each host entry in
+`~/.flw/style.toml` records its own `source`, so a custom style installed from
+`~/.flw/styles/<name>.md` refreshes from that file and never from flw's shipped one. Not a
+conversion of the copy into a symlink — the frontmatter is generated per host and a link
+cannot add a header to one host and withhold it from another.
+
+WHAT ALREADY EXISTS AND GETS RECYCLED. `report_style` already resolves a recorded entry to
+a state: source gone, path missing, block gone, behind, installed-but-not-selected, or
+current. The refresh needs the same question answered about the same record, and writing a
+second comparison beside the first is how two answers to one question drift apart. Extract
+it once and let doctor and update both call it. The prompt idiom exists too — `[y/N]`
+defaulting to no, bypassed by `-y`, in `install_block` and `select_style` — and the refresh
+follows it rather than inventing a second convention.
+
+WHAT THE PROMPT HAS TO SHOW. A y/N the user cannot answer is worse than no prompt, and the
+question behind the answer is which side moved: flw's source, or the installed copy under
+the user's own hand. Comparing the two bodies cannot tell those apart — it reports that
+they differ and stops — and mtime only leans, because on a host with no style slot the
+file being timestamped is the user's own instructions file, which moves when they edit
+their own notes. So install records a digest of the body it wrote, per host, and the
+question becomes answerable rather than guessable: a held body still matching that digest
+means flw's source moved on and a refresh loses nothing, and a held body differing from it
+means the copy was edited here and a refresh discards that edit. Both paths and the line
+count of each body are shown in every case. A record written before this version carries no
+digest, so the prompt says which side moved is unknown rather than inventing a verdict, and
+the refresh it offers writes one. Declining changes nothing and `flw doctor` still reports
+the difference at the end of the same run, so the answer is never load-bearing.
+
+THE OPEN QUESTION THIS ALSO CLOSES. The contract asked whether a large modify that
+reconceives something without removing it needs its own signal beyond the remove predicate.
+It does not: the human numbers the version file while naming it, nothing in the code
+computes a version, and flw suggesting while the human decides is the answer rather than a
+fallback. The question is deleted rather than answered in place, because a question the
+contract still asks after the answer shipped reads as live.
+"""
+
+[[decisions]]
+topic     = "how the contract states what update guarantees"
+options   = [
+  "narrow the sentence to the truth — skills are picked up immediately, a copied style is offered",
+  "state the property instead of the mechanism — no host is left silently stale, by whichever means fits it",
+]
+chosen    = "state the property instead of the mechanism"
+rationale = "The mechanism is a fact about today's hosts. Claude Code needs generated frontmatter, so the style is a copy; a host that grows a style slot would make the narrower sentence wrong again and force a second contract edit for no change in behaviour."
+
+[[decisions]]
+topic     = "silent refresh on update, or a prompt"
+options   = ["refresh silently and print what happened", "prompt [y/N] per host"]
+chosen    = "prompt [y/N] per host"
+rationale = "The drift check compares bodies, so a difference means either the source moved on or the user edited the installed copy, and nothing distinguishes them. A silent refresh is correct in the first case and destroys work in the second. Prompting is still strictly better than today, where the only remedy is re-running the whole install by hand."
+
+[[decisions]]
+topic     = "what the prompt shows before asking"
+options   = [
+  "the two paths only",
+  "paths, line counts, and which of the two files has the newer mtime",
+  "paths, line counts, and which side moved, from a digest of the body install recorded",
+  "the full diff",
+]
+chosen    = "paths, line counts, and which side moved, from a digest of the body install recorded"
+rationale = "The decision being made is whether a refresh discards the user's own edit, and paths alone do not let them make it. mtime only leans at it, and on a host with no style slot it times the user's whole instructions file, so their own unrelated note makes it point the wrong way. A digest of what flw wrote answers it outright and costs one line in a record flw already keeps. The full diff turns update into a wall of text once several hosts differ."
+
+[[dag]]
+group  = 1
+phase  = "one comparison, two callers"
+tasks  = [
+  { id = "record-installed", desc = "`flw style install` records a digest of the body it wrote, per host, in ~/.flw/style.toml, and a refresh rewrites it. That record is the only thing that separates \"flw's source moved on\" from \"the copy was edited here\" — two cases a source-against-installed comparison collapses into one. An entry written before this version carries no digest and is reported as differing with no verdict." },
+  { id = "style-state", desc = "Extract the per-host resolution out of report_style into a function that takes a recorded entry and returns its state — source gone, path missing, block gone, behind, edited, differs, not selected, current — plus the bodies it compared. `behind` and `edited` split on the recorded digest; `differs` is the entry that has none. report_style prints from it and stops doing the comparison itself.", depends_on = ["record-installed"] },
+]
+
+[[dag]]
+group  = 2
+phase  = "the offer"
+tasks  = [
+  { id = "refresh-one", desc = "A function that takes a recorded host entry whose installed body differs from its source, prints both paths, the line count of each body, and which side moved — or that it cannot tell, for an entry with no recorded digest — prompts [y/N] defaulting to no, and on yes rewrites the style file from that entry's own source through the existing frontmatter generator. Never touches the host's settings.", depends_on = ["style-state"] },
+  { id = "update-flags", desc = "Add -y/--yes and -n/--dry-run to the update subparser, which currently takes no arguments at all, matching install's spelling and help text." },
+  { id = "update-offers", desc = "After the pull and before doctor, update walks every entry in the style record and offers refresh-one for each whose installed body differs from its source, whichever way it moved. A host in any other state is left to doctor to report. A refresh records the digest of what it wrote, so the next run offers nothing. --yes accepts without asking; --dry-run says what it would rewrite and writes nothing.", depends_on = ["refresh-one", "update-flags"] },
+  { id = "tests", desc = "Against the fake HOME fixture: a behind style is offered and refreshed on yes; declining leaves the file byte-identical and still lets doctor report it; --yes refreshes without reading stdin; --dry-run writes nothing; a custom style refreshes from its own recorded source and not from flw's shipped one; a host whose recorded path is gone is not offered a refresh; and the refresh leaves outputStyle in the settings file untouched. On the digest: a source that moved reports the copy untouched, a hand-edited copy reports that it was edited here, an entry with no digest reports that it cannot tell, and a refresh records one so the next run is quiet.", depends_on = ["update-offers"] },
+]

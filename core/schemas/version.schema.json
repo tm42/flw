@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tm42/flw/schemas/version.schema.json",
+  "title": "flw version record",
+  "description": "specs/versions/<name>-<minor|major>.toml \u2014 one file per version, addressed by a name it keeps, recording how that version came about. Read alongside the contract, never instead of it: it carries the route and never the destination, so it never restates what current.toml already says. Three fields are required and the rest appear when the change has something to put in them \u2014 a one-line correction is four lines of file, a migration with a lossy backfill is fifty. Nothing about a change's size or kind dictates which optional fields it uses.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "summary"
+  ],
+  "properties": {
+    "base": {
+      "type": "string",
+      "description": "The contract state this version was specced against, by record name. It orders nothing \u2014 the contract's `applied` list does that \u2014 and exists so validation can say a record was written against a contract that has since moved. Absent on a project's first version."
+    },
+    "spec_version": {
+      "type": "string",
+      "description": "The contract's release number at the time this version was specced. Optional, and never an identity: `name` is the identity. Present on every record written before names."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One line: what changed and why, in the author's words. The only field a four-line version file has beyond its lineage, and often the only prose anywhere for a small change."
+    },
+    "approach": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The reasoning that produced the plan: what is actually in the tree, what survives, what gets recycled out of the thing being deleted, what order protects what. The rule that keeps it from becoming a second contract \u2014 write only what stops being true once the work lands. If a sentence would still hold afterwards, it belongs in the contract. Its clearest use is negative: saying what the work is NOT, so nobody solves the wrong problem correctly."
+    },
+    "contract_edit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The exact sentences the contract gains, loses or replaces, and where each goes. flw-spec writes it, the human reviews it with the rest of the version file, and flw-execute applies it to current.toml when its run completes. Optional because a version whose only contract change is the spec_version bump has nothing to write here."
+    },
+    "dag": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/dag_group"
+      },
+      "description": "Phases and tasks, when the work needs ordering. Optional: plenty of changes are one obvious move. Authored and edited by a human before anything runs \u2014 a plan accepted as drafted is how a re-spec becomes a demolition nobody sanctioned."
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/decision"
+      },
+      "description": "Forks settled while working out the plan. They belong to the change that made them rather than to the contract, which describes the system as it is rather than as a history of how it got there. A decision that outlives the change and constrains the product belongs in the contract, as an assumption or a component's implementation note."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$",
+      "description": "This record's identity, and the filename without its classification suffix. A record is stored as <name>-minor.toml or <name>-major.toml, so a directory listing says which each change is; the suffix stays out of the name so that reclassifying a change during its interview renames the file without moving the record's identity. Chosen when the version is specced and never changed afterwards, so two people speccing in parallel cannot collide. Legacy records carry the number they were written with and no suffix."
+    },
+    "release_line": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The line this record moves the product to — 0 while it is not real, 1 when it is — and the point the fold restarts from: the release after this record is <release_line>.0.0, with the major and minor counting behind it from there. Optional; a record that does not move the line omits it entirely. Moves the one contract this record belongs to, at the project root nearest_project resolves it to, and nothing else — a repository with several independently-released parts carries one contract per part, each with its own line."
+    }
+  },
+  "$defs": {
+    "dag_group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group",
+        "tasks"
+      ],
+      "properties": {
+        "group": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Phase order, lowest first. A group is the unit you can stop at, review, or revert to."
+        },
+        "phase": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/dag_task"
+          }
+        }
+      }
+    },
+    "dag_task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "desc"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique across the whole dag, not just its group \u2014 depends_on addresses it."
+        },
+        "desc": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to do. Required, because a work order of bare ids is a list rather than an order."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [],
+          "description": "Task ids this one waits for, within or across groups. Checked for dangling ids and cycles."
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic",
+        "options",
+        "chosen",
+        "rationale"
+      ],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "At least two. A decision with one option is not a decision, and months later the rejected option is usually the part you need."
+        },
+        "chosen": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

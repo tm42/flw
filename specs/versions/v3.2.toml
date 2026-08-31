@@ -1,0 +1,124 @@
+base         = "3.1"
+spec_version = "3.2"
+name         = "3.2"
+summary      = "flw ships one writing style: always on for its own outputs, opt-in for the host"
+
+approach = """
+flw's prose guidance is currently split between `core/shared/ambient.md` — one bullet,
+"Say the thing" — and a line at the end of the reviewer discipline, "Terse markdown. No
+preamble." Both describe the intent and neither is specific enough to change what an
+agent writes. The measured version of that guidance now exists, written and revised
+against real output, and this version puts it in the package as one file.
+
+WHAT THE WORK IS NOT. Not an extension: an extension amends one skill in one repo, and a
+writing style is global and belongs to no repo. Not automatic: `flw install` says the
+style exists and installs nothing, because a skill is opt-in per invocation while a style
+silently reshapes every response in every session, including work that has nothing to do
+with flw. Not copied into each `SKILL.md`: the file is at a fixed derivable path, so the
+skills reference it and `flw doctor` can check that what a host holds still matches it.
+Not a linter and not a hook — flw intercepts nothing, and a style that is read is the
+whole of the mechanism.
+
+TWO DELIVERY PATHS, BECAUSE THE HOSTS DIFFER. Claude Code has an output-style slot whose
+contents get a per-turn reminder, which is why guidance placed there survives a long
+session when the same text in an instructions file decays. Codex and OpenCode have no
+such slot, so the only channel is the always-on instructions file flw already writes, and
+the style goes in beside the ambient block under its own tag pair. That is the only
+reason two paths exist; if a host grows a style slot, it moves to the file.
+
+WHAT ALREADY EXISTS AND GETS RECYCLED. `install_ambient` and `strip_ambient` already
+write and exactly remove a tagged block in each host's instructions file, prompting per
+host, and delete the file when flw's block was all it held. That machinery serves the
+style block unchanged except for one thing: `BEGIN` and `END` are module constants, so
+they become parameters. Doing that first is what keeps the style block and the ambient
+block independently removable, which is the property the whole install rests on.
+
+ONE PATHS FIX, FOUND WHILE DOING THE WORK. `core/shared/` — the ambient block and the
+context every skill reads — appears in no component's paths, so the contract does not
+describe material two of this version's tasks edit. It belongs to the skills component,
+which is where every reader of it lives.
+
+ADDITIVE INSTALL, MADE GENERAL. Install adds; only uninstall removes, and only what a
+record says flw made. Three files fall under it and one older path does too — `flw install`
+replaced a symlink at a skill's name whoever made it, then recorded it as its own, so
+uninstall deleted the user's link. The promise is about the CLI, not about the style. That covers the style file, the host's settings JSON, and — the one
+place that predates this version — the instructions file the ambient block goes into,
+which inferred ownership from "nothing else is left in it" and so would delete a user's
+own file that happened to hold only whitespace. Ambient installs now carry the same
+record the style ones do.
+
+FRONTMATTER IS NOT A HORIZONTAL RULE. The style file a host with a slot needs is generated
+with frontmatter, and reading a body back has to undo that. Treating any leading `---` as a
+fence deletes the top of a user's style that opens with a rule, and says nothing: drift
+compares two bodies stripped the same way, so doctor calls the truncated copy current. The
+fence counts only when every line inside it reads as a key.
+
+ORDER. The file exists before anything installs it, the tag pair is parameterised before
+a second block is written through it, and the package's own prose is rewritten last —
+that rewrite is the first real test of whether the rules are usable by an agent that did
+not write them.
+"""
+
+[[decisions]]
+topic     = "does flw install write the style into host config?"
+options   = ["yes, alongside the skills", "no, a separate opt-in command", "ship the file and print the command, install nothing"]
+chosen    = "a separate opt-in command"
+rationale = "A skill is opt-in per invocation; a style reshapes every response in every session. Install mentions it exists, `flw style install` does the work, `flw style uninstall` removes it. Without it the style still governs flw's own outputs, because the skills read the file themselves."
+
+[[decisions]]
+topic     = "one style file or two, prose and formatting"
+options   = ["two files, as they were authored", "one merged file"]
+chosen    = "one merged file"
+rationale = "Two files are two things to reference, two to check for drift, and nothing reads one without the other."
+
+[[decisions]]
+topic     = "activating the style on Claude Code, which needs an outputStyle key in settings.json"
+options   = ["write the file only and print the command", "write the key silently", "write the file, then offer the key on a y/N prompt"]
+chosen    = "write the file, then offer the key on a y/N prompt"
+rationale = "The file alone is inert and the key alone replaces whatever style is already active, so a silent write can take away a style the user chose. The prompt matches what install_ambient already does with the user's instructions file. The previous value is recorded so uninstall restores it."
+
+[[decisions]]
+topic     = "the channel on Codex and OpenCode, which have no style slot"
+options   = ["its own tag pair in the same instructions file", "appended to the existing flw ambient block", "a block for Codex and an opencode.json instructions path for OpenCode"]
+chosen    = "its own tag pair"
+rationale = "One mechanism for both hosts, reusing tested strip machinery, with style and ambient independently removable. Appending couples them: style uninstall would rewrite the ambient block and install would silently drop the style. The opencode.json path avoids a copy on one host, which is a property doctor's drift check already provides for all of them."
+
+[[decisions]]
+topic     = "where a custom style named on the command line comes from"
+options   = ["~/.flw/styles/<name>.md", "a bundle registered with flw add", "a path argument"]
+chosen    = "~/.flw/styles/<name>.md"
+rationale = "A fixed derivable path beside bundles.toml and links.toml, so doctor can check it. A bundle means skills; a bare path records nothing, so nothing can report drift."
+
+[[dag]]
+group = 1
+phase = "the style file"
+tasks = [
+  { id = "styles-file", desc = "core/styles/terse_prose.md — the merged prose and formatting rules, nine of them. Two things differ from the authored version: nothing machine-local (no plot, no mmd, no cache path), and the hard-wrap rule is scoped to terminal responses, because flw-review writes reports to files and two trailing spaces render as <br> in a file someone else reads.", depends_on = [] },
+]
+
+[[dag]]
+group = 2
+phase = "the CLI"
+tasks = [
+  { id = "style-tags", desc = "Parameterise BEGIN/END through ambient_text, strip_block, install_ambient and strip_ambient. Nothing else changes; the ambient path keeps passing today's constants.", depends_on = ["styles-file"] },
+  { id = "style-cmd", desc = "flw style install [<name>] and flw style uninstall. A name resolves to ~/.flw/styles/<name>.md, absent means the shipped file. Claude Code gets ~/.claude/output-styles/; Codex and OpenCode get the flw:style block. Record what was written per host so uninstall removes exactly that.", depends_on = ["style-tags"] },
+  { id = "style-settings", desc = "On Claude Code, after writing the file, offer on a y/N prompt to set outputStyle in ~/.claude/settings.json, preserving the rest of the JSON and recording the previous value. Uninstall restores it.", depends_on = ["style-cmd"] },
+  { id = "install-mention", desc = "flw install prints one line saying the style exists and is not installed, naming the command. It writes nothing.", depends_on = ["style-cmd"] },
+  { id = "doctor-style", desc = "flw doctor reports, per host: not installed, installed and current, or installed and behind the file it was copied from.", depends_on = ["style-cmd"] },
+  { id = "rule-seven", desc = "Rule 7 banned the symptom — second-person walkthroughs and staged sequences — which also caught the ordered steps every SKILL.md in this package is made of. Replace it with the test that separates them: did this happen, or will the reader do it. Neither means it is invented and the point should be stated instead.", depends_on = ["styles-file"] },
+  { id = "ambient-record", desc = "Record ambient installs in ~/.flw/ambient.toml with a created flag, and delete the instructions file only when flw made it. Replaces the remaining.strip() heuristic, which is the last place install could destroy something it did not create.", depends_on = ["style-tags"] },
+  { id = "style-selected", desc = "Record whether the settings key was actually set, and have doctor say 'installed but not selected' rather than ticking a style that shapes nothing. Uses the return value select_style already produces.", depends_on = ["doctor-style"] },
+  { id = "commit-prose", desc = "The style says what a commit message is: one line for what the commit does, a body only for what the diff cannot show, and no trailer naming the tool or the session. flw-execute says the same where it proposes one, and adds that a subject needing two clauses means the phase did two things.", depends_on = ["styles-file"] },
+  { id = "install-symlink", desc = "flw install refuses a symlink at a skill's name that read_links does not record, instead of replacing it and recording it as flw's — which made uninstall delete a link the user made. The contract's promise is about every install path, and this was the one it was generalised over without being tested.", depends_on = ["ambient-record"] },
+  { id = "style-tests", desc = "Tests for what nothing downstream notices when it breaks: a style block strips without disturbing the ambient block and vice versa, an unknown style name is an error rather than a silent fall back to the shipped one, drift is detected, and uninstall restores the previous outputStyle rather than deleting the key.", depends_on = ["doctor-style", "style-settings"] },
+]
+
+[[dag]]
+group = 3
+phase = "the skills"
+tasks = [
+  { id = "review-style", desc = "flw-review §3 reads $FLW/core/styles/terse_prose.md and gives it to every reviewer verbatim as a fifth item, and §4 writes the consolidated report by it. Replaces the trailing 'Terse markdown. No preamble.'", depends_on = ["styles-file"] },
+  { id = "package-prose", desc = "Read the package's own prose against the rules and fix what breaks them. It was already written in this voice: three phrases changed, in core/shared/ambient.md and core/skills/flw-execute/SKILL.md. Recorded as three rather than as a rewrite, because a later reader takes this list as an account of what happened.", depends_on = ["review-style"] },
+  { id = "context-style", desc = "core/shared/context.md tells every skill to read the style and write by it, unless its own instructions already carry the rules — an installed style is already in front of the model, so reading the file again buys nothing. The test is what the agent is holding, never whether a state file exists: the install is per host and can be declined at the prompt, so the file proves nothing about what reached this session. A dispatched subagent inherits neither, which is why flw-review hands it the path regardless.", depends_on = ["styles-file"] },
+  { id = "ambient-style", desc = "Delete the 'Say the thing' bullet from core/shared/ambient.md. It was a one-line stand-in for guidance that now ships as a file with a mechanism behind it, and two copies of the same rule at different granularity is the thing the style itself forbids.", depends_on = ["context-style"] },
+]

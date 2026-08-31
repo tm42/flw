@@ -1,0 +1,46 @@
+base         = "2.0"
+spec_version = "2.1"
+name         = "2.1"
+summary      = "the review team exists: four lenses as data, and one of them executes"
+
+approach = """
+Mostly writing, not building. The four perspectives are the substance — a reviewer
+is a fresh context that costs real tokens, so a thin lens is not merely weak, it is
+expensive and returns nothing actionable.
+
+Two structural choices are worth recording rather than leaving in the prose.
+
+The discipline is in the skill and the lens is in the config. Every reviewer gets
+the same instructions about how to report, what to demonstrate, and what not to
+pad — and the config says only what to look for. Writing the discipline per
+reviewer is how four copies drift into four different standards.
+
+`effort` replaces v2's `model`. Model names are host-specific and this config is
+meant to be portable; the agent doing the dispatching maps high and normal onto
+whatever it has.
+
+Validate's judgment half lands here as two of the four lenses — `tests` for
+coverage and assertion quality, `adversarial` for probing. Its checkable half
+already went to `flw gates`. `probes` is a declared boolean rather than a sentence
+inside a perspective, because an adversarial lane that is only ever described in
+prose decays into opinion, and because it tells a reader which reviewer runs code.
+
+Shipping two configs rather than four: `ds` and `ai-tooling` came from v2 and are
+domain-specific. Two good ones and a schema people can copy beats four nobody
+tuned.
+
+The contract said a review team was possible before one existed. That claim is now
+true, so this version corrects the paths rather than adding a promise.
+"""
+
+[[decisions]]
+topic     = "where the reporting discipline lives"
+options   = ["in each reviewer's perspective", "in the skill, given to every reviewer verbatim"]
+chosen    = "in the skill"
+rationale = "Four copies of a standard become four standards. The config should carry only what differs between lenses, which is what to look for."
+
+[[decisions]]
+topic     = "per-reviewer report files"
+options   = ["each reviewer writes a structured report to disk, as v2 did", "reviewers return findings and the skill consolidates"]
+chosen    = "reviewers return findings"
+rationale = "v2's files and their schema existed to serve a handoff that does not need one. Running four reviewers in this session without them worked; the machinery was serving itself."

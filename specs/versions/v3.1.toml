@@ -1,0 +1,88 @@
+base         = "3.0"
+spec_version = "3.1"
+name         = "3.1"
+summary      = "the two empty components: one deletes, one gets written from what was measured"
+
+approach = """
+Both of flw's remaining components were declared and empty — `adapters/` was three
+directories with nothing in them, `docs/` was nothing at all. That is flw's own contract
+promising what does not exist, which is the drift it exists to prevent, and it went
+unnoticed because a `find` for files does not list an empty directory.
+
+They are not the same problem and do not get the same answer.
+
+ADAPTERS DELETES. The component promised a user could see, per host, where skills install
+and what that host supports. `flw doctor -v` already prints exactly that, from `Host.note`
+in the CLI, and it is covered by tests. The directory was a second home for data that is
+already live — the same duplication that killed `design.md` in v3.0, arriving from the
+other direction. The claim moves to the CLI component, where it is already true, and the
+directory joins `final_state.removed`.
+
+DOCS GETS WRITTEN, AND ONLY NOW. Not out of order: what belongs in it is what running flw
+proved, and most of that was learned in the last few hours. A doc written before those runs
+would have recorded the design's intentions and been wrong in three places.
+
+What the runs actually settled, each of which contradicted something believed beforehand:
+
+A skill folder installs as a symlink, and the host does state the skill's base directory —
+but a relative path that escapes the folder does not work, because the file-reading tool
+collapses `..` lexically before walking it. Bash resolves the same path correctly. So
+`references/*.md` inside a skill works and `../../shared/` does not, and reaching shared
+material needs the absolute path from `~/.flw/root`. The design doc had this as an open
+question and the honest answer is a split verdict, not a yes.
+
+`flw install` installed into every host it knew about rather than every host present, and
+fabricated a skills directory for one that was not there. Detection has to use evidence the
+host creates, never a skills directory, because flw creates those and a self-justifying
+check is worse than none.
+
+`flw install` also writes `~/.flw`, which made every home directory look like a project
+root, so any command run outside a real project resolved to `$HOME`. `flw scout` then
+walked a home directory into a cloud mount and hung. Two of flw's own artifacts have now
+been mistaken for the user's, which is a class worth naming rather than a pair of bugs.
+
+A contract is optional. `flw-research` configures a repo flw never specced, and `flw gates`
+died there reading a contract that was never going to exist.
+
+WHAT DOCS IS NOT. Not a tutorial, not a second README, and not a restatement of the design
+doc. It records what was verified by running flw against a real host and a real repo, kept
+separate from what the design intends, so that an untested claim is never mistaken for a
+measured one. The contract's `success_criteria` already says the host exercise is manual by
+necessity and recorded in `docs/` rather than asserted — this is that record finally
+existing.
+
+One open question is replaced rather than answered. The one about tracking the gap between
+'phase committed' and 'delta applied' assumed deltas, which v2.0 deleted; it has been dead
+text for two versions. What matters now is whether `flw-execute` survives a cold reader on
+a version file it did not write — it is the last skill never run end to end by an agent
+that was not its author, and this version is the occasion to find out.
+"""
+
+[[decisions]]
+topic     = "what to do with the empty adapters/ directory"
+options   = ["write per-host notes into it as the contract promised", "delete it and move the claim to the CLI, which already satisfies it"]
+chosen    = "delete it"
+rationale = "flw doctor -v already prints per-host paths, support notes and install status from Host.note, and that is tested. Writing the directory would create a second copy of live data that can disagree with the first — the same failure that removed design.md one version ago."
+
+[[decisions]]
+topic     = "when docs/ gets written"
+options   = ["earlier, alongside the code it describes", "after the first real install and the first real research run"]
+chosen    = "after"
+rationale = "Its content is what running flw proved, and three of those findings contradicted what the design assumed. Written earlier it would have recorded intentions as facts."
+
+[[dag]]
+group = 1
+phase = "remove adapters"
+tasks = [
+  { id = "adapters-gone", desc = "Delete adapters/ and its three empty host directories. The removal check is already in the contract.", depends_on = [] },
+  { id = "adapters-refs", desc = "Update the README layout block, which still lists adapters/ as a directory of per-host install paths and setup notes.", depends_on = ["adapters-gone"] },
+]
+
+[[dag]]
+group = 2
+phase = "write docs"
+tasks = [
+  { id = "docs-verified", desc = "docs/verified.md — what running flw against a real host and a real repo established, each finding with what was believed before it and what the measurement showed. Host symlink behaviour and the relative-path split verdict; host presence detection; flw's own artifacts read as the user's; a contract being optional.", depends_on = [] },
+  { id = "docs-install", desc = "docs/install.md — the first-install walkthrough as actually performed, including that the CLI is symlinked onto PATH rather than copied, and what flw doctor reports when a host is absent rather than broken.", depends_on = ["docs-verified"] },
+  { id = "docs-extending", desc = "docs/extending.md — writing a bundle and writing an extension, the two ways to extend flw, each by copying the shape of something that exists. Names the doctor check that catches an extension no skill will ever read.", depends_on = ["docs-verified"] },
+]

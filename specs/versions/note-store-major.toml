@@ -1,0 +1,323 @@
+name         = "note-store"
+base         = "silent-misses"
+spec_version = "0.8.2"
+
+summary = """
+Renames the existing search to flw ledger and builds flw kb as a freeform note store agents
+write to and read from, machine-wide plus one root per project.
+"""
+
+approach = """
+Two commands come out of this, and only one of them is new. `flw kb` today searches what a
+project has written down about itself; that becomes `flw ledger`, unchanged in behaviour and
+unchanged in corpus. The name it vacates goes to a store that did not exist: freeform markdown
+notes under `~/.flw/kb/`, plus one root per project at `plans/notes/`, which any agent that can
+write a file can write to and every flw skill can read from.
+
+**The design is `plans/design-memory.md`, and it is the destination. This record is the first
+route to it, not all of it.** Built here: both roots, the four verbs `search` / `show` / `write`
+/ `lint`, every filter and shape, and every frontmatter key. Deferred, with nothing to migrate
+when they come back because a note is markdown and every key is optional: `flw kb promote`; the
+reverse lookup that marks a superseded note wherever it surfaces (`supersedes` is still written
+and parsed, it is just not read backwards); `index.md` as a category description, its
+`orphans` lint check, and any special treatment of a category that has one; and nine of the
+fourteen lint checks — orphans, dangling links, dangling supersedes, untitled, tag/type
+collision, labels, ages, sizes, empty categories. Five ship: undescribed, undated,
+near-duplicates, ambiguous slugs and `edited since stamped`.
+
+**Why the rename is `-major` and the store is not.** Nothing relied on the store; something
+relied on `flw kb --show <name>`, which is how a skill reads one version record by name. Every
+caller of that string breaks on the day this lands, and there is no alias — an alias would make
+`flw kb` mean two things for as long as it existed, in a CLI whose contract says every accepted
+subcommand is declared.
+
+**The corpus question was the review's CRITICAL and it is settled by directory, not by rule.**
+`flw ledger` keeps `plans/*.md`. This store's project root is `plans/notes/` and nothing above
+it. So no file is reachable from both commands, the contract property naming that corpus needs
+no change of content, and `plans/design-ledger.md` §6 stands. It does need a change of *name*:
+three lines call that corpus the knowledge base's, and after this version the knowledge base is
+the other command, so read literally they would say the store reads `plans/*.md` and nothing
+below it. The alternative — handing all of
+`plans/` to the store — drops two fifths of what `flw ledger` can find and rewrites a property,
+in exchange for making a reviewed design document searchable beside a scribble about a flaky CI
+runner. It also fixes three things for free that would otherwise each need their own mechanism:
+a 73,538-character design document no longer prints `undated` on every surface forever, no
+longer costs ~18,384 tokens to `show` behind a listing that promised a title, and no longer
+absorbs a 316-character search window meant for a note.
+
+**What this is not.** Not a second ledger: nothing here is validated, nothing is enforced to
+still describe reality, and every surface says so. Not an extension: an extension is read
+unconditionally on every run and this is read on demand. Not an index: the store is walked and
+parsed on every query, and there is no cache, no database and no file on disk holding a second
+copy of anything. Not embeddings: lexical search only, reusing the engine `flw ledger` already
+runs.
+
+**What is already in the tree.** `core/scripts/kb.py` is 699 lines and the whole of it is the
+ledger. Four functions in it are the search engine and are corpus-agnostic — `forms`, `pattern`,
+`window`, `_capped` — and a note has no structured parts, so it takes the same `window()` path
+`plans/*.md` takes today. The store imports them rather than copying them; a second whole-word
+matcher is a second thing that can disagree about what a word is. The rest of `kb.py` — the
+`Corpus` walk, `GROUPS`, `decision_parts`, `render_record`, `render_component` — is about specs
+and moves with the ledger.
+
+**Phase 1 must leave the tree working.** It renames and nothing else: `core/scripts/kb.py` to
+`ledger.py`, `tests/test_kb.py` to `test_ledger.py`, the CLI handler and its subparser, the
+contract's provides lines and `flw kb` references in `docs/` and `README.md`. No new file
+appears in phase 1 and no test is added.
+
+One test stays red through it, and an executor that does not expect this will read the rename as
+broken. `test_the_cli_surface_matches_the_parser_in_both_directions` walks the parser's
+subcommands against the contract's `surfaces` in both directions, and all six `flw kb` lines are
+declared from spec time onward. So it goes green when group 4 lands `flw kb lint`, the last
+declared verb, and not before. **Every other test passes at the end of phase 1 or the rename is
+wrong rather than the store** — 326 of 327 today, and the same 326 after.
+
+**Two parser traps, both measured, both cheap to avoid.** An `argparse` subparser parses into a
+fresh namespace and copies its own defaults over the parent's, so `flw kb -T -t python search
+foo` silently becomes an untagged full-store search in the default shape, exit 0, no warning —
+on exactly the composition the design recommends. `default=argparse.SUPPRESS` on the
+subparser's copies of the filter and shape flags fixes it; a test asserts a filter parses
+identically on both sides of the verb. Separately, `--type` takes no short form: `-y` is
+`--yes` in four other flw commands.
+
+**The write path's third argument is a flag, not a positional.** Three free strings in a row
+have nothing to tell them apart, and the failure is silent: transposing title and description
+is accepted, the title sets the filename, and the note lands at a slug forty words long that
+the same command then refuses to let you correct. `--here` takes no category at all, because
+the directory is already decided; the two forms differ in arity and the handler resolves which
+it got.
+
+**The gate is one sentence per skill and the rules are in `--help`.** The five rules that decide
+what gets written are ~1,100 tokens; a run that writes nothing must not pay them. So each write
+moment carries one sentence — write it only if it was measured, and the next agent, in a
+repository that does not hold this one's history, could not get it faster than measuring it
+again — and `flw kb write --help` carries the rest, read once that sentence is answered yes.
+The scope clause in it is load-bearing: without it, an flw-execute run writes nothing, because
+it records what it measured in the version file before its write moment fires and three of
+three things the `silent-misses` run measured come back from `flw ledger` in under a second.
+
+**Measurements carried from the review, because they cannot be re-derived by reading.** The
+scoped opening read costs 618 characters, ~154 tokens, against ~2,109 tokens an flw-execute run
+has read before it starts work; the machine-wide listing it replaces is ~2,309 tokens at
+eighteen categories. A windowed hit is ~316 characters whatever it windows, so the ceiling is
+~3,160 tokens at eight matching categories, ~7,110 at eighteen, ~11,850 at thirty — which is why
+the cap is on categories as well as on hits inside them. A clone taken minutes ago stats every
+tracked file at checkout time, which is why the `edited since stamped` check runs under the
+machine-wide root only.
+
+**Coverage of the review this is specced from.** `.flw/reports/2026-08-31T1205-design-final.md`,
+three lenses over `plans/design-memory.md` at commit `db2878b`: one CRITICAL, eight MAJOR, seven
+MINOR, verdicts BUILD / BUILD WITH CUTS / BUILD WITH CUTS. Every finding is addressed in the
+design at commit `c18c9dc` rather than here. What the review did not cover: any code, because
+none exists; the HTML mind map, which was out of scope; and whether the store is used, which is
+what §11 of the design says to watch for and no review can answer.
+
+**The surfaces are in the contract already, before the run.** The CLI component's property says
+every accepted subcommand is declared and every declared one exists, so a run that added the
+parser and waited for `contract_edit` would fail its own check and never move the contract. The
+`flw ledger` and `flw kb` lines, the `[kb] category` config key and the two store paths were
+written into `specs/current.toml` at spec time; `contract_edit` below carries only the prose.
+"""
+
+contract_edit = """
+In `final_state.components`, "validation and checks":
+
+REPLACE that component's `paths` entry "core/scripts/kb.py" with two entries,
+"core/scripts/ledger.py" and "core/scripts/store.py" — the first is the rename, the second is
+where the note store lives and is otherwise in no component at all.
+
+REPLACE, in the property beginning "The corpus a knowledge-base query reads", the words "a
+knowledge-base query" with "`flw ledger`", so the sentence names the command that reads that
+corpus rather than a concept the other command now owns. Make the same substitution in the
+`implementation` clause reading "the knowledge base keeps all three", which becomes "the ledger
+keeps all three", and in the open question beginning "Whether a knowledge-base corpus should be
+bounded by directory", which becomes "Whether `flw ledger`'s corpus should be bounded by
+directory". The question itself is unsettled by this version and stays.
+
+REPLACE the provides line beginning "A user can search everything the project has written down
+about itself" with the same sentence naming the command:
+
+  "A user can search everything the project has written down about itself — the contract, every
+  version record and the design documents beside them — with `flw ledger`, each hit grouped by
+  what kind of thing it is, so a settled decision is not made again for want of finding it."
+
+REPLACE the provides line beginning "A user can read one version record or one contract
+component by name" with:
+
+  "A user can read one version record or one contract component by name with `flw ledger
+  --show`, without knowing which file holds it or what its classification suffix is."
+
+ADD to that component's provides:
+
+  "A user can keep what an agent worked out — a library's silent behaviour, a proxy's real
+  rules, an approach that was measured and lost — where the next session in another repository
+  or on another host will find it, without a database, an index, a server or a per-host
+  integration."
+  "An agent that never thought to search still meets the store, because a skill reads its own
+  project's category at its opening and searches once it knows its subject."
+  "A user can write a note from any agent on any host, or by hand in an editor, because a note
+  is a markdown file in a directory and nothing about the format can refuse one."
+  "A user is told what a note costs before opening it and how old it is, so following a title
+  into a note is a decision rather than a surprise."
+  "A user can find where a store is going wrong — notes with no description, no date, near
+  duplicates of each other, or a slug that resolves to several — without flw deciding which of
+  them to delete."
+
+ADD to that component's properties:
+
+  "A note is never required to carry anything: a bare markdown file with no frontmatter is a
+  valid note, and every field that is missing degrades a surface rather than failing a read."
+  "The two stores are disjoint by directory. flw ledger reads plans/*.md and flw kb reads
+  plans/notes/, so no file is reachable from both and neither command has to say which one
+  owns a hit."
+  "A note's age comes from its frontmatter and from nowhere else. mtime is never read as a
+  date, because a checkout rewrites it and a stale note that reads as fresh is worse than one
+  that reads as undated."
+  "A category is a directory and no note carries a category field, so moving a note between
+  categories is mv and there is no second place for the two to disagree."
+  "flw kb lint reports and never blocks: it exits 0 unless it cannot read a root, because the
+  cheapest way to green a failing note check is to delete notes."
+  "Filters compose and are ANDed, and a filter means the same thing on either side of the
+  verb."
+  "flw holds no index, cache or database of the store: every query walks and parses both roots,
+  so nothing can go stale against the files."
+  "A note whose +++ block does not parse is read as a note with no frontmatter and reported by
+  lint, never raised: the store is parsed in full on every query, so one hand-written typo must
+  not be able to break every command on the machine."
+  "The project's category sorts first and never filters. No note is hidden because its directory
+  name did not match the project's, which is the failure the store exists to avoid."
+
+In `final_state.components`, "the skills", ADD to provides:
+
+  "A user gets a store that fills itself, because flw-execute, flw-research and each dispatched
+  flw-review reviewer are offered a write at the point they have just finished learning
+  something — and offered it, never blocked by it."
+"""
+
+[[decisions]]
+topic     = "Which command reads plans/*.md once flw kb names the note store"
+options   = [
+  "flw ledger keeps plans/*.md, and the note store's project root is plans/notes/",
+  "the note store takes all of plans/, and flw ledger narrows to specs/ and .flw/reviews/",
+  "both read plans/*.md, stated as a deliberate overlap",
+]
+chosen    = "flw ledger keeps plans/*.md, and the note store's project root is plans/notes/"
+rationale = """
+Disjoint corpora make the design's claim that the two never merge true by construction rather
+than by a rule someone has to remember, and they leave the contract property naming the
+ledger's corpus untouched. Narrowing the ledger would delete two fifths of what it can find —
+28,804 words of an 82,373-word corpus, measured — and rewrite that property, to buy a reviewed
+design document a place in note search. The overlap option is cheapest to write and worst to
+own: one file returned by two commands in two shapes with two age models.
+"""
+
+[[decisions]]
+topic     = "Where the five rules that decide what gets written are read"
+options   = [
+  "one gate sentence in each skill, the rules in flw kb write --help",
+  "all five rules inlined in each skill with a write moment",
+  "all five rules in core/shared/context.md",
+]
+chosen    = "one gate sentence in each skill, the rules in flw kb write --help"
+rationale = """
+Rule one is the test for whether a note happens at all, so it must be read before the decision;
+the other four shape a write that is already happening. Splitting them puts 24 words on every
+run and ~1,100 tokens only on the runs that write. Inlining all five pays the full cost on every
+run including the majority that write nothing, which is the argument the design already uses
+against putting a note in an extension. context.md is read first by every skill, so anything
+there competes with what is always true.
+"""
+
+[[decisions]]
+topic     = "How a bare `flw kb` is declared, when the surface test records leaf commands only"
+options   = [
+  "extend _parser_surface to record a parent whose subcommand is optional",
+  "add an explicit `flw kb browse` verb and let bare `flw kb` dispatch to it",
+  "require a verb, dropping bare `flw kb`",
+]
+chosen    = "extend _parser_surface to record a parent whose subcommand is optional"
+rationale = """
+The CLI component's property says every subcommand the CLI accepts is declared, and a parent
+that runs bare is one the test cannot see today — `_parser_surface` records a path only where
+`not has_sub`, so `flw style` is invisible to it for the same reason. Extending it makes the
+check stricter rather than looser, which is the only direction a test may be changed to resolve
+a red. The `browse` verb moves the gap rather than closing it: bare `flw kb` would still be an
+accepted path nothing declares. Requiring a verb costs the design its cheapest surface, the
+thing you type to find out what is in the store.
+
+Found during the run, not at spec time: the two `flw kb write` lines also did not parse under
+that grammar. `--here` starts with a dash and not a bracket, so the path collector swallowed it
+into a command path `('kb','write','--here')`, and `-d|--description DESC` outside brackets was
+read as no flag at all. The two lines are now one, with both spelled as optional — which is how
+every other line in `surfaces` spells a flag, required or not.
+"""
+
+[[decisions]]
+topic     = "Whether the note store reimplements search or reuses the ledger's engine"
+options   = [
+  "import forms, pattern, window and _capped from the ledger module",
+  "a separate matcher tuned for prose notes",
+]
+chosen    = "import forms, pattern, window and _capped from the ledger module"
+rationale = """
+A note has no structured parts, so it takes the same window() path plans/*.md takes today and
+needs no engine change. Two whole-word matchers are two things that can disagree about what a
+word is, and the disagreement would surface as a query that finds a note under one command and
+not the other.
+"""
+
+[[dag]]
+group = 1
+phase = "Give the existing search its own name"
+tasks = [
+  { id = "ledger-module", desc = "Rename core/scripts/kb.py to core/scripts/ledger.py, unchanged in behaviour. Nothing new is added in this phase." },
+  { id = "ledger-cli", desc = "Rename the CLI handler and subparser to `ledger`, keeping its flags, help text and examples; update the examples to say `flw ledger`. No alias for `flw kb` — it is about to mean something else." },
+  { id = "ledger-tests", desc = "Rename tests/test_kb.py to tests/test_ledger.py and update its imports. The suite passes at the end of this phase or the rename is wrong.", depends_on = ["ledger-module", "ledger-cli"] },
+  { id = "ledger-callers", desc = "Update every `flw kb` reference in docs/, README.md and core/skills/ to `flw ledger`.", depends_on = ["ledger-cli"] },
+]
+
+[[dag]]
+group = 2
+phase = "The store, and reading from it"
+tasks = [
+  { id = "store-walk", desc = "core/scripts/store.py: walk ~/.flw/kb/**/*.md and <project root>/plans/notes/**/*.md, parse a +++ TOML frontmatter block with tomllib, and return notes carrying category (the directory path relative to its root), root, path, size and every frontmatter key. A file with no frontmatter is a valid note, and so is one whose block does not parse: catch TOMLDecodeError, read it as frontmatter-less, and record it for lint. Nothing in a walk may raise on one malformed file, because every query parses the whole store.", depends_on = ["ledger-module"] },
+  { id = "store-resolution", desc = "Title: frontmatter `title`, then the first `#` heading outside a fenced code block, then the filename slug with dashes turned to spaces. Identity: the filename stem, never re-derived from the title. Date: frontmatter `updated` only, never mtime; without it the note is undated.", depends_on = ["store-walk"] },
+  { id = "store-search", desc = "flw kb search <terms>, importing forms, pattern, window and _capped from ledger.py. Group by category, most recently updated first, the project's own category first, every hit naming its root. Cap the hits inside a category and the number of categories printed: the project's, then the four with most hits, then one line naming the rest and the term that would narrow them.", depends_on = ["store-resolution"] },
+  { id = "store-filters", desc = "-c/--category as a prefix match, -t/--tag repeatable, --type with no short form, --here and --global. All ANDed, all valid on both `flw kb` and `flw kb search`, with default=argparse.SUPPRESS on the subparser's copies so a filter before the verb is not silently dropped.", depends_on = ["store-search"] },
+  { id = "store-shapes", desc = "The four mutually exclusive shapes: default (windowed hits for search; the -s counts for a bare browse, or a named category's titles), -T/--tree, -s/--stats, -p/--paths.", depends_on = ["store-filters"] },
+  { id = "store-show", desc = "flw kb show <slug>: the note whole, with its path, age and size. A bare slug matching several categories prints every match rather than guessing; <category>/<slug> prints one.", depends_on = ["store-resolution"] },
+  { id = "store-age-size", desc = "Every listing and every hit prints the age or `undated`, and the size in tokens, both from the stat the walk already does.", depends_on = ["store-shapes", "store-show"] },
+  { id = "store-config", desc = "[kb] category in .flw/config.toml, defaulting to the project directory's name. It sorts that category first and never filters, and a test asserts the never-filters half: a note outside the project's category is still returned by an unfiltered search run inside the project.", depends_on = ["store-walk"] },
+  { id = "read-tests", desc = "tests/test_store.py: the walk over both roots, category from path, a note with no frontmatter, a note whose +++ block is malformed leaving every other command working, a title whose only `#` is inside a fence, undated with no mtime fallback, the category ceiling, a filter parsing identically on both sides of the verb, and a bare slug that matches two categories.", depends_on = ["store-age-size", "store-config"] },
+]
+
+[[dag]]
+group = 3
+phase = "Writing a note"
+tasks = [
+  { id = "write-command", desc = "flw kb write <category> <title> -d <description>, and flw kb write --here <title> -d <description>, body on stdin. Resolves the path, creates the category, slugs the title, stamps `updated`, prints the path and the resulting size. --type and --tags optional.", depends_on = ["store-walk"] },
+  { id = "write-refusals", desc = "Refuse an existing slug in the target category, naming the file to edit instead; the same stem in another category is not a collision. Refuse an empty body, naming stdin. Refuse a missing description.", depends_on = ["write-command"] },
+  { id = "write-warnings", desc = "Always print to stderr what already matches the title's terms, using the same search the store reads with; the write still happens. Print a line naming what a missing --type or --tags will cost in a tree and in -s.", depends_on = ["write-refusals"] },
+  { id = "write-help", desc = "flw kb write --help carries the five rules verbatim and the type-versus-tags test, and nothing else carries them.", depends_on = ["write-command"] },
+  { id = "write-tests", desc = "tests/test_store.py: the slug refusal, the empty-body refusal from a non-tty stdin, the near-duplicate warning reaching stderr while the write succeeds, and --here resolving to plans/notes/ with no category argument.", depends_on = ["write-warnings", "write-help"] },
+]
+
+[[dag]]
+group = 4
+phase = "Reporting what is wrong without deciding it"
+tasks = [
+  { id = "lint-checks", desc = "flw kb lint with six checks: undescribed, undated, near-duplicates (by the write path's own search), ambiguous slugs, unparseable frontmatter (the notes store-walk read as frontmatter-less because their block did not parse, with the tomllib error text), and `edited since stamped` — mtime newer than `updated`, under ~/.flw/kb/ only, because a fresh clone reports every note in a versioned root.", depends_on = ["read-tests"] },
+  { id = "lint-exit", desc = "Always exits 0 unless it cannot read a root. Inside a project it lints both roots.", depends_on = ["lint-checks"] },
+  { id = "lint-tests", desc = "tests/test_store.py: each check fires on a fixture that should trip it and stays silent on one that should not, and the exit code is 0 with findings present.", depends_on = ["lint-exit"] },
+]
+
+[[dag]]
+group = 5
+phase = "Making the skills use it"
+tasks = [
+  { id = "skill-open", desc = "flw-spec, flw-execute and flw-research read `flw kb -c <the project's category>` in their opening block. flw-review gives the same listing to each dispatched reviewer instead, alongside the perspective, scope, contract, discipline, style and target file.", depends_on = ["store-shapes"] },
+  { id = "skill-search", desc = "The later search goes where each skill learns its subject: flw-execute once it holds the version file, flw-spec once the interview names the change, flw-research once the survey has the repository's shape.", depends_on = ["skill-open"] },
+  { id = "skill-gate", desc = "The gate sentence, verbatim and identical in all three: write it only if it was measured, and the next agent, in a repository that does not hold this one's history, could not get it faster than measuring it again. An agent answering yes reads flw kb write --help first.", depends_on = ["write-help"] },
+  { id = "skill-write-moments", desc = "The write moment itself: flw-execute at the end of a run after the contract moves and the report is printed; flw-research at its write-up; flw-review in each dispatched reviewer. All three are offers the run declines by doing nothing. flw-spec gets none, and says why — its decisions already reach the ledger.", depends_on = ["skill-gate"] },
+  { id = "docs", desc = "docs/ and README.md: flw kb as the note store, flw ledger as the spec search, and what a note is. The four-command table in README gains the store.", depends_on = ["skill-write-moments", "lint-tests"] },
+]

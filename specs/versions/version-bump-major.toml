@@ -1,0 +1,91 @@
+base    = "5.0"
+name    = "version-bump"
+summary = "carry major or minor in the record's filename, and let flw-execute move the contract's release number by it"
+
+approach = """
+WHAT 5.0 LEFT UNDONE. It made `spec_version` "a release number a human sets" and then nothing
+set it: the contract still reads 4.6 with 5.0 in `applied`. A number a human is supposed to
+remember to bump is a number that drifts, which is the failure the deleted bump machinery in
+`final_state.removed` was originally about.
+
+WHERE THE CLASSIFICATION LIVES. In the filename: `<name>-minor.toml` or `<name>-major.toml`.
+The `kind` field 5.0 added is deleted rather than kept alongside, because two places holding
+one fact is what this package removes on sight.
+
+WHAT THE FILENAME DOES NOT CARRY. The `name` field stays the bare name, without the suffix.
+Reclassifying a change during its interview — you find it deletes something after all — then
+renames the file and leaves the record's identity untouched, which is the property 5.0 exists
+for. `applied` holds bare names, and `flw-execute` reads the classification off the filename
+of the record it is running, which it has open anyway.
+
+THE ABBREVIATION THAT WAS REJECTED. `-m` and `-M` were the first proposal and cannot work
+here: APFS is case-insensitive by default, so the two are one file. Measured, not assumed —
+writing `add-thing-m.toml` and then `add-thing-M.toml` in a scratch directory left one file
+holding the second write.
+
+LEGACY RECORDS ARE EXEMPT AND STAY THAT WAY. The eighteen numbered files keep their names and
+carry no suffix; their numbers already encode the classification that produced them. The
+validator takes a stem matching `v<digits>.<digits>` as its own name, and requires the suffix
+of everything else.
+
+WHAT WAS NOT EXAMINED. Whether a contract that has both a `spec_version` and an `applied` list
+wants the number at all, once nothing reads it. It is kept because the user asked for versions
+preserved on main, and because a release number is what a human quotes.
+"""
+
+contract_edit = """
+1. In the component named "the skills", replace the `provides` entry beginning "A user can spec
+   two changes at once":
+
+   from  "... because a version record is addressed by a name it keeps and the order they
+          landed in is recorded by the contract rather than by the records."
+
+   to    "... because a version record is addressed by a name it keeps, the order they landed
+          in is recorded by the contract rather than by the records, and the release number
+          moves by itself when a run finishes."
+
+2. In the component named "validation and checks", append to `provides`:
+
+   "A version record whose filename does not say whether the change is major or minor is
+   refused at authoring time, and a contract whose release number disagrees with what its
+   applied records add up to is named — so the number is folded from the record set rather
+   than remembered."
+
+3. Set `spec_version` to "6.0", which is what this version's own classification produces from
+   5.0, and is the first release number flw did not set by hand.
+
+Nothing else changes.
+"""
+
+[[decisions]]
+topic     = "where the major/minor classification is written"
+options   = [
+  "a `kind` field inside the record, as 5.0 shipped it",
+  "a suffix on the filename, with the field deleted",
+  "both, checked against each other the way name and filename are",
+]
+chosen    = "a suffix on the filename"
+rationale = "The user asked for it in the filename, where a directory listing shows it without opening anything. Keeping the field as well would be one fact in two places, which is the duplication this package deletes on sight; the name-versus-filename check exists because a name has to be inside the file for a reader who has only the file, and a classification does not."
+
+[[decisions]]
+topic     = "whether the classification is part of the record's identity"
+options   = ["`name` includes the suffix", "`name` is the bare name and only the filename carries the suffix"]
+chosen    = "the bare name"
+rationale = "Classification changes during an interview and identity must not — that is the whole of 5.0. Keeping the suffix out of `name` means reclassifying renames the file and leaves every reference to the record intact, including the entries already in `applied`."
+
+[[dag]]
+group = 1
+phase = "shape"
+tasks = [
+  { id = "schema", desc = "version.schema.json: delete `kind`; describe the filename convention on `name` — the file is <name>-minor.toml or <name>-major.toml, and `name` is the bare name without the suffix." },
+  { id = "validator", desc = "check_version: derive the classification from the filename, requiring the -minor or -major suffix and comparing `name` against the stem with the suffix removed. A stem matching v<digits>.<digits> is legacy: it is its own name and needs no suffix. Add a helper that returns (name, classification) for one filename, since flw-execute needs the same parse.", depends_on = ["schema"] },
+  { id = "validator-tests", desc = "Tests for: a missing suffix refused, a name disagreeing with the suffixed filename caught, a legacy numbered stem accepted, and a name that itself ends in -minor or -major parsed correctly. Each checked against the mutation it exists to catch.", depends_on = ["validator"] },
+]
+
+[[dag]]
+group = 2
+phase = "move"
+tasks = [
+  { id = "bump", desc = "flw-execute step 5: alongside appending the name to `applied`, set `spec_version` from the record's filename — major gives <X+1>.0, minor gives <X>.<Y+1>. Say the new number in the run's report. Delete the sentence leaving the number to a human.", depends_on = ["validator"] },
+  { id = "rename-self", desc = "Rename this record to follow its own rule if it does not already, and check that specs/versions/ carries no unsuffixed non-legacy file.", depends_on = ["validator"] },
+]

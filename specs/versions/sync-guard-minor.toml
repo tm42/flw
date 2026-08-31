@@ -1,0 +1,69 @@
+base    = "version-bump"
+name    = "sync-guard"
+summary = "put the additive rule behind one function every destructive move calls, and say what each change replaced"
+
+approach = """
+WHY A FUNCTION AND NOT A FOURTH IF. `flw sync` has three destructive moves — remove a link
+that dangles or is orphaned, relink one that moved, create one that is missing — and the rule
+"never touch what flw did not create" was written separately in each. The 2026-08-25 review
+found the third with no guard at all, and it destroyed a user's file at the exact path
+`flw install` refuses three ways. Writing the rule a fourth time is how the fourth branch
+gets it wrong too.
+
+THE HOLE THAT PATCH DID NOT CLOSE. Reading the whole loop to build the choke point found
+another: the relink branch calls `path.unlink(missing_ok=True)` on any recorded path whose
+fault is "missing", and "missing" is the verdict for a path that is not a symlink. A user who
+replaces one of flw's links with a file of their own has it deleted, because the path is
+recorded even though the thing standing at it is not what flw put there. The record says flw
+made a symlink here; it does not say flw made this file.
+
+WHAT REFUSAL LEAVES BEHIND. A refused relink keeps its record rather than dropping it.
+Dropping it would make flw quietly forget a path it linked, and the user's own next move —
+removing their file and running sync again — should restore the link rather than require a
+reinstall.
+
+BEFORE AND AFTER ON EVERY CHANGE. A symlink's whole diff is one line: the target it had
+against the target it gets. Printing it makes `--dry-run` worth reading, which it currently
+is not, and it is what the user asked for by "explicit diffs on each collision" — for a
+symlink there is nothing else a diff could contain.
+
+WHAT THIS IS NOT. Not a prompt. sync is the repair command and asking per link would make it
+unusable on an install with twenty of them; refusing loudly and carrying on is the behaviour
+install already has. Not a change to what sync will do to its own links: a link flw created
+and recorded is still relinked or removed without asking.
+"""
+
+contract_edit = """
+In the component named "the flw CLI", replace the `provides` entry beginning "A user can bring
+an install back into line with the checkout":
+
+  from  "... refreshing a style copy that fell behind — without re-running install and without
+         linking into a host they never chose."
+
+  to    "... refreshing a style copy that fell behind — without re-running install, without
+         linking into a host they never chose, and without replacing anything flw did not put
+         there, each change reported with what it replaced."
+
+Nothing else changes.
+"""
+
+[[decisions]]
+topic     = "how the additive rule is enforced across sync's three destructive moves"
+options   = ["a guard written in each branch", "one function every branch calls before writing"]
+chosen    = "one function"
+rationale = "The rule was written per branch and the review found the branch that had none, after it had destroyed a file. Reading the loop to centralise it found a second hole in the relink branch. A rule that has to be remembered at each new call site is a rule that will be missed at the next one."
+
+[[decisions]]
+topic     = "what happens to the record when a relink is refused"
+options   = ["drop the record, since flw no longer owns the path", "keep it and report the refusal"]
+chosen    = "keep it"
+rationale = "Dropping it makes flw forget a path it linked, silently, and the user cannot get it back without a reinstall. Keeping it means removing their own file and running sync again restores the link, which is the recovery they would expect. uninstall is already guarded on is_symlink, so a kept record cannot make it delete their file."
+
+[[dag]]
+group = 1
+phase = "guard"
+tasks = [
+  { id = "choke", desc = "Add a function taking a path and the recorded paths and returning None or the reason flw may not write there: a symlink flw did not record, or anything that is not a symlink. Call it from all three of sync's destructive branches — remove, relink, link-new — replacing the two guards added on 2026-08-25 and covering the relink branch that had none." },
+  { id = "report", desc = "Report what each change replaced: the relink line carries the target the link had as well as the one it gets. Keep the existing verbs and shape.", depends_on = ["choke"] },
+  { id = "tests", desc = "A test per branch: a real file at a recorded path survives a relink, a foreign symlink survives a removal, and the relink line names the old target. Each checked against the mutation it exists to catch.", depends_on = ["choke", "report"] },
+]

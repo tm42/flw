@@ -1,0 +1,218 @@
+name         = "store-surfaces"
+base         = "note-store"
+spec_version = "0.9.0"
+
+summary = """
+Makes the note store's surfaces tell the truth: filters that compose across the verb, a
+duplicate check that fires on duplicates, a file it could not read that says so, and a slug
+that keeps a title in any script.
+"""
+
+approach = """
+`note-store` built the store and an `eng` review of it found twenty-one things. Three
+CRITICALs were fixed before this record was written, in commit `7d5dff9`, because each lost
+data at exit 0 — the frontmatter escaping, a category that climbed out of the store, and the
+four handlers that needed an flw project to reach a machine-wide store. Two smaller findings
+came out of the same lines and landed with them: the provenance line moved to stderr, so `-p`
+puts only paths on stdout, and it now names the resolved category. **This record is the rest.**
+
+**The theme is a surface that reports success while doing the wrong thing.** Every finding
+below exits 0 and looks right: a filter that silently stops applying, a check that names most
+of the store, a note that is in the store and in no answer, a title that becomes the stem
+`note`, and a test that passes with its own behaviour deleted. None of them is a crash, which
+is why the suite is green at 387 with all of them present.
+
+**Why `-major`.** The slug changes for a title anyone has already written: `[^a-z0-9]+`
+replaces `_` with `-`, and `[^\\w]+` keeps it, so `a_b` slugs to `a_b` where it slugged to
+`a-b`. The stem is the note's identity — `store-resolution` fixed that in `note-store` and
+`flw kb write --help` says so — and an identity that changes under an existing title is
+exactly the classification's case. Nothing else here is major on its own.
+
+**What this is not.** Not a redesign: `plans/design-memory.md` is unchanged by all of it, and
+every fix below makes the code say what that document and the contract already claim. Not the
+deferred half of `note-store` — `promote`, the `supersedes` reverse lookup, `index.md` and its
+orphans check, and nine lint rows all stay deferred. Not a performance version: lint is
+quadratic, measured at 1.06s over 500 notes and 16.2s over 2000 against 0.14s for `flw kb -s`,
+and `all()` for `any()` does not touch that. It wants its own record, after there is a store
+big enough to care.
+
+**The two questions the review could not settle, both now answered.**
+
+An unreadable note becomes lint's business. `walk` catches `OSError` and `UnicodeDecodeError`
+and continues, which is right and stays — one bad file must not cost the reader the store. But
+nothing then says a file was skipped, so `flw kb search encoding` returns `nothing matched.` at
+exit 0 while the word sits in a latin-1 file in the store. The contract's own line is "A user
+can find where a store is going wrong", and a note flw could not open is the clearest way one
+goes wrong. So `walk` returns what it skipped alongside what it read, lint gains a row, and the
+read verbs print a one-line count to stderr. The alternative — stating in the contract that
+skipping is silent — was refused because a note can then match a query and never surface, with
+nothing anywhere to explain it.
+
+A slug keeps unicode word characters after `casefold()`. Today `Кэш прокси всегда пустой` is
+`ru/note.md` and the next Russian title in that category is refused as a duplicate of it, with
+the error naming an unrelated note to go and edit. ASCII titles are unchanged except for `_`.
+Transliteration was refused because it needs a table per script, which is a dependency in
+disguise in a project that ships none.
+
+**Two findings in one fix, twice.** `--here` and `--global` are in a mutually exclusive group
+per parser, so one on each side of the verb lands both in the namespace and every query then
+returns nothing; and `-t` with `action="append"` and a `SUPPRESS` default starts the
+subparser's list from empty rather than from the parent's, so the sub side replaces instead of
+extends. Both are the same shape as the bug `SUPPRESS` was added to fix and neither is what
+`SUPPRESS` does: it restores the parent's value when the subparser is silent, and does nothing
+when both sides speak. The handler is where both get resolved, because that is the one place
+holding both halves.
+
+**Measurements carried from the report, because they cannot be re-derived by reading.** The
+near-duplicate check, over a 156-note store built from this repository's own prose: writing "uv
+makes a venv without pip" names 54 of 156 as already written, and lint reports 7,898 of 12,090
+possible pairs; `all()` takes those to 0 and 1,937. On a ten-note store of ten unrelated
+subjects it reports four or five false pairs and no true ones, colliding on the stopwords
+`with`, `need`, `only` and `than` — four and five letters, which the `len(w) > 3` floor is
+exactly long enough to admit. Three mutations survive all 387 tests: replacing `store.search`'s
+body with `return list(notes)`, changing its `all()` to `any()`, and deleting the search call
+from the handler. Deleting the first element of `group()`'s sort key also passes, and so does
+deleting the `len(w) > 3` floor.
+
+**Coverage of the review this is specced from.** `.flw/reports/2026-08-31T1453-eng.md`, four
+lenses over the `note-store` run at `e182718`, `3cdf5e2`, `029fbb1`: 3 CRITICAL, 11 MAJOR, 7
+MINOR. Three findings arrived from more than one lens independently — the escaping
+(correctness, adversarial), the near-duplicate check (correctness, footprint, tests) and the
+root line on stdout (correctness, footprint). What the review did not cover: the ledger rename,
+which was out of bounds, and the skills' prose beyond the opening read's length. Two costs it
+measured and reported as costs rather than findings, both left alone here: nothing refuses a
+256 MB body, and two concurrent writes of the same title both exit 0 with the later winning,
+which is inherent to a store that is a directory of files.
+
+**No new subcommand and no new flag**, so nothing goes into `surfaces` at spec time and the
+`contract_edit` below is the whole contract change.
+"""
+
+contract_edit = """
+In `final_state.components`, "validation and checks":
+
+ADD to provides:
+
+  "A user is told when the store holds a file flw could not read, rather than searching a
+  store that silently answers from part of itself."
+
+REPLACE the property beginning "A note is never required to carry anything" — unchanged in
+substance, with the emitted case named — with:
+
+  "A note is never required to carry anything: a bare markdown file with no frontmatter is a
+  valid note, and every field that is missing degrades a surface rather than failing a read.
+  What flw kb write emits always parses as what flw kb reads, whatever characters the title,
+  description, type and tags hold."
+
+ADD to properties:
+
+  "A file the store could not read is skipped rather than raised, and named rather than
+  skipped silently: lint reports it with the error, and every read verb says how many were
+  skipped."
+  "A note's identity survives its title's script. A slug keeps unicode word characters, so a
+  title in any script produces a stem that carries it."
+  "A filter given before the verb and a filter given after it compose rather than replace, and
+  two filters that contradict each other are refused rather than silently answered with
+  nothing."
+  "A listing that is empty because a filter matched nothing says so differently from a store
+  that holds no notes."
+"""
+
+[[decisions]]
+topic     = "Whether flw kb lint owns a note the store could not read"
+options   = [
+  "an unreadable lint row, plus a one-line stderr count from the read verbs",
+  "keep the skip silent and state in the contract that it is",
+]
+chosen    = "an unreadable lint row, plus a one-line stderr count from the read verbs"
+rationale = """
+The contract already provides "A user can find where a store is going wrong", and a note flw
+could not open is the clearest way one goes wrong. Measured: a latin-1 file and a chmod 000
+file in one category are absent from `flw kb -T`, named by nothing in lint, and
+`flw kb search encoding` returns `nothing matched.` at exit 0 while the word sits in one of
+them. Staying silent keeps the read path simpler and was refused for what it costs the reader:
+a note that matches a query, is in the store, and never surfaces, with nothing anywhere to
+explain it. The skip itself does not change — one bad file must not cost the reader the store.
+"""
+
+[[decisions]]
+topic     = "What a title in a non-Latin script slugs to"
+options   = [
+  "unicode word characters after casefold",
+  "keep ASCII and refuse a title that slugs to nothing",
+  "transliterate to ASCII",
+]
+chosen    = "unicode word characters after casefold"
+rationale = """
+`[^a-z0-9]+` deletes every character outside ASCII lowercase and digits, so
+`Кэш прокси всегда пустой` becomes `ru/note.md`, `Таймаут соединения 30 секунд` becomes
+`ru/30.md`, and a third Russian title is refused as a near-duplicate of the first with the
+error naming an unrelated note to edit. The stem is the identity and for any script but Latin
+it carries none of the title. Refusing such a title keeps stems typeable on any keyboard and
+was rejected because it refuses a title a non-English team would naturally write.
+Transliteration needs a table per script, which is a dependency in disguise in a project whose
+contract assumes stdlib only.
+"""
+
+[[decisions]]
+topic     = "Where a filter split across the verb is reconciled"
+options   = [
+  "in the handler, which holds both halves",
+  "in the parser, by dropping the filters from the subparser's copy",
+]
+chosen    = "in the handler, which holds both halves"
+rationale = """
+Dropping the flags from the subparser would make argparse reject a post-verb `-t` loudly, which
+is honest but contradicts the contract: "a filter means the same thing on either side of the
+verb". The handler is the one place holding the parent's value and the subparser's, so it is
+where a union and a contradiction can both be resolved. `SUPPRESS` stays — it is what restores
+the parent's value when the subparser is silent, and neither of these findings is that case.
+"""
+
+[[dag]]
+group = 1
+phase = "Filters that compose"
+tasks = [
+  { id = "root-exclusive", desc = "In kb(), refuse --here with --global rather than walking with both: they are opposites, and one on each side of the verb currently lands both in the namespace and returns nothing at exit 0. The parser's per-parser mutually exclusive groups stay; this catches the pair the parser cannot see." },
+  { id = "tag-union", desc = "In kb(), union the tags given before the verb with those given after it. action='append' with a SUPPRESS default starts the subparser's list from empty, so the sub side replaces the parent's. Collect the subparser's copy under its own dest and merge, so both sides survive." },
+  { id = "empty-vs-filtered", desc = "render_index, render_tree and render_stats say which emptiness they mean: `no notes` for a store with none, and a line naming the filters that matched nothing when the store holds notes and the filtered list does not. The caller knows both counts; the renderers need the unfiltered one passed in.", depends_on = ["tag-union"] },
+  { id = "filter-tests", desc = "tests/test_store.py: --here before the verb with --global after it is refused; -t on both sides ANDs both tags; a repeated -t ANDs rather than honouring the first (honouring only the first passes today); -c python does not match a category named pythonista (a plain startswith passes today); and an empty filtered result reads differently from an empty store.", depends_on = ["empty-vs-filtered"] },
+]
+
+[[dag]]
+group = 2
+phase = "A check that fires on duplicates"
+tasks = [
+  { id = "near-duplicates-all", desc = "near_duplicates: all() rather than any() at core/scripts/store.py:502, which is what search() does and what 'by the write path's own search' reads as. Measured on a 156-note corpus: 'uv makes a venv without pip' names 54 of 156 before and 0 after; lint's pair count goes from 7,898 of 12,090 to 1,937." },
+  { id = "near-duplicates-tests", desc = "tests/test_store.py: two notes whose titles share only a stopword report no near-duplicate — it fails against the current OR and against the len(w) > 3 floor, which can be deleted today with all 60 tests passing. Keep the existing recall test.", depends_on = ["near-duplicates-all"] },
+]
+
+[[dag]]
+group = 3
+phase = "A file it could not read, and a title in any script"
+tasks = [
+  { id = "walk-skipped", desc = "walk returns what it skipped alongside what it read: (path, error) for every OSError and UnicodeDecodeError it swallows. The skip itself does not change — one bad file must not cost the reader the store." },
+  { id = "lint-unreadable", desc = "flw kb lint gains an `unreadable` row naming each skipped file and the error text, making seven checks.", depends_on = ["walk-skipped"] },
+  { id = "read-verbs-warn", desc = "kb() and kb_show() print one stderr line naming the count and the first path when the walk skipped anything. Not an error and not an exit code: the answer is still the answer, and this says what it was drawn from.", depends_on = ["walk-skipped"] },
+  { id = "unicode-slug", desc = "slug(): strip on [^\\\\w]+ with default unicode semantics after casefold(). ASCII titles slug identically except that `_` survives, which is the behaviour change making this record -major.", depends_on = [] },
+  { id = "store-tests", desc = "tests/test_store.py: a latin-1 note and an unreadable note each appear in lint's unreadable row and in the stderr line, while every other command keeps working; a Russian and a Japanese title each produce a stem carrying the title; two non-Latin titles in one category do not collide; and an ASCII title with an underscore keeps it.", depends_on = ["lint-unreadable", "read-verbs-warn", "unicode-slug"] },
+]
+
+[[dag]]
+group = 4
+phase = "Tests that pass without their behaviour"
+tasks = [
+  { id = "search-excludes", desc = "tests/test_store.py: two notes and one term, asserting the non-matching note is absent; two terms, asserting a note carrying only one is absent; and a second note in the handler test. Today replacing store.search's body with `return list(notes)`, changing its all() to any(), or deleting the search call from the handler each leaves 387 passing.", depends_on = ["filter-tests"] },
+  { id = "sorts-first", desc = "tests/test_store.py: rename the project's category in test_the_projects_category_sorts_first_and_never_filters so it loses the alphabetical tiebreak, and give the other category more notes so the size term does not carry it. Deleting the project-category priority from group()'s sort key passes today.", depends_on = ["filter-tests"] },
+  { id = "render-index-test", desc = "tests/test_store.py: one render_index test over a category holding more than CAP notes, asserting the count line and the truncation line. It is the shape flw kb -c <category> prints, which is what three skills run at their opening, and the string does not appear in the test file today.", depends_on = ["filter-tests"] },
+]
+
+[[dag]]
+group = 5
+phase = "What earns nothing"
+tasks = [
+  { id = "rules-inline", desc = "Move the RULES literal from core/scripts/store.py to cli/flw.py beside the write subparser, its only reader. _kb_rules, its sys.path mutation and its except ImportError fallback go with it: epilog=_kb_rules() is evaluated at parser-build time, so every flw command imports the store to build a string one help screen reads — 4.7ms against 1.9ms, measured." },
+  { id = "section-config", desc = "Give _paths_config a section parameter and call it for [kb]. _kb_category is a second copy of its two-path loop, exists() skip, tomllib try and error message, and _paths_config's own docstring says the underlay must be true of every section — a fact now written twice." },
+  { id = "drop-defensive", desc = "Plain attribute access in kb() for the ten getattr defaults: every key is present in every path through both parsers, and a getattr default means a renamed dest silently stops filtering at exit 0. Drop `meta if isinstance(meta, dict) else {}` in store.py, where _frontmatter returns {} or tomllib.loads's dict, and the redundant ValueError beside TOMLDecodeError, which is its subclass." },
+  { id = "trim-opening", desc = "Cut the middle sentence of the opening read in flw-spec, flw-execute and flw-research — it argues for a decision the reader was never offered, on every run of three skills, and the listing it explains costs ~154 tokens against the paragraph's ~100. The first sentence is the instruction and the last stops an agent running the bare listing; both stay, in all three copies." },
+]

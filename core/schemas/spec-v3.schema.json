@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tm42/flw/schemas/spec-v3.schema.json",
+  "title": "flw contract",
+  "description": "specs/current.toml — one per project, complete and current. It states what is true when the work is done, never how to get there: how each version came about lives in one file per version under specs/versions/. Five questions, one home each — what exists (final_state.components), what a user can do with it (provides), what is gone (final_state.removed), how we know it works (success_criteria), and what would force a redesign if false (assumptions).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "spec_version", "final_state", "success_criteria", "assumptions"],
+  "properties": {
+    "schema_version": {
+      "const": 3,
+      "description": "Selects the schema. validate_spec.py dispatches on this rather than on the path it was given."
+    },
+    "spec_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "MAJOR.MINOR. A re-spec bumps major, a quick_fix bumps minor. Two levels are sufficient because those are the only two change types that move a version."
+    },
+    "final_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["components"],
+      "properties": {
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/component" },
+          "description": "What exists when the work is done. A component may be conceptual rather than file-shaped — one capability spanning several files is one component."
+        },
+        "removed": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/removal" },
+          "description": "What this contract has deleted. Stating a removal is not the op that performs it, so a set here never forces a major bump on its own."
+        }
+      }
+    },
+    "success_criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criteria"],
+      "properties": {
+        "tests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/test" },
+          "description": "Commands that must exit 0. These are the project's own — flw bakes in no test runner, no linter and no toolchain. `flw test -A` runs them and reports; it does not judge whether the work is done."
+        },
+        "criteria": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the tests cannot express. Required even when tests are present: a suite that passes is not the same claim as the work being done, and pretending otherwise is how a green build ships the wrong thing."
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "What would force a redesign if it turned out false. Required, and an empty list is a legitimate answer — the point is that the question was asked, not that it produced entries. Phrase as testable propositions ('input fits in memory'), not intents ('data is small')."
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Raised and not settled. Optional, because a contract with none is a complete contract. Better here than answered by assumption."
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "paths", "provides"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The natural key. Amendments address a component by name, so changing it is a remove plus an add — which is why rename needs no op of its own, and why names must be unique (checked semantically; the schema language has no uniqueItems here)."
+        },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Where this component lives, project-relative. Directories end in '/'. Nothing materializes these — they locate the component for a reader and for review."
+        },
+        "provides": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "What a user can do, one capability per entry. This is the product surface. A component that provides nothing is a file list, not a component."
+        },
+        "implementation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional. Constraints on how this component is built that are part of the agreement — the ones whose violation would need a re-spec. 'SQLite, one file per user, no ORM' qualifies; 'probably use a dataclass' does not. If it does not constrain, it is not spec, and it belongs in the version file's approach or nowhere."
+        }
+      }
+    },
+    "removal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement"],
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What is gone, in the author's words."
+        },
+        "check": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A command that exits non-zero while the removed thing is still present. Optional on purpose — some removals are conceptual, and a fabricated check is worse than an honest absence."
+        }
+      }
+    },
+    "test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Run from the project root; must exit 0. No runner allow-list — v2 had one because it carried a language registry, and the registry is gone."
+        }
+      }
+    }
+  }
+}
