@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import shutil
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -2187,3 +2189,108 @@ def test_the_interpreter_guard_exits_one_not_two(tmp_path):
     source = (REPO / "cli" / "flw.py").read_text()
     guard = source[: source.index("import argparse")]
     assert "raise SystemExit(1)" in guard and "SystemExit(2)" not in guard
+
+
+def test_update_dry_run_issues_no_pull(home, capsys, monkeypatch):
+    """The cheap half of the check: prove no pull was issued at all."""
+    fake_checkout(monkeypatch, home)
+    calls: list[tuple] = []
+
+    def recording_git(*args):
+        calls.append(args)
+        if args and args[0] == "log":
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout="origin/main\n", stderr="")
+
+    monkeypatch.setattr(flw, "git", recording_git)
+    flw.update(argparse.Namespace(dry_run=True, yes=True))
+
+    assert calls, "update issued no git commands at all"
+    assert not any(a and a[0] == "pull" for a in calls)
+    assert any(a and a[0] == "fetch" for a in calls)
+
+
+def test_update_dry_run_says_which_checkout_the_style_check_used(
+    home, capsys, monkeypatch
+):
+    """sync compares installed copies against the source in this checkout,
+    which -n no longer moves. Unsaid, the dry run reports no refresh and the
+    real run offers one — this version's own defect, moved."""
+    fake_checkout(monkeypatch, home)
+    monkeypatch.setattr(
+        flw, "git", lambda *a: SimpleNamespace(returncode=0, stdout="", stderr="")
+    )
+    flw.update(argparse.Namespace(dry_run=True, yes=True))
+    out = capsys.readouterr().out
+    assert "measured against this checkout" in out
+    assert "nothing written" in out
+
+
+def test_update_dry_run_reports_a_failed_fetch_rather_than_stale_history(
+    home, capsys, monkeypatch
+):
+    """refs/remotes/ answers HEAD..upstream offline, so a machine with no
+    network would otherwise read days-old commits as what a pull would bring."""
+    fake_checkout(monkeypatch, home)
+
+    def offline_git(*args):
+        if args and args[0] == "fetch":
+            return SimpleNamespace(returncode=128, stdout="", stderr="could not resolve host")
+        if args and args[0] == "log":
+            return SimpleNamespace(returncode=0, stdout="abc1234 old news\n", stderr="")
+        return SimpleNamespace(returncode=0, stdout="origin/main\n", stderr="")
+
+    monkeypatch.setattr(flw, "git", offline_git)
+    flw.update(argparse.Namespace(dry_run=True, yes=True))
+    out = capsys.readouterr().out
+    assert "could not fetch" in out and "could not resolve host" in out
+    assert "last successful fetch" in out
+
+
+GIT = shutil.which("git")
+
+
+@pytest.mark.skipif(GIT is None, reason="git not on PATH")
+def test_update_dry_run_leaves_head_where_it_was(tmp_path, monkeypatch, capsys):
+    """The expensive half, and the one that answers the actual finding: a real
+    repository behind a real origin, and HEAD does not move. Every other update
+    test stubs `git` out, so none of them could have caught this."""
+    ident = [
+        "-c", "user.email=flw@example.invalid",
+        "-c", "user.name=flw",
+        "-c", "commit.gpgsign=false",
+    ]
+
+    def run(*args, cwd):
+        return subprocess.run(
+            [GIT, *ident, *args], cwd=cwd, capture_output=True, text=True, check=True
+        )
+
+    origin = tmp_path / "origin.git"
+    seed = tmp_path / "seed"
+    clone = tmp_path / "clone"
+    subprocess.run([GIT, "init", "--bare", "--initial-branch=main", str(origin)],
+                   capture_output=True, check=True)
+    subprocess.run([GIT, "clone", str(origin), str(seed)], capture_output=True, check=True)
+    (seed / "a.txt").write_text("one\n")
+    run("add", "a.txt", cwd=seed)
+    run("commit", "-m", "first", cwd=seed)
+    run("push", "-u", "origin", "main", cwd=seed)
+    subprocess.run([GIT, "clone", str(origin), str(clone)], capture_output=True, check=True)
+
+    # Put the clone behind by one commit.
+    (seed / "b.txt").write_text("two\n")
+    run("add", "b.txt", cwd=seed)
+    run("commit", "-m", "second", cwd=seed)
+    run("push", cwd=seed)
+
+    monkeypatch.setattr(flw, "checkout", lambda: clone)
+    monkeypatch.setattr(flw, "sync", lambda _a: 0)
+    monkeypatch.setattr(flw, "doctor", lambda _a: 0)
+    before = run("rev-parse", "HEAD", cwd=clone).stdout.strip()
+
+    flw.update(argparse.Namespace(dry_run=True, yes=True))
+
+    assert run("rev-parse", "HEAD", cwd=clone).stdout.strip() == before
+    assert not (clone / "b.txt").exists()
+    assert "would pull 1 commit(s)" in capsys.readouterr().out

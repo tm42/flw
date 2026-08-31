@@ -164,6 +164,10 @@ carry, so what a host holds is a generated copy. `flw update` offers to refresh 
 copy that no longer matches, one host at a time, saying which side moved before it
 asks, rather than leaving it silently stale.
 
+`flw update -n` writes nothing: it fetches, reports which commits a pull would bring, and
+says what the style check found without refreshing anything. HEAD and your working tree do
+not move — the same thing `-n` means on `install`, `sync` and `style install`.
+
 ## Requirements
 
 Python 3.11 or later, as a system interpreter. No runtime dependencies at all.

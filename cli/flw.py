@@ -1732,6 +1732,35 @@ def update(args: argparse.Namespace) -> int:
         )
         return 1
 
+    if args.dry_run:
+        # -n means the same here as on install, sync and style install: nothing
+        # the command would otherwise write gets written. A fetch is the
+        # exception it is allowed, because it writes only inside .git and moves
+        # neither HEAD nor the working tree.
+        upstream = tracking.stdout.strip()
+        fetched = git("fetch")
+        if fetched.returncode != 0:
+            # refs/remotes/ answers HEAD..upstream offline, so without this a
+            # machine with no network reads days-old history as news.
+            print(f"  could not fetch: {fetched.stderr.strip() or 'unknown error'}")
+            print("  the range below is whatever the last successful fetch left")
+        ahead = git("log", "--oneline", f"HEAD..{upstream}").stdout.strip()
+        if ahead:
+            print(f"  would pull {len(ahead.splitlines())} commit(s) from {upstream}:")
+            print("    " + ahead.replace("\n", "\n    "))
+        else:
+            print(f"  already up to date with {upstream}")
+        # sync compares each installed copy against the source in this checkout,
+        # which the fetch did not move. Without this line the dry run reports no
+        # refresh and the real run offers one.
+        print("  the style check below is measured against this checkout as it")
+        print("  stands, not against what the fetch found")
+        print()
+        sync(argparse.Namespace(dry_run=True, yes=args.yes))
+        print("\n  nothing written — drop -n to apply")
+        print()
+        return doctor(argparse.Namespace(verbose=False))
+
     fast_forward = git("pull", "--ff-only")
     if fast_forward.returncode == 0:
         print(fast_forward.stdout.strip() or "already up to date")
@@ -2590,7 +2619,10 @@ def build_parser() -> argparse.ArgumentParser:
     # Not install's "show, do nothing": the pull happens either way, and a flag
     # that claimed otherwise would be read as one that skipped it.
     p.add_argument(
-        "-n", "--dry-run", action="store_true", help="pull, but refresh nothing"
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="report what a pull would bring; write nothing",
     )
     p.set_defaults(handler=update)
 
