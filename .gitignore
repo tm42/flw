@@ -7,4 +7,4 @@ __pycache__/
 node_modules/
 package-lock.json
 .flw/reports/
-.flw/reviews/publish.toml
+.flw/reviews/publish*.toml
