@@ -569,6 +569,25 @@ def replace_block(text: str, block: str, begin: str, end: str) -> str:
     return (text.rstrip("\n") + "\n\n" if text.strip() else "") + block
 
 
+def confirm(prompt: str) -> bool:
+    """Ask one [y/N] question, and treat a stdin that cannot answer as no.
+
+    Every offer flw makes goes through here so the four cannot drift apart.
+    EOF is a condition rather than a bug — a script, a CI job or an agent has
+    no terminal to answer with — so it declines the offer and lets the run
+    finish, instead of raising past main()'s deliberately narrow handler and
+    ending an install over an optional extra. It says why: an offer that
+    answers itself in silence is indistinguishable from one a user declined.
+    """
+    try:
+        return input(prompt).strip().lower() in ("y", "yes")
+    except EOFError:
+        # input() has already written the prompt with no newline, so this
+        # lands on the same line and reads as the answer to it.
+        print("no terminal on stdin — declined")
+        return False
+
+
 def install_block(
     host: Host,
     block: str,
@@ -603,13 +622,11 @@ def install_block(
 
     if dry:
         return False
-    if not assume_yes:
-        # This is the user's own instructions file, read on every request. flw is
-        # a guest in it, so it asks even though the block is exactly removable.
-        answer = input("           write it? [y/N] ").strip().lower()
-        if answer not in ("y", "yes"):
-            print("           skipped")
-            return False
+    # This is the user's own instructions file, read on every request. flw is
+    # a guest in it, so it asks even though the block is exactly removable.
+    if not assume_yes and not confirm("           write it? [y/N] "):
+        print("           skipped")
+        return False
 
     target.parent.mkdir(parents=True, exist_ok=True)
     write_host_text(target, updated)
@@ -897,11 +914,9 @@ def select_style(name: str, *, dry: bool, assume_yes: bool) -> tuple[bool, str |
         print(f"         note: settings.local.json selects {shadow}, which wins")
     if dry:
         return False, None
-    if not assume_yes:
-        answer = input("         write it? [y/N] ").strip().lower()
-        if answer not in ("y", "yes"):
-            print("         skipped — the file is written; select it yourself")
-            return False, None
+    if not assume_yes and not confirm("         write it? [y/N] "):
+        print("         skipped — the file is written; select it yourself")
+        return False, None
 
     settings["outputStyle"] = name
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1010,11 +1025,11 @@ def style_install(args: argparse.Namespace) -> int:
                     f"  {host.name}: {tilde(target)} was edited after flw wrote it",
                     file=sys.stderr,
                 )
-                if not args.yes:
-                    answer = input("           overwrite it? [y/N] ").strip().lower()
-                    if answer not in ("y", "yes"):
-                        print("           skipped")
-                        continue
+                if not args.yes and not confirm(
+                    "           overwrite it? [y/N] "
+                ):
+                    print("           skipped")
+                    continue
         # Two different files, two different records: `created` is the style
         # file, `settings_created` is the host's settings JSON. Uninstall may
         # delete either only if flw is the one that made it.
@@ -1259,11 +1274,9 @@ def refresh_style(
     if dry:
         print("         would refresh — not writing (dry run)")
         return False
-    if not assume_yes:
-        answer = input("         refresh it? [y/N] ").strip().lower()
-        if answer not in ("y", "yes"):
-            print("         skipped")
-            return False
+    if not assume_yes and not confirm("         refresh it? [y/N] "):
+        print("         skipped")
+        return False
 
     if host.styles:
         path.write_text(style_file_text(name, source_body, str(source)))
@@ -2789,6 +2802,11 @@ def main(argv: list[str]) -> int:
         # nobody can debug.
         where = f": {exc.filename}" if exc.filename else ""
         print(f"error: {exc.strerror or exc}{where}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        # Ctrl-C ends the command; it does not decline an offer and carry on,
+        # which is what confirm() does and why the two are separate.
+        print("\ninterrupted", file=sys.stderr)
         return 1
 
 

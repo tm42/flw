@@ -2054,3 +2054,126 @@ def test_unread_counting_is_relative_to_the_root_not_absolute(tmp_path):
     (root / ".git" / "hidden.rs").write_text("fn x() {}\n")
 
     assert flw.unread_by_scouts(root, {"node_modules"}) == {".rs": 1}
+
+
+def _no_stdin(monkeypatch):
+    """stdin that cannot answer, as a CI job, a script or an agent has.
+
+    Reproduces the shape rather than closing the real one: `input()` raises
+    EOFError either way, and a test that redirected sys.stdin would still
+    leave builtins.input reading from the terminal fd.
+    """
+
+    def raise_eof(*_):
+        raise EOFError("EOF when reading a line")
+
+    monkeypatch.setattr("builtins.input", raise_eof)
+
+
+def test_a_prompt_with_no_stdin_declines_and_says_why(capsys, monkeypatch):
+    _no_stdin(monkeypatch)
+    assert flw.confirm("  write it? [y/N] ") is False
+    assert "no terminal on stdin — declined" in capsys.readouterr().out
+
+
+def test_the_ambient_offer_declines_on_no_stdin_and_the_install_still_finishes(
+    home, capsys, monkeypatch
+):
+    """The CRITICAL. Before confirm(), this raised EOFError uncaught out of
+    main() — a traceback and exit 1 for every non-interactive caller. The
+    ambient block is an optional extra, so declining it must not cost the
+    install that was asked for."""
+    _no_stdin(monkeypatch)
+    code = flw.install(
+        argparse.Namespace(hosts=[], dry_run=False, ambient=True, yes=False)
+    )
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "no terminal on stdin — declined" in out and "skipped" in out
+    assert not (home / ".claude" / "CLAUDE.md").exists()
+    # The work that was actually asked for happened anyway.
+    assert sorted(p.name for p in (home / ".claude" / "skills").iterdir())
+
+
+def test_the_style_offer_declines_on_no_stdin_and_writes_the_file_anyway(
+    home, capsys, monkeypatch
+):
+    install()
+    capsys.readouterr()
+    _no_stdin(monkeypatch)
+
+    assert style_install(yes=False) == 0
+    out = capsys.readouterr().out
+    assert "no terminal on stdin — declined" in out
+
+    # Selecting is what was declined; writing the style is not.
+    assert (home / ".claude" / "output-styles" / "flw-terse.md").exists()
+    settings = home / ".claude" / "settings.json"
+    assert not settings.exists() or "outputStyle" not in settings.read_text()
+
+
+def test_the_overwrite_offer_declines_on_no_stdin_and_keeps_the_file(
+    home, capsys, monkeypatch
+):
+    install()
+    install_mine(home)
+    installed = home / ".claude" / "output-styles" / "mine.md"
+    capsys.readouterr()
+
+    # flw wrote it, then someone edited it. doctor reports that as something to
+    # decide, so style_install asks before discarding it.
+    installed.write_text("## Mine\n\nEdited by hand.\n")
+    before = installed.read_text()
+    _no_stdin(monkeypatch)
+    style_install("mine", "claude-code", yes=False)
+
+    assert "no terminal on stdin — declined" in capsys.readouterr().out
+    assert installed.read_text() == before
+
+
+def test_the_refresh_offer_declines_on_no_stdin_and_leaves_the_copy(
+    home, capsys, monkeypatch
+):
+    source = install_mine(home)
+    installed = home / ".claude" / "output-styles" / "mine.md"
+    before = installed.read_text()
+    capsys.readouterr()
+
+    source.write_text("## Mine\n\nWrite even more briefly.\n")
+    _no_stdin(monkeypatch)
+    assert sync(yes=False) == 0
+
+    assert "no terminal on stdin — declined" in capsys.readouterr().out
+    assert installed.read_text() == before
+
+
+def test_every_prompt_goes_through_confirm():
+    """The four sites are one function so they cannot drift apart. A fifth
+    offer added with a bare input() would be unguarded again, and nothing but
+    this notices — the crash only shows up without a terminal."""
+    source = (REPO / "cli" / "flw.py").read_text()
+    calls = [
+        ln.strip()
+        for ln in source.splitlines()
+        if "input(" in ln and not ln.lstrip().startswith("#")
+    ]
+    assert calls == ['return input(prompt).strip().lower() in ("y", "yes")']
+
+
+def test_ctrl_c_exits_one_with_a_line_rather_than_a_traceback(capsys, monkeypatch):
+    """Separate from confirm(): Ctrl-C ends the command, it does not decline an
+    offer and carry on. main() caught OSError only, deliberately, so this was a
+    traceback."""
+    monkeypatch.setattr(flw, "build_parser", lambda: _interrupting_parser())
+    assert flw.main(["flw"]) == 1
+    assert "interrupted" in capsys.readouterr().err
+
+
+def _interrupting_parser():
+    def handler(_args):
+        raise KeyboardInterrupt
+
+    parser = argparse.ArgumentParser()
+    parser.set_defaults(handler=handler)
+    return parser
