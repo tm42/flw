@@ -2177,3 +2177,13 @@ def _interrupting_parser():
     parser = argparse.ArgumentParser()
     parser.set_defaults(handler=handler)
     return parser
+
+
+def test_the_interpreter_guard_exits_one_not_two(tmp_path):
+    """2 already means "this run proved nothing" for `flw test` and `flw
+    validate`. The guard refuses to run, which is what 1 names, and it fires
+    ahead of every subcommand — so on an old interpreter any command could
+    return a code the contract scopes to two of them."""
+    source = (REPO / "cli" / "flw.py").read_text()
+    guard = source[: source.index("import argparse")]
+    assert "raise SystemExit(1)" in guard and "SystemExit(2)" not in guard

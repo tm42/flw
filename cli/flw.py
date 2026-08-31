@@ -30,7 +30,7 @@ if sys.version_info < (3, 11):  # noqa: UP036
         f"{sys.version_info.major}.{sys.version_info.minor}.",
         file=sys.stderr,
     )
-    raise SystemExit(2)
+    raise SystemExit(1)
 
 import argparse
 import hashlib
