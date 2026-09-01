@@ -1,0 +1,115 @@
+base         = "pin-what-the-suite-claims"
+spec_version = "0.11.2"
+name         = "report-the-real-state"
+summary      = "ten commands that report something other than the state the machine is in, from a host that install fabricated evidence for to a dry run that predicts a pull and performs a rebase"
+
+approach = """
+Nothing here damages a disk. Every one of the ten prints, returns or refuses something
+that does not describe what is true, which is the other half of the bar this repository
+is being read against: it must not break things, and it must not mislead.
+
+Two of them are the same defect from opposite ends, and that is why they are in one
+record. `present()` accepts the parent of the ambient path as evidence a host is here —
+and that parent is the directory `flw install` creates, so installing manufactures the
+proof. `doctor` prints "not installed" whenever `satisfied_by` returns None, without
+consulting `present()` at all, so a host that is here with one broken link reads as
+absent. `declared-behaviour` added the property that doctor and install never describe
+the same machine differently and fixed the absent-but-reachable case; these are the two
+halves it did not look at.
+
+The `update -n` pair is the same shape as the defect that flag was rewritten to fix.
+`git log HEAD..<upstream>` has its exit status discarded, so a ref the fetch has just
+pruned reads as "already up to date with origin/main" seconds after the ref stopped
+existing — while the real command exits 1 because `@{upstream}` no longer resolves. And
+`HEAD..<upstream>` counts only what is behind, so a diverged checkout reads exactly like
+a clean fast-forward: the dry run says "would pull 1 commit(s)" and the real command
+rebases, rewriting local shas. A rebase is harder to undo than the fast-forward that
+`declared-behaviour`'s rationale called the hardest of flw's side effects to undo, and it
+is the one state where a user most wants the warning.
+
+Measured, and not re-derivable by reading. `input()` raises `EOFError` when stdin is
+/dev/null or an exhausted pipe, and `RuntimeError: lost sys.stdin` when fd 0 is closed at
+exec, because CPython sets sys.stdin to None. `confirm()` catches the first only, so
+`flw install --ambient 0<&-` still ends in the traceback the helper was written to
+remove — and no test can see it, because every prompt test monkeypatches
+`builtins.input` to raise EOFError and so exercises a stub rather than a stdin. That gap
+needs a subprocess test with fd 0 actually closed.
+
+What this is not. It is not a pass over every message flw prints. Each entry below was
+reproduced by a reviewer in an isolated home, and each names a specific sentence that is
+false about a specific state. Two things the review raised are deliberately left:
+`flw uninstall` leaves the empty directories it created, and one ordering leaves a
+one-byte AGENTS.md — cosmetic, and named here rather than half-fixed. Whether a failed
+fetch under -n should also change the exit code is settled below as a decision rather
+than treated as a defect.
+"""
+
+contract_edit = """
+1. In the "the flw CLI" component's `properties`, replace the entry that currently reads
+   "flw doctor distinguishes a host installed on this machine from one that is absent but
+   whose skills would be reachable through another host's directory, so doctor and install
+   never describe the same machine differently." with:
+
+   "flw doctor and flw install describe a machine the same way, in every state: a host
+   present with healthy links, present with broken ones, absent but reachable through
+   another host's directory, and absent entirely are four distinct lines and no two of
+   them are the same. What counts as present is evidence the host left — never a
+   directory or a file flw itself created, because that would make every install prove
+   the host it installed for."
+
+2. In the same `properties` list, after the -n entry, add one:
+
+   "A dry run predicts the run it is a dry run of. flw update -n says which of a
+   fast-forward and a rebase a real pull would do, and says when it could not find out,
+   rather than reporting a clean state it did not verify."
+"""
+
+[[decisions]]
+topic     = "what counts as evidence that a host is on this machine"
+options   = ["the host's binary on PATH, or its instructions file where flw's records do not claim flw created it", "the binary alone", "the ambient file, without consulting the records"]
+chosen    = "the host's binary on PATH, or its instructions file where flw's records do not claim flw created it"
+rationale = "The reviewer's own suggestion — probe ~/.claude/CLAUDE.md — is self-justifying too, because `flw install --ambient` creates that file, and on a host with no styles slot `flw style install` creates it as well. flw already records which it made: ambient.toml carries `created` per host and style.toml carries `created` and `settings_created`, both written so uninstall knows what it may delete. Reading them here costs one file read and closes the loop the docstring already states. The binary alone was rejected because a host configured on a machine where its CLI is not on PATH then reads as absent, which is the failure the directory check was added for. The residual false negative — host arrives after flw made the file, binary not on PATH — errs toward saying absent, which is the safe direction: install then says 'not on this machine — skipping' and naming the host still overrides it."
+
+[[decisions]]
+topic     = "whether flw update -n should exit non-zero when its fetch fails"
+options   = ["keep exit 0 and say so on stderr", "exit 1 when the fetch fails"]
+chosen    = "keep exit 0 and say so on stderr"
+rationale = "The reviewer named this as a decision rather than a defect and it is. -n is a report, and the report is still true — it says which commits the last successful fetch left and that the fetch failed. Exiting 1 would make `flw update -n` unusable as a check for `is there anything to pull` on any machine that is offline, which is the machine most likely to be running it. What was wrong is only that the failure went to stdout while every other error in the file goes to stderr, so a caller reading stdout saw it as part of the report."
+
+[[decisions]]
+topic     = "flw scout exits 2 against a contract that scopes 2 to test and validate"
+options   = ["return 1 at both sites", "widen the exit-code surface to cover scout"]
+chosen    = "return 1 at both sites"
+rationale = "Identical to the decision `declared-behaviour` took for the interpreter guard, and taken for the same reason: 2 means 'this run proved nothing' for test and validate, and giving it a second meaning costs a caller that cannot see which command it ran. Neither scout site is that case anyway — a directory that does not exist and a tree with nothing to parse are both refusals, and 1 is already 'something failed or was refused'."
+
+[[dag]]
+group = 1
+phase = "One machine, described one way"
+tasks = [
+  { id = "present-evidence", desc = "cli/flw.py present(): stop accepting expand(host.ambient).parent.is_dir(). Use the ambient file itself, and only when flw's own records do not say flw created it — ambient.toml's `created` per host, and style.toml's `created` for a host with no styles slot. Keep shutil.which(host.binary) as the first test. The docstring already states the invariant this restores; extend it with why the file needs the record check too, which is that --ambient and a block-host style install both create that file." },
+  { id = "doctor-present", desc = "cli/flw.py doctor(): the hosts block prints '· <host>: not installed' whenever satisfied_by returns None, without consulting present(). Branch on present() first, so a host that is here but whose links are broken gets a line naming that rather than one saying it is absent. Four states, four distinct lines: present and healthy, present with nothing healthy here, absent but reachable through another host's root, absent entirely.", depends_on = ["present-evidence"] },
+  { id = "host-checks", desc = "tests/: `flw install claude-code` into a home with no claude binary and no ~/.claude leaves doctor still reporting the host as not present — the self-justifying case, which fails today. A host whose ambient file exists and which flw's records do not claim is present. A host present with one link unlinked gets a line that is not 'not installed'. And install and doctor agree in all four states, asserted against each other rather than against a literal.", depends_on = ["present-evidence", "doctor-present"] },
+]
+
+[[dag]]
+group = 2
+phase = "A dry run that predicts the run"
+tasks = [
+  { id = "log-status", desc = "cli/flw.py update() under -n: `git log --oneline HEAD..<upstream>` has its exit status discarded, so an unresolvable ref — one the fetch on the line above has just pruned — prints 'already up to date with <upstream>'. Keep the CompletedProcess and branch on returncode the way the fetch two lines up already does; on failure print its stderr and say the range is unknown, never that the checkout is current." },
+  { id = "rebase-warning", desc = "cli/flw.py update() under -n: read <upstream>..HEAD as well as HEAD..<upstream>. When the checkout has local commits the real command refuses the fast-forward and runs `git pull --rebase`, which rewrites their shas; the dry run says 'would pull N commit(s)' and names neither. Say that the pull will rebase N local commit(s) rather than fast-forward.", depends_on = ["log-status"] },
+  { id = "fetch-stderr", desc = "cli/flw.py update() under -n: the two lines reporting a failed fetch go to stdout while every other error in the file goes to stderr, and git's own multi-line stderr is printed raw, so the explanatory second line lands several lines below the one it belongs to. Print both to stderr and strip the raw text to its first line. The exit code stays 0 — see the decision.", depends_on = ["log-status"] },
+  { id = "update-checks", desc = "tests/: against real throwaway repositories, in the shape tests/test_cli.py already uses for the -n dry run — a diverged checkout's dry run names the rebase and the local commit count, and an upstream ref that does not resolve is not reported as up to date. Both fail today.", depends_on = ["log-status", "rebase-warning", "fetch-stderr"] },
+]
+
+[[dag]]
+group = 3
+phase = "Refusals that say what happened"
+tasks = [
+  { id = "confirm-runtime", desc = "cli/flw.py confirm(): catch RuntimeError alongside EOFError. input() raises EOFError for /dev/null and an exhausted pipe but RuntimeError('lost sys.stdin') when fd 0 is closed at exec, and both are 'stdin is not a terminal', which the contract declares handled. Say in the comment which condition raises which, because the two are indistinguishable to a caller and only one was caught." },
+  { id = "confirm-subprocess-check", desc = "tests/: run the CLI as a subprocess with fd 0 closed — `0<&-`, not `< /dev/null` — and assert it declines, prints why, and exits 0 without a traceback. Every existing prompt test monkeypatches builtins.input to raise EOFError, which is a stub and cannot reach this, so this must spawn a real process.", depends_on = ["confirm-runtime"] },
+  { id = "unicode-guard", desc = "cli/flw.py main(): add UnicodeDecodeError to the handler that currently catches OSError, and name the path. Five readers of ~/.flw — root, links.toml, bundles.toml, style.toml — and json_indent over a UTF-16 settings.json each raise it past main and print a traceback, against a contract that says an unreadable record says what happened and which path it was reading. UnicodeDecodeError carries no filename, so the message needs the path from the raising site." },
+  { id = "scout-exit", desc = "cli/flw.py: the two scout refusals return 2 — a missing directory and a tree with nothing to parse. Return 1 at both. The contract's exit-code surface scopes 2 to flw test and flw validate." },
+  { id = "style-promise", desc = "cli/flw.py style_install(): it prints 'replacing <name>, put back on uninstall' and then, when the replaced style is flw's own, removes it and records no `previous` — so uninstall clears the selection and puts nothing back. Print the promise only when a `previous` is about to be recorded. The path where the replaced style is the user's own already keeps the promise and must keep it." },
+  { id = "sync-replaced", desc = "cli/flw.py sync(): the relink line prints the recorded target as what was replaced, so a symlink the user retargeted is reported as flw replacing its own link with itself. Read path.readlink() before unlinking and print that, falling back to the recorded target when the path is not a symlink. The contract says each change is reported with what it replaced, and this is the one case where the report matters." },
+  { id = "refusal-checks", desc = "tests/: the scout's two refusals exit 1. A non-UTF-8 ~/.flw/links.toml gives one error line naming the path rather than a traceback. Installing a style over flw's own does not promise to put it back. Sync's relink line names where the link actually pointed, not the record's target.", depends_on = ["unicode-guard", "scout-exit", "style-promise", "sync-replaced"] },
+]

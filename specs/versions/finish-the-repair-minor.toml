@@ -1,0 +1,124 @@
+base         = "documents-match-the-program"
+spec_version = "0.11.4"
+name         = "finish-the-repair"
+summary      = "thirteen places where last night's repair closed a defect in one path and left its twin open, including one regression it introduced"
+
+approach = """
+Two readers went over the 32 commits that fixed a five-lens review: one asked whether any
+fix half-fixed, the other whether the four artifacts still describe the same program. They
+found thirteen. Three are the shape the first was dispatched for, and one is a regression
+the repair introduced — which is the finding that justifies having run it.
+
+The regression, and where it is fixed. Filtering `sync`'s adoption to roots the record
+already names closed a real contract violation, and it also removed the only way back from
+a lost `links.toml`.
+Reproduced: delete the record over four live links, and `flw sync` says "nothing
+recorded", `flw install` refuses all four as symlinks it did not create, `flw doctor`
+exits 0 with OK while promising adoption four times, and `flw uninstall` says "nothing to
+remove" and leaves them. Before the filter, `flw sync` adopted them back. The reader put the fix in
+`install`; that was tried and reverted, because `install`'s refusal to adopt an unrecorded
+symlink is a recorded decision with a test naming its reason — a link the user made
+pointing at flw's own directory is indistinguishable from one flw made, and adopting it
+lets `uninstall` delete their link. The fix that keeps both is narrower: `sync` bounds
+adoption to recorded roots only when there is a record, because an empty one is the single
+state where there is no install to widen.
+
+The half-fix. `present()` was rewritten to stop treating a directory flw creates as proof
+a host is here, and it reasons about which directories those are from the `HOSTS` roots
+table. It misses the other `mkdir`: `install_block` creates the ambient file's parent, and
+for Codex that is `~/.codex`, which no host root is under. So `flw install codex --ambient`
+followed by `flw uninstall codex` leaves `~/.codex` behind, and the next bare `flw install`
+fabricates `~/.agents/skills` for a Codex that is not there — word for word the failure the
+function's own docstring says it exists to prevent. flw can create all three hosts' ambient
+parents, so the parent test is worth nothing and goes; what remains is the binary and the
+ambient file, and the residual false negative that leaves is the one
+`report-the-real-state` already recorded as the safe direction.
+
+The property that is still false. `pin-what-the-suite-claims` put "Every subcommand that
+takes -n is checked by a test that fails if that command writes anything under -n" into the
+contract, and closed nine mutations. The reader mutated all twenty-three `dry` guards in
+`cli/flw.py` and found six survivors, three of them real writes: `strip_ambient`'s record
+write, `select_style`'s early return, and `style_install` unlinking the style it replaces.
+Removing all three leaves the suite green while `flw uninstall -n` deletes
+`~/.flw/ambient.toml` and `flw style install -n <other>` deletes the installed style file
+and rewrites `settings.json`. The behaviour is right today — both were probed and wrote
+nothing — so this is the property being false rather than a dry run that writes. It is the
+same defect as the record that introduced it: nine closed, three not looked at.
+
+What this is not. It is not another review round's worth of findings. Every entry was
+reproduced against the program by a reader with no stake in the repair, and eleven of the
+thirteen are one or two lines. Three things are left, each with a reason: `flw update`'s
+real pull path is still stubbed everywhere and still needs a conflict fixture nobody has
+built; `tests/test_ledger.py` still has no mutation campaign; and `cli/flw.py:1976`
+hardcodes `specs` when locating a project root, which is the code disagreeing with itself
+about `[paths] specs` rather than with a document, and is a larger change than this record.
+"""
+
+contract_edit = """
+1. In the "the flw CLI" component's `properties`, in the entry beginning "flw doctor and
+   flw install describe a machine the same way", replace "a host present with healthy
+   links, present with broken ones, absent but reachable through another host's directory,
+   and absent entirely are four distinct lines and no two of them are the same" with:
+
+   "a host present with healthy links, present with broken ones, present and never
+   installed into, absent but reachable through another host's directory, and absent
+   entirely are five distinct lines and no two of them are the same"
+
+2. In the same component's `provides`, after the entry beginning "A symlink flw made but
+   has no record of", add one:
+
+   "A lost or deleted links.toml is recoverable: with no record at all there is no install
+   to widen, so `flw sync` adopts flw's own live links wherever they are and rebuilds the
+   record from what is on disk, instead of leaving an install nothing can see or remove."
+"""
+
+[[decisions]]
+topic     = "how present() should treat the ambient file's parent directory"
+options   = ["drop the parent test entirely", "extend the disqualified set to the three ambient parents", "keep it and special-case codex"]
+chosen    = "drop the parent test entirely"
+rationale = "Extending the set and dropping the test are the same behaviour: flw can create all three hosts' ambient parents — two as the parent of a skills root, and all three through install_block's mkdir — so the disqualifying condition is constant-True and the branch is dead code that reads as live. Dropping it says what is true, that a directory is never evidence. Special-casing codex was rejected because it is the shape that produced this finding: a rule derived from one table that a second mkdir walks around."
+
+[[decisions]]
+topic     = "where to restore the recovery path a lost links.toml used to have"
+options   = ["install adopts a link that is already flw's own", "sync adopts in any root again", "leave it and document that the record is not recoverable"]
+chosen    = "sync adopts anywhere when the record is empty, and only in recorded roots otherwise"
+rationale = "The reader proposed putting this in install, and that was tried and rejected against a test: test_install_does_not_adopt_a_symlink_it_did_not_create records the opposite decision with its reason — a symlink the user made pointing at flw's own skill directory is indistinguishable from one flw made, and recording it as flw's is what let uninstall delete the user's link. Overturning that to fix this would trade one silent loss for another. An empty record is the narrower and more accurate condition: it is the one state where there is no install to widen, so the guard the repair added is vacuous there and the widening it closed stays closed. Verified both ways — a lost links.toml over four live links is rebuilt by one sync, and a hand-made symlink in an unrecorded root beside a real install survives two."
+
+[[decisions]]
+topic     = "confirm() catching RuntimeError"
+options   = ["test sys.stdin is None before calling input()", "keep the broad except RuntimeError"]
+chosen    = "test sys.stdin is None before calling input()"
+rationale = "input() raises RuntimeError for three conditions — lost sys.stdin, lost sys.stdout and lost sys.stderr — and only the first is the one the contract declares handled. Two of them would be answered with a message saying stdin cannot answer, which is wrong, and anything else raised as RuntimeError through a replaced readline is now silently declined and the run carries on. That is the swallow main()'s own handler says it does not want. Testing the condition directly is narrower than catching a class of exception and says which condition it is."
+
+[[dag]]
+group = 1
+phase = "The half-fixes and the regression"
+tasks = [
+  { id = "present-parent", desc = "cli/flw.py present(): delete the parent-directory test and the flw_would_make_it computation. install_block runs mkdir on the ambient file's parent for every host, so ~/.codex is flw's output too and the HOSTS-derived rule walked around it. What remains: the binary on PATH, or the ambient file where flw's records do not claim flw wrote it. Update the docstring, which currently explains a rule that no longer exists." },
+  { id = "present-check", desc = "tests/: test_presence_ignores_the_skills_directory_flw_itself_creates asserts that creating ~/.codex makes codex present; that is the behaviour being removed, so invert it and say why. Add the reproduction: install codex --ambient, uninstall codex, then a bare install must not link into ~/.agents/skills.", depends_on = ["present-parent"] },
+  { id = "sync-empty-record", desc = "cli/flw.py sync(): apply the recorded-roots filter to pending_adoption only when the record is non-empty. An empty links.toml over live links is the one state with no install to widen, and bounding it there left four working symlinks that doctor called not installed and uninstall would not remove. install keeps refusing an unrecorded symlink at a skill's path — that refusal is a recorded decision with its own test, and overturning it would let uninstall delete a link the user made." },
+  { id = "sync-double-line", desc = "cli/flw.py sync(): when a path is already in pending_adoption, skip the fill-in branch. Today one run prints both `! flw-spec — a symlink flw did not create is already there` and `+ flw-spec — adopted`, and a reader cannot tell which happened." },
+  { id = "recovery-checks", desc = "tests/: delete links.toml over a healthy install, then one flw sync rebuilds the record, doctor reports the host installed, and uninstall removes all four — all four assertions fail today. A hand-made symlink in an unrecorded root beside a real install still survives two syncs unadopted. And a sync that adopts prints one line about the skill, not two.", depends_on = ["sync-empty-record", "sync-double-line"] },
+]
+
+[[dag]]
+group = 2
+phase = "Guards and readers the last pass did not reach"
+tasks = [
+  { id = "pin-three-guards", desc = "tests/: three dry guards survive mutation with the suite green, and all three are real writes — strip_ambient's write_ambient, select_style's early return, and style_install unlinking the style it replaces. Extend the two -n tests that already exist rather than adding new ones: uninstall's to compare ambient.toml's bytes as it already compares links.toml's, and style install's to run under -n over an already-installed style rather than only over none. Verify by mutation that all three now fail." },
+  { id = "settings-unicode", desc = "cli/flw.py: read_flw_text landed on the five ~/.flw readers and not on the settings.json reads the same task named. Wrap the reads in select_style and deselect_style, and the host style file read in refresh_style. A UTF-16 settings.json still prints a traceback today, against a contract sentence that says an unreadable record names its path instead." },
+  { id = "confirm-stdin", desc = "cli/flw.py confirm(): return False when sys.stdin is None, before calling input(), and narrow the except back to EOFError. RuntimeError covers lost sys.stdout and lost sys.stderr as well, and anything a replaced readline raises, so the current catch answers no to conditions that are not the one the message names." },
+  { id = "fetch-prune", desc = "cli/flw.py update() under -n: `git fetch` becomes `git fetch --prune`. The exit-status branch added last night handles an upstream ref that no longer resolves, and without pruning a default git never reaches that state — it prints `already up to date` for a checkout whose real pull fails. Pruning writes only inside .git, which is the exception -n already grants the fetch." },
+  { id = "guard-checks", desc = "tests/: a UTF-16 settings.json gives one error line naming the path rather than a traceback. Ctrl-free: with sys.stdin monkeypatched to None, confirm() declines without raising.", depends_on = ["settings-unicode", "confirm-stdin"] },
+]
+
+[[dag]]
+group = 3
+phase = "Documents that still point at nothing"
+tasks = [
+  { id = "critic-path", desc = "core/skills/flw-spec/references/spec-critic.md:21: `<this directory>/good-contract.md` becomes $FLW/core/skills/flw-spec/references/good-contract.md. Last night's commit fixed the placeholder on the line below and left this one, and the file is handed to a dispatched subagent, which context.md says inherits nothing and must be given absolute paths." },
+  { id = "spec-relative-paths", desc = "core/skills/flw-spec/SKILL.md:75 and :222: two bare `references/…` paths, in the file that spends three lines explaining why a relative path through a symlinked skill folder does not resolve. Prefix both with $FLW/core/skills/flw-spec/." },
+  { id = "paths-specs", desc = "core/shared/context.md: one sentence under The artifacts saying the specs/ in both rows is [paths] specs from .flw/config.toml, defaulting to specs. The key is honoured by flw validate — a project setting it to contracts/ has flw-spec write the contract where validate does not look — and every skill hardcodes the directory. The sibling key [paths] reports is already documented this way in flw-review." },
+  { id = "research-count", desc = "core/skills/flw-research/SKILL.md: 'four other sections' names three, and the config has four sections in total. Three." },
+  { id = "layout-line", desc = "docs/layout.md: the pointer to docs/verified.md's rationale reads specs/current.toml:53 and the sentence is at :58. It was off by one at the baseline and drifted four more as records were appended to applied above it." },
+]

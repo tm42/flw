@@ -1,0 +1,95 @@
+base         = "declared-behaviour"
+spec_version = "0.11.0"
+name         = "write-only-our-own"
+summary      = "four places where flw wrote a file that was not its own, or failed to remove one that was"
+
+approach = """
+Every finding here is the code disagreeing with a sentence the contract already carries.
+Nothing below is a new promise except one: the contract says nothing about what
+`flw kb write` may land on, and that is the CRITICAL. The other three are repairs, so
+this record adds one property and changes nothing else about what flw claims.
+
+Where the four came from. A five-lens review ran over the tree at 48fc21b — `destructive`
+enumerated every write, delete, move and symlink the CLI can perform and probed each in an
+isolated HOME; `claims` ran every documented behaviour against the program; `delta` read
+the five commits since the previous review; `skills` read the four SKILL.md files as
+instructions; `tests` audited what the suite's green is worth. It found 2 CRITICAL,
+13 MAJOR and 11 MINOR. This record carries the four that touch a user's disk. The rest are
+reporting defects and documentation defects, and are two separate records, because a
+version that fixes a data-loss bug and a wrapped sentence in the same run is a version
+nobody can review.
+
+What this is not. It is not a hardening pass over the filesystem layer. Three defects the
+review named are deliberately left: `flw uninstall` leaves behind the empty directories it
+created and, on one ordering, a one-byte AGENTS.md; `write_style`, `write_ambient` and
+`write_bundles` are plain write_text where `write_links` is atomic through os.replace; and
+nothing takes a lock, so two flw processes racing is unexamined. The first is cosmetic, the
+second and third are already backlog items with their own files. Widening this record to
+reach them would put untested concurrency work in the same version as a fix for a bug that
+destroys a user's file.
+
+Two measurements the review made that reading cannot re-derive. `store.walk` skips a path
+that fails `path.is_file()` or `read_text`, so the caller's taken-slug refusal is blind to
+exactly the two shapes that reach the unguarded write: a dangling symlink and a symlink to
+a non-UTF-8 file. A symlink to a readable UTF-8 file is caught by the refusal and is not
+affected — which is why the first attempt to reproduce this finding failed, and why the
+check has to use one of the two shapes that matter. And `plan_roots` assigns greedily in
+HOSTS order, so claude-code always takes ~/.claude/skills first and `satisfied_by` then
+reports opencode as covered by it, whatever links.toml records; opencode's own root is
+therefore unreachable to a bare `flw uninstall` on every machine, not only on one where
+Claude Code is installed.
+"""
+
+contract_edit = """
+1. In the "validation and checks" component's `properties`, after the entry beginning
+   "A file the store could not read is skipped rather than raised", add one:
+
+   "flw kb write only ever creates a file. A path inside the store that already holds
+   something — a file flw did not write, a symlink pointing anywhere, or a symlink pointing
+   nowhere — is refused with the path named, because the store is parsed rather than
+   indexed and a path the reader skips is a path the writer must not land on."
+
+Nothing else changes. The other three defects this record fixes are already claimed by the
+contract as it stands: "remove them exactly, leaving no trace in host configuration" at the
+CLI component's `provides`, "flw sync never creates a link in a directory links.toml does
+not already record, so it can repair an install and can never widen one" at its
+`properties`, and "A host's instructions file keeps the line endings it had" at its
+`provides`.
+"""
+
+[[decisions]]
+topic     = "what flw kb write does when something is already at the note's path"
+options   = ["refuse with the path named", "overwrite, as today", "write beside it under a suffixed slug"]
+chosen    = "refuse with the path named"
+rationale = "The caller already refuses a slug the store holds, so the only paths that reach the write are ones the store's own reader could not see — a dangling symlink, or a symlink to a file that is not UTF-8. Both were reproduced destroying a file outside the store. Overwriting is what produced the CRITICAL. Writing beside it under a suffixed slug was rejected because it hides the collision: the user asked for a note at a path that is occupied by something of theirs, and the useful answer is to say so, not to quietly pick a different name. Refusing costs nothing — no note of flw's is ever at that path, by the caller's own guarantee."
+
+[[decisions]]
+topic     = "how uninstall decides which root a host's links are in"
+options   = ["use the host's own primary root when links.toml records links under it, else plan_roots", "use every root the host reads", "use plan_roots as today and document the gap"]
+chosen    = "use the host's own primary root when links.toml records links under it, else plan_roots"
+rationale = "Using every root a host READS is the bug a previous version already fixed and its comment at cli/flw.py:435-440 records why: OpenCode reads Claude Code's and Codex's directories, so `flw uninstall opencode` unlinked both and took the root pointer with it. Falling back to plan_roots preserves that, because a claude-code-only install leaves opencode's own root with no records, so it still reports 'nothing to remove' rather than reaching into ~/.claude/skills. Documenting the gap was rejected: the command prints 'nothing to remove' and exits 0 over four live symlinks, so a user who believes flw is gone is wrong about their machine, and no wording of a message fixes that."
+
+[[decisions]]
+topic     = "whether sync may adopt a symlink in a root links.toml does not record"
+options   = ["adopt only in already-recorded roots", "adopt anywhere and stop the fill-in loop from widening", "keep adopting anywhere"]
+chosen    = "adopt only in already-recorded roots"
+rationale = "Adoption exists for one case, named in the contract: an install interrupted between writing the record and making the link. That install wrote its record first, so its root is always already recorded and the case still works. Stopping the fill-in loop instead was rejected because it leaves the record itself widened — links.toml would carry a root the user never chose, and `flw doctor` would then report an install in a directory nobody installed into. Keeping it as is contradicts a property the same command prints a line about in the same run."
+
+[[dag]]
+group = 1
+phase = "Writes that land on someone else's file"
+tasks = [
+  { id = "store-refusal", desc = "core/scripts/store.py write(): before path.write_text, refuse when anything is already at the path — `if path.exists() or path.is_symlink()`, raising ValueError naming the path and saying it is not flw's to write. is_symlink() is needed separately because a dangling symlink is not exists(). The docstring says refusals are the caller's to make before this is reached; amend it to say this one cannot be, because the caller's refusal reads the store through walk() and walk() skips exactly the paths that reach here." },
+  { id = "store-refusal-surfaced", desc = "cli/flw.py at the engine.write call site (~:2492): let the ValueError reach the user as an error line and exit 1, in the shape the other kb refusals already use, rather than as a traceback.", depends_on = ["store-refusal"] },
+  { id = "style-newlines", desc = "cli/flw.py refresh_style(): the block-host branch reads with path.read_text() and writes with path.write_text(), both of which translate newlines, so a refresh rewrites every line ending in the user's own instructions file. Use read_host_text(path) and write_host_text(path, ...) instead — the pair that exists for this, used by install_block at :630. The styles-file branch above it writes a file flw owns and is unaffected." },
+  { id = "write-checks", desc = "tests/: kb write refuses and writes nothing when the note's path is a dangling symlink, and when it is a symlink to a non-UTF-8 file; assert the outside file is byte-identical afterwards and that the command exits 1 naming the path. A readable UTF-8 file at that path is still caught by the existing slug refusal — assert that too, so the two refusals are pinned apart. For the style: a host instructions file written with CRLF keeps every CR through a refresh, which is what fails today.", depends_on = ["store-refusal", "store-refusal-surfaced", "style-newlines"] },
+]
+
+[[dag]]
+group = 2
+phase = "Roots flw may and may not touch"
+tasks = [
+  { id = "uninstall-roots", desc = "cli/flw.py uninstall(): before plan_roots decides, take each host's own primary root — host.roots[0] — when links_under({expand(host.roots[0])}) is non-empty, and fall back to plan_roots' answer only when it is not. Only roots[0], never the whole roots tuple: opencode reads ~/.claude/skills, and consulting every root is the bug the existing comment records. Keep that comment and add why the record is consulted first." },
+  { id = "sync-adoption", desc = "cli/flw.py sync(): filter pending_adoption to entries whose parent is already a recorded root — {Path(link['path']).parent for link in recorded}. An interrupted install writes the record before the link, so its root is always recorded and the case adoption exists for is unaffected. Today two sync runs build a full install in a directory links.toml never recorded, in the same run that prints 'sync will not widen the install'." },
+  { id = "root-checks", desc = "tests/: after `flw install opencode` into a home with no ~/.claude, a bare `flw uninstall` removes all four links and leaves the opencode skills directory empty — it must not print 'nothing to remove'. And `flw uninstall opencode` against a claude-code-only install still removes nothing from ~/.claude/skills, which is the regression the fix must not cause. For sync: a hand-made symlink into the checkout, in a root links.toml does not record, is left alone by two consecutive sync runs, and links.toml still records no link under that root.", depends_on = ["uninstall-roots", "sync-adoption"] },
+]

@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.11.0"
+spec_version = "0.11.5"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -12,6 +12,11 @@ applied = [
   "note-store",
   "store-surfaces",
   "declared-behaviour",
+  "write-only-our-own",
+  "pin-what-the-suite-claims",
+  "report-the-real-state",
+  "documents-match-the-program",
+  "finish-the-repair",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -72,6 +77,7 @@ provides = [
   "A user can bring an install back into line with the checkout — relinking what moved, removing what no longer exists, refreshing a style copy that fell behind — without re-running install, without linking into a host they never chose, and without replacing anything flw did not put there, each change reported with what it replaced.",
   "An install that is interrupted leaves a state flw can name and repair: the record of a link is written before the link itself, so what is left over is a record with nothing at its path rather than a symlink nothing knows about, and `flw sync` fixes it.",
   "A symlink flw made but has no record of — from a run that was interrupted or one that raced another — is adopted back into the record by `flw sync` rather than staying invisible to `flw uninstall`.",
+  "A lost or deleted links.toml is recoverable: with no record at all there is no install to widen, so `flw sync` adopts flw's own live links wherever they are and rebuilds the record from what is on disk, instead of leaving an install nothing can see or remove.",
   "A command that meets an ordinary filesystem condition — an unreadable record, a corrupt root pointer, a missing directory — says what happened and which path it was reading, rather than printing a traceback.",
   "A host's instructions file keeps the line endings it had. flw appending or removing its own tagged block changes the block and nothing else, so the diff in someone else's repository is the size of the change.",
 ]
@@ -81,7 +87,8 @@ properties = [
   "A prompt flw cannot get an answer to, because stdin is not a terminal, declines the offer, says that is why, and lets the rest of the run finish. Every [y/N] offer flw makes behaves the same way.",
   "Ctrl-C at any point exits 1 with one line, not a traceback.",
   "-n never writes what the command would otherwise write: no link, no file, no host configuration. On flw update a dry run may fetch, because a fetch writes only inside .git, and it moves neither HEAD nor the working tree.",
-  "flw doctor distinguishes a host installed on this machine from one that is absent but whose skills would be reachable through another host's directory, so doctor and install never describe the same machine differently.",
+  "flw doctor and flw install describe a machine the same way, in every state: a host present with healthy links, present with broken ones, present and never installed into, absent but reachable through another host's directory, and absent entirely are five distinct lines and no two of them are the same. What counts as present is evidence the host left — never a directory or a file flw itself created, because that would make every install prove the host it installed for.",
+  "A dry run predicts the run it is a dry run of. flw update -n says which of a fast-forward and a rebase a real pull would do, and says when it could not find out, rather than reporting a clean state it did not verify.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -174,6 +181,7 @@ properties = [
   "A contract whose applied list names only records that exist validates clean; a record no applied list names is a version in flight rather than an error.",
   "A check reported as one this session could not run is one the project named in [tests] yours. A failing [tests] setup fails every check in the run instead, with the setup's own error text attached.",
   "A command that could not be run to completion is never reported as passing: a check whose text spans more than one line is refused at collection time rather than reported by its last line's exit code.",
+  "Every subcommand that takes -n is checked by a test that fails if that command writes anything under -n. The promise is one sentence covering six commands, so a check covering one of them reads as a check covering the sentence.",
   "A definition reached through files that are themselves depended on outranks one imported by the same number of files that nothing depends on; with damping at zero the two tie exactly, because what separates them is transitivity and not how many importers each has.",
   "An importer's rank divides evenly across what it imports, and an import that resolves to nothing in the repository does not divide it at all: a file importing one local name and twenty from elsewhere gives that name the same score as a file importing nothing else.",
   "The printed ranking is converged: running more iterations changes no score the scout prints.",
@@ -193,6 +201,7 @@ properties = [
   "Filters compose and are ANDed, and a filter means the same thing on either side of the verb.",
   "flw holds no index, cache or database of the store: every query walks and parses both roots, so nothing can go stale against the files.",
   "A file the store could not read is skipped rather than raised, and named rather than skipped silently: lint reports it with the error, and every read verb says how many were skipped.",
+  "flw kb write only ever creates a file. A path inside the store that already holds something — a file flw did not write, a symlink pointing anywhere, or a symlink pointing nowhere — is refused with the path named, because the store is parsed rather than indexed and a path the reader skips is a path the writer must not land on.",
   "A note's identity survives its title's script. A slug keeps unicode word characters, so a title in any script produces a stem that carries it.",
   "A filter given before the verb and a filter given after it compose rather than replace, and two filters that contradict each other are refused rather than silently answered with nothing.",
   "A listing that is empty because a filter matched nothing says so differently from a store that holds no notes.",

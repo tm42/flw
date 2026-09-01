@@ -1,0 +1,87 @@
+base         = "report-the-real-state"
+spec_version = "0.11.3"
+name         = "documents-match-the-program"
+summary      = "thirteen places where a document describes a flw that does not exist, including four skill instructions an agent would follow into the wrong action"
+
+approach = """
+No code changes except one: the documents are wrong, not the program. The exception is
+`flw-research`'s instruction to write `.flw/config.toml`, which has no code to change
+because the writer is an agent — so the fix is the sentence that tells it to keep what is
+already there.
+
+Why the skills come first. The four SKILL.md files are not documentation about a program;
+they are the program, executed by a language model in a repository nobody here can see,
+and read literally. Four of them tell an agent something that is not true of flw:
+`flw-execute` says "flw does not stage" in its Lane and runs `git add <files>` in step 6,
+so an agent taking the first as governing skips the stage and then reports an empty diff
+for a run that created files — the exact failure step 6 exists to prevent. `flw-spec`
+tells a first contract to write `specs/versions/v1.0.toml`, a legacy-numbered name v5.0
+retired; the reviewer measured what follows —
+`expected_release(["1.0"], {...release_line: 1})` returns 0.1.0 rather than 1.0.0, because
+the LEGACY_NUMBER branch continues before `release_line` is read, so the documented way to
+start a project at 1.0.0 silently does nothing. `flw-research` is told to write
+`[tests]` into `.flw/config.toml` and never told to keep the file's four other sections,
+so a second run over a configured repo drops the user's report path, interview mode and
+note-store category. And two places consume a report's "coverage line" that the discipline
+injected into every reviewer never asks for.
+
+The one that is measurably false. `docs/measuring.md` publishes a baseline table and a
+protocol that says a number three times the baseline is a finding. Its
+`flw kb search proxy` row reads 0.03 s, which is below the 40 ms interpreter-startup floor
+the same document states two paragraphs later, and cannot beat the `flw kb -s` row over
+the same corpus given the document's own statement that every query walks and parses both
+stores. Measured at 0.48-0.51 s. A reader running the protocol reports a 16x regression
+that does not exist. The table is also stamped with a commit that no longer resolves, so
+the honest repair is to re-run every row on this machine and re-stamp it, not to patch one
+cell.
+
+What this is not. It is not a documentation review. Every entry was reproduced by a
+reviewer against the program, and the sentence named is false rather than merely
+improvable. Two things are deliberately left: `flw-spec` never says what `spec_version` a
+first contract should carry, which the reviewer raised as an untested gap rather than a
+defect, and `plans/*.md` are not audited for currency because `docs/layout.md` already
+calls them design prose rather than a record and `flw ledger` prints that they may be
+superseded.
+"""
+
+contract_edit = """
+None. Every sentence this record changes is a document describing behaviour the contract
+already states correctly, and the one behaviour change — flw-research preserving the
+config sections it did not measure — is already covered by the skills component's
+`provides`, which says flw-research "records what IS" about a repository rather than
+replacing what a project declared.
+"""
+
+[[decisions]]
+topic     = "flw-execute's Lane says it does not stage, and step 6 stages"
+options   = ["narrow the Lane sentence to commit and tag", "drop the git add from step 6", "leave both and let an agent reconcile them"]
+chosen    = "narrow the Lane sentence to commit and tag"
+rationale = "Step 6 already carries its own two-sentence defence of the stage — an untracked file is invisible to every diff, so a run that created a directory would report nothing, and staging is not committing. That reasoning is right and the Lane sentence was written before it. Dropping the git add would take the report back to reporting nothing for exactly the runs worth reporting. Leaving both is what produced the finding: an agent holding one file resolves the conflict by whichever it read last, and neither answer is a design."
+
+[[decisions]]
+topic     = "the coverage line two documents consume and no reviewer is asked for"
+options   = ["ask for it in the discipline and add it to the report template", "delete both consumers"]
+chosen    = "ask for it in the discipline and add it to the report template"
+rationale = "What a review did not look at is the honest half of its output and the half a later round needs, which is why two documents reach for it. Deleting the consumers would remove the one thing that carries a review's boundary into the version record that survives it. The discipline block is injected verbatim into every dispatched reviewer, so one bullet there reaches every lens; §3b already asks for it inline, which is where the two consumers were reading it from and why the gap was invisible on the path that matters."
+
+[[dag]]
+group = 1
+phase = "Instructions an agent executes"
+tasks = [
+  { id = "execute-lane", desc = "core/skills/flw-execute/SKILL.md: the Lane's 'flw does not stage, commit or tag' becomes 'flw does not commit or tag', leaving step 6's own paragraph to carry the staging rule it already defends. Separately, the Lane's 'It does not amend the contract' becomes 'It does not author contract changes; it applies the one the version file already carries' — step 5 writes three edits to the contract, and an agent that stops there on the strength of the Lane leaves applied unmoved and the next run rebuilds a version that is already built." },
+  { id = "spec-first-record", desc = "core/skills/flw-spec/SKILL.md step 4: write specs/versions/<name>-minor.toml or <name>-major.toml by the rule step 5 already states, not specs/versions/v1.0.toml. A legacy-numbered first record carries no classification, gives flw-execute no branch for moving spec_version, and makes expected_release return 0.1.0 where a named record returns 1.0.0." },
+  { id = "research-config", desc = "core/skills/flw-research/SKILL.md step 4: say to read the existing .flw/config.toml first and edit [tests] in place, leaving every other section and every key this run did not measure alone. The file also holds [paths] specs and reports, [interview] mode, and [kb] category, and the skill's own frontmatter names the re-run case." },
+  { id = "review-coverage", desc = "core/skills/flw-review/SKILL.md: add one bullet to the discipline block beside the Holds up one — finish also with what you did not check — and the matching section to the §4 report template. §3b asks for it inline already; the dispatched path, which is the normal one, never did, while two documents consume it." },
+  { id = "schema-paths", desc = "core/skills/flw-spec/SKILL.md and references/spec-critic.md: write $FLW/core/schemas/spec-v4.schema.json and $FLW/core/schemas/version.schema.json in full at the three sites that name a schema with no directory, and replace spec-critic.md's <schemas> placeholder, which nothing in the repository defines. context.md makes the schemas the authority on every field, and the same file explains that a relative path through a symlinked skill folder resolves nowhere." },
+  { id = "shared-docs", desc = "core/shared/context.md: add [kb] category to the .flw/config.toml block, which shows three of the file's four sections while every skill's opening step reads that key. And delete the '$FLW_ROOT if it is set' rung from all four skills: nothing in flw sets or reads it, so it is a dead step that only fires on a machine where something unrelated exported the name." },
+]
+
+[[dag]]
+group = 2
+phase = "Documents that describe this program"
+tasks = [
+  { id = "install-doc", desc = "docs/install.md: re-paste the flw install block, which omits three lines the command prints; re-paste the doctor block, whose host lines this release changed; and correct the legend — `·` does not mean the host is absent, it means nothing reaches it, and there are now two `·` cases and a `!` one." },
+  { id = "layout-doc", desc = "docs/layout.md: the ignored-files section says one thing is ignored and lists .flw/reports/ alone; .gitignore also carries .flw/reviews/publish*.toml, which is a reviewer team config and the third row of the same document's own records table." },
+  { id = "extending-doc", desc = "docs/extending.md:113: it says flw install and flw doctor both name a shadowing bundle above one pasted line, and the two word it differently — doctor prints '! flw-spec: [my-bundle] shadows [core]' and install prints 'override: flw-spec from [my-bundle] shadows [core] (<path>)'. Say so, and paste both." },
+  { id = "measure-again", desc = "docs/measuring.md: re-run every row of the baseline table by the document's own protocol on this machine and this interpreter, and re-stamp the machine line with both and with a commit that resolves. The search row's 0.03 s is below the 40 ms startup floor the document states and measures 0.48-0.51 s; the commit it currently names does not exist in this repository. Patching one cell would leave a table measured on two machines, which the document's own rule forbids." },
+]

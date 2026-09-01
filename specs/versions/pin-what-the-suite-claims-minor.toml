@@ -1,0 +1,92 @@
+base         = "write-only-our-own"
+spec_version = "0.11.1"
+name         = "pin-what-the-suite-claims"
+summary      = "eight places where the suite is green over behaviour nothing checks, including five of the six -n surfaces the contract promises"
+
+approach = """
+Tests only, and one assertion added to an existing test. Every guard named below is
+present and correct in the source today — the `destructive` lens snapshotted an isolated
+home before and after each of `install -n`, `install -n --ambient`, `style install -n`,
+`style uninstall -n`, `sync -n`, `uninstall -n` and `doctor`, fourteen runs, and found
+zero differences. So this record adds no fix. What it adds is the checks that would have
+caught it had any of them been wrong, because a promise nothing can falsify is not a
+promise.
+
+The finding that orders the rest. `declared-behaviour` added the contract property "-n
+never writes what the command would otherwise write: no link, no file, no host
+configuration" and its `surface-checks` task named `update -n` and nothing else. Six
+subcommands take -n. That record widened the promise to all six and tested one, which is
+the same shape as the defect it was written to fix — a tool reporting more than it
+verified. This record closes that gap rather than narrowing the promise, because the
+promise is the right one and the code already keeps it.
+
+How the review found these, which is the part reading cannot re-derive. The reviewer
+worked by mutation: break one guard in a scratch copy, run the whole suite, and record
+every mutation that stays green. Reading assertions found two of the eight; the other six
+only appeared once something was broken and nothing went red. Two mutations of one
+mechanism can also cancel — deleting `start_new_session=True` alone turns the run red not
+because an assertion fires but because `os.killpg` then kills pytest's own process group,
+so that mutant reads as a dead harness rather than a failed check. A mutation campaign
+over this suite has to run under its own session for that class to be legible.
+
+Measured, and worth carrying: a fresh `git archive HEAD` export runs 427 passed, 12
+skipped, because an export has no node_modules and every test in tests/test_scout_mjs.py
+skips by name. Pointed at a checkout's own node_modules the same tree runs 439 passed, 0
+skipped. Both numbers are honest and they are not the same number; a report quoting one
+without saying which is quoting a coincidence of its own working directory.
+
+What this is not. It is not a coverage pass. Nothing here is added because a line is
+unexecuted — every entry names one behaviour, the mutation that proves it unpinned, and
+what breaking it would cost a user. Three gaps the review named are deliberately left,
+each with a reason: `flw update`'s real pull path is stubbed in every test and needs a
+conflicting-rebase fixture nobody has built; `write_links`' atomic replace survives being
+made non-atomic because no test can construct a crash mid-write; and tests/test_ledger.py,
+at 837 lines, had a read but no mutation campaign. Those are named in the report and in
+this paragraph rather than half-fixed.
+"""
+
+contract_edit = """
+1. In the "validation and checks" component's `properties`, after the entry beginning
+   "A command that could not be run to completion is never reported as passing", add one:
+
+   "Every subcommand that takes -n is checked by a test that fails if that command writes
+   anything under -n. The promise is one sentence covering six commands, so a check
+   covering one of them reads as a check covering the sentence."
+
+Nothing else changes. The -n promise itself, the scout's convergence and rank-division
+properties, and the store's refusals are all already stated correctly; this record makes
+five of them falsifiable rather than restating any of them.
+"""
+
+[[decisions]]
+topic     = "the -n promise covers six subcommands and one was checked"
+options   = ["check the other five", "narrow the contract sentence to the commands that are checked"]
+chosen    = "check the other five"
+rationale = "Narrowing would make the contract true by making flw promise less, and the behaviour a user relies on is the wide one: -n on any command writes nothing. The code already keeps the wide promise on all six — fourteen isolated before-and-after snapshots, zero differences — so the sentence is accurate and only the evidence was missing. Narrowing it would also have to be undone the moment anyone checked the other five, which is this record."
+
+[[decisions]]
+topic     = "whether a mutation the suite survives is a finding when the source is correct"
+options   = ["yes, when breaking that guard would damage a user's disk", "no, an untested correct line is coverage rather than a defect"]
+chosen    = "yes, when breaking that guard would damage a user's disk"
+rationale = "The general rule stands: an unexecuted line is not a defect and this project does not chase coverage. The exception is a guard whose absence is silent and expensive — `uninstall -n` unlinking every skill prints exactly what a correct dry run prints, so a user reading the output cannot tell. Three separate mutations produce that outcome with the suite green. A guard nothing can falsify is indistinguishable from a guard nobody wrote, and the cost of being wrong here is the user's own instructions file."
+
+[[dag]]
+group = 1
+phase = "The five unproven -n surfaces"
+tasks = [
+  { id = "dry-helpers", desc = "tests/test_cli.py: the uninstall helper at :90 and the style_uninstall helper at :103 both hardcode dry_run=False, so every call in the suite is a real run. Give each a dry parameter defaulting to False, in the shape install's helper at :79 already uses. No existing call site changes." },
+  { id = "uninstall-dry", desc = "tests/: install, then uninstall(dry=True), then assert every recorded path is still a symlink, links.toml is byte-identical, and a host instructions file carrying the ambient block is unchanged. Today three separate mutations — dropping `if not dry:` at cli/flw.py:463 and :471, and dropping `if dry: return` in strip_block_from — each leave the suite green while the dry run destroys the install.", depends_on = ["dry-helpers"] },
+  { id = "style-uninstall-dry", desc = "tests/: install a style, then style_uninstall(dry=True), and assert the style file, settings.json and style.toml are all byte-identical. Two mutations survive today: cli/flw.py:1116 losing its `and not dry`, which deletes the installed style file, and deselect_style losing its `if dry: return`, which rewrites settings.json and deletes it when flw created it.", depends_on = ["dry-helpers"] },
+  { id = "sync-dry-branches", desc = "tests/: extend test_sync_dry_run_writes_nothing so the removal and creation branches both run under -n — a dangling link and a known skill linked nowhere, alongside the missing-link case it already covers. Replace its second assertion: `flw.read_links() == before` compares the record against itself, because sync's dry run recomputes the list it read, so it passes whether or not the write is guarded. Compare the file's bytes instead." },
+  { id = "ambient-dry", desc = "tests/: install(dry=True, ambient=True) and style_install_dry(None, 'codex') each leave the host instructions file absent. install_block's `if dry: return False` can be deleted today with the suite green, and that is the only -n path that touches a file whose other lines are the user's." },
+]
+
+[[dag]]
+group = 2
+phase = "Assertions that cannot fail, and one scout pinned only by order"
+tasks = [
+  { id = "mjs-score", desc = "tests/test_scout_mjs.py: assert on a printed score, not only on the ordering. With node_modules reachable, two mutations to core/scripts/scout.mjs leave all 439 tests passing — dividing by nothing rather than by the edge count, which diverges the power iteration to a top score of 1034484.386, and dropping the dangling-mass spread, which stops the ranks summing to 1. Both are caught in the Python scout by tests named for them. The contract's convergence and rank-division properties are not scoped to one of the two scouts. Asserting the top score is below 1 catches the divergence from stdout the tests already read." },
+  { id = "duplicate-id", desc = "tests/test_validate_spec.py:338: test_a_duplicate_task_id_is_caught asserts any('a' in e for e in errors), and the duplicated id in the fixture is the letter a, so the assertion passes on any error text containing that letter. Rewriting the message to name no id at all leaves it green. Assert the id is named, the way the sibling test two lines below asserts on 'alpha'." },
+  { id = "untracked-bound", desc = "tests/test_cli.py: add one assertion to test_sync_leaves_a_foreign_symlink_alone that doctor's output does not name the foreign link. Deleting `and checkout() in entry.resolve().parents` from untracked_links leaves the suite green, and doctor then says 'points into flw but was not created by it — flw sync will adopt it' about a symlink pointing elsewhere that sync will not adopt." },
+  { id = "killpg", desc = "tests/test_run_tests.py: one check that backgrounds a process writing its pid to a file, then assert after the timeout that the pid is gone. The existing timeout test runs `sleep 30`, and bash execs a single simple command in place, so killing bash's own pid is enough — nothing exercises a check that forks, which is the case the comment at core/scripts/run_tests.py:154 names. Both halves of the mechanism, start_new_session=True and the killpg, can be deleted together today with the suite green." },
+]
