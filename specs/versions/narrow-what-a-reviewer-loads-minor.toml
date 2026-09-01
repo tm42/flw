@@ -1,0 +1,41 @@
+base         = "commits-name-a-part"
+spec_version = "0.11.6"
+name         = "narrow-what-a-reviewer-loads"
+summary      = "a reviewer is given the contract components its scope touches, not the whole contract, because a four-lens run spent ~31,000 tokens on it before reading any code"
+
+approach = """
+Measured on this repository. `specs/current.toml` is ~7,800 tokens, and §3 hands it to
+every dispatched reviewer. A reviewer inherits no prompt cache — not from the orchestrator
+and not from another reviewer — so each one pays it cold: a four-lens `eng` run spends
+~31,000 tokens on the contract, plus ~8,800 on the style file, before a line of the code
+under review is read. That is roughly three flw-spec amends spent on context nobody asked
+a question about.
+
+The contract is already structured for the fix. Every component carries `paths`, and §2
+already requires the orchestrator to fix an explicit scope. Intersecting the two is
+arithmetic the orchestrator can do before dispatch, and it is the only party that can:
+a reviewer given the whole file cannot know which parts of it are about its scope.
+
+What this trades away, stated because it is real. A reviewer can no longer catch code in
+its scope that violates a principle stated on a component outside it. Two things bound
+that. `assumptions` and `open_questions` belong to no component and are always passed, so
+the project-wide statements survive. And the orchestrator says which components it passed,
+so a reviewer that finds itself reasoning about a component it was not given can ask for
+it rather than guess.
+
+What this is not. It is not a change to what a reviewer reports or how severely — §3's
+discipline block is untouched. It is not lens selection: `:role` already exists and is the
+larger saving, four times this one on a four-lens team, and needs no change because the
+skill already argues for it.
+
+No check accompanies this. flw's suite cannot load a skill and run it — the gap
+`success_criteria` already records — so the only thing testable here is that the prose
+contains a phrase, which is a test that fails on every deliberate rewording and proves
+nothing about behaviour. Recorded rather than papered over.
+"""
+
+[[decisions]]
+topic     = "how a reviewer gets the parts of the contract outside its scope"
+options   = ["always pass assumptions and open_questions, name the components passed", "pass the whole contract to one designated reviewer", "pass nothing and let each reviewer read the file itself"]
+chosen    = "always pass assumptions and open_questions, name the components passed"
+rationale = "Letting each reviewer read the file itself saves nothing — the tokens are spent either way, and later, after the reviewer has already started reasoning without it. A designated whole-contract reviewer reintroduces the full cost on one lens and makes findings depend on which lens happened to hold the file, which breaks the property that two lenses reaching one finding independently is evidence. Passing the project-wide sections to everyone costs ~580 tokens per reviewer and keeps the statements that are not about any single component; naming what was passed makes the boundary visible to the reviewer rather than silent."

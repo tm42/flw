@@ -125,8 +125,16 @@ Give every reviewer the same seven things:
 
 - **its `perspective`, verbatim**
 - **the scope** — the exact files or diff, and what is out of bounds
-- **the contract** at `specs/current.toml`, with the
-  instruction to flag anything violating a stated principle
+- **the contract, narrowed to the scope** — not `specs/current.toml` whole. Every
+  component carries `paths`; intersect those with the scope you fixed in §2 and pass only
+  the components that meet it, plus `assumptions` and `open_questions`, which belong to no
+  component. Name the components you passed, so a reviewer reasoning about one it was not
+  given can ask for it instead of guessing. Pass the whole file when the scope is the whole
+  repository. The instruction is unchanged: flag anything violating a stated principle.
+  **Why this is worth doing.** A reviewer inherits no prompt cache — not from you, not from
+  another reviewer — so every one of them pays the contract cold. flw's own is ~7,800
+  tokens, and a four-lens run spent ~31,000 of them before reading a line of the code under
+  review.
 - **the discipline below, verbatim**
 - **the writing style** at `$FLW/core/styles/terse_prose.md` — the absolute path, to
   read and write by. A reviewer inherits nothing from your context, so a style installed
