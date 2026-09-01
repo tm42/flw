@@ -1023,6 +1023,66 @@ def test_sync_names_where_the_link_actually_pointed(home, bundle, capsys):
 
     assert "flw-spec — relinked" in out
     assert flw.tilde(elsewhere) in out
+def test_a_style_install_over_flws_own_promises_nothing_it_cannot_keep(
+    home, capsys, monkeypatch
+):
+    """It printed "put back on uninstall" and then removed the very file it was
+    promising to restore, recording no `previous` — so uninstall cleared the
+    selection and put nothing back. The promise holds for a style the user owns
+    and only that path may make it."""
+    style_install(None, "claude-code")
+    capsys.readouterr()
+    install_mine(home)
+
+    style_install("mine", "claude-code")
+    out = capsys.readouterr().out
+
+    assert "put back on uninstall" not in out
+    assert "which flw installed" in out
+
+
+def test_a_style_install_over_the_users_own_still_promises_it(home, capsys):
+    """The other direction: this promise is kept, and style_uninstall keeps it."""
+    settings = home / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"outputStyle": "myown"}))
+
+    style_install(None, "claude-code")
+    out = capsys.readouterr().out
+
+    assert "replacing myown, put back on uninstall" in out
+
+
+def test_a_style_refresh_keeps_the_line_endings_the_file_had(home, capsys, monkeypatch):
+    """The block host's file is the user's own, and most of its lines are theirs.
+    read_text and write_text both translate newlines, so a refresh through them
+    rewrote every CRLF in the file — every byte of content survived and none of
+    the line endings did. install and uninstall use read_host_text and
+    write_host_text for exactly this; refresh did not."""
+    styles = home / ".flw" / "styles"
+    styles.mkdir(parents=True)
+    source = styles / "mine.md"
+    source.write_text("## Mine\n\nWrite briefly.\n")
+
+    instructions = home / ".codex" / "AGENTS.md"
+    instructions.parent.mkdir(parents=True)
+    instructions.write_bytes(b"# My own notes\r\n\r\nkeep this line.\r\n")
+    style_install("mine", "codex")
+    capsys.readouterr()
+
+    before = instructions.read_bytes()
+    head = before[: before.index(flw.STYLE_BEGIN.encode())]
+    assert head.count(b"\r\n") == 3
+
+    source.write_text("## Mine\n\nWrite even more briefly.\n")
+    fake_pull(monkeypatch, home)
+    update(yes=True)
+
+    after = instructions.read_bytes()
+    assert b"even more briefly" in after
+    assert after[: after.index(flw.STYLE_BEGIN.encode())] == head
+
+
 
 
 def test_reinstalling_a_block_does_not_creep_up_the_file(home, capsys):

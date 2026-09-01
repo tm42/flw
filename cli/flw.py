@@ -919,7 +919,9 @@ def shadowing_style() -> str | None:
     return None
 
 
-def select_style(name: str, *, dry: bool, assume_yes: bool) -> tuple[bool, str | None]:
+def select_style(
+    name: str, *, dry: bool, assume_yes: bool, ours: str | None = None
+) -> tuple[bool, str | None]:
     """Point the host's settings at the style. Returns (written, what it was).
 
     Separate from writing the file, and asked for separately: the file is inert
@@ -951,8 +953,14 @@ def select_style(name: str, *, dry: bool, assume_yes: bool) -> tuple[bool, str |
         return True, None
 
     print(f"\n  style: would set outputStyle = {name} in {tilde(target)}")
-    if previous:
+    if previous and previous != ours:
         print(f"         replacing {previous}, put back on uninstall")
+    elif previous:
+        # A style flw installed. It is about to be removed as the rename it is,
+        # and the record keeps whatever the user had before flw arrived — so
+        # uninstall has nothing of theirs to put back, and saying it will is a
+        # promise style_uninstall cannot keep.
+        print(f"         replacing {previous}, which flw installed")
     shadow = shadowing_style()
     if shadow and shadow != name:
         print(f"         note: settings.local.json selects {shadow}, which wins")
@@ -1097,7 +1105,9 @@ def style_install(args: argparse.Namespace) -> int:
                     }
                 ]
             )
-        selected, previous = select_style(name, dry=dry, assume_yes=args.yes)
+        selected, previous = select_style(
+            name, dry=dry, assume_yes=args.yes, ours=prior.get("name")
+        )
         if prior_path and prior_path != target and prior_path.exists() and not dry:
             # A rename leaves the old file behind, selected by nothing and
             # recorded by nothing.
@@ -1326,7 +1336,12 @@ def refresh_style(
         path.write_text(style_file_text(name, source_body, str(source)))
     else:
         block = wrap(source_body, STYLE_BEGIN, STYLE_END)
-        path.write_text(replace_block(path.read_text(), block, STYLE_BEGIN, STYLE_END))
+        # The pair, not read_text/write_text: both translate newlines, so a
+        # refresh rewrote every line ending in a file whose other lines are the
+        # user's. install_block writes the same file through the same pair.
+        write_host_text(
+            path, replace_block(read_host_text(path), block, STYLE_BEGIN, STYLE_END)
+        )
     print("         refreshed")
     return True
 
