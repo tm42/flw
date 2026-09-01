@@ -1,0 +1,65 @@
+base         = "finish-the-repair"
+spec_version = "0.11.5"
+name         = "commits-name-a-part"
+summary      = "what a commit is, written once in one file every skill cites, after a run produced 44 commits where 9 said the same thing"
+
+approach = """
+The rules flw had were about a commit's message and said nothing about its contents. Two
+review rounds were executed under them and produced 44 commits for work that reads as 9,
+because nothing said what a commit should be *about*. Squashing them to 9 lost no
+information: the same tree, and every subject a line someone could put in a release note.
+That is the measurement this record acts on.
+
+What was missing has two halves. The first is a grouping rule — a commit changes one part
+of the product, named from the outside, and carries everything that changed for that part:
+code, check, prose, contract sentence. The second is a folding rule — a follow-up that
+completes, corrects or tests something already in this branch belongs inside it, not beside
+it. Nine of the 44 existed only because I found the same defect twice and committed the
+correction separately; merged, each is one coherent change rather than a fix and its repair.
+
+Why the rules move out of the skill. `core/skills/flw-execute/SKILL.md` is the only file in
+the repository that states them today, and they are about to triple in length. Commits
+happen in a flw-execute run and in every ordinary session, so the authority does not belong
+inside one skill — a `references/` file there would say it does, and force everything else
+to reach into that skill's private directory to cite it. `core/shared/` already holds what
+more than one thing reads.
+
+What this is not. It is not a style change: `core/styles/terse_prose.md` governs how a
+sentence is written, including a commit message's sentence, and needs no edit. It is not a
+constraint on how often to commit — a dirty tree mid-step is fine, and the practical
+consequence of folding is that a commit comes at the end of a step rather than at each
+discovery inside it. That matters because `git rebase -i` is unavailable in an agent's
+shell, so retroactive folding costs a rebuild and is where mistakes get made.
+"""
+
+contract_edit = """
+1. In the "the skills" component's `provides`, after the entry beginning "A user can
+   install a build posture alongside the skills", add one:
+
+   "A user gets commits that are one part of the product each, complete with the check that
+   proves them, because what a commit is and what its message says are written once in one
+   file every skill cites rather than restates — so an agent proposing a commit and an agent
+   working outside a flw run follow the same rule."
+"""
+
+[[decisions]]
+topic     = "where the authority on commits lives"
+options   = ["core/shared/commits.md", "core/skills/flw-execute/references/commits.md", "keep it inside flw-execute/SKILL.md"]
+chosen    = "core/shared/commits.md"
+rationale = "A references/ file under a skill says the material belongs to that skill. Commits do not: they happen in an execute run, and in every session that never loads a skill at all. Putting the authority there would make ambient.md — which is installed into a user's top-level instructions — cite into one skill's private directory for a rule that is not that skill's. core/shared/ is already the directory for what more than one thing reads: context.md is read by all four skills at their opening, ambient.md is installed into instructions. Keeping it in the SKILL.md was rejected on length and on reach: the file is the longest of the four at 339 lines, and nothing outside a flw-execute run can see it."
+
+[[decisions]]
+topic     = "whether ambient.md restates the rules or points at them"
+options   = ["point at the file", "restate the short invariants and point for the rest"]
+chosen    = "point at the file"
+rationale = "A restatement is a compression, and a compression drifts from what it compresses — which is the failure this record exists to close, since the rules currently live in one place only because nobody has needed them twice yet. Pointing costs one file read the first time an agent commits in a session, and buys a single authority. flw's own principle is that there is no second place for the same fact; a summary in the file installed into every session would be exactly that."
+
+[[dag]]
+group = 1
+phase = "One file that says what a commit is"
+tasks = [
+  { id = "commits-doc", desc = "core/shared/commits.md, new. Five sections, no more. (1) What a commit is: one part of the product, named from the outside, carrying everything that changed for that part — code, check, prose, contract sentence — and the four floor tests: complete, verifiable alone, not divisible without breaking those, not mergeable with its neighbour without 'and'. (2) Fold by default: a follow-up that completes, corrects or tests something already in this branch goes inside it; never its own commit for a fix to something introduced earlier in the branch, a lint fix for this branch's code, a test for this branch's change, or rewrapping and renaming. Say the consequence — commit at the end of a verified step, because rebase -i is unavailable in an agent's shell and retroactive folding is where mistakes are made. (3) The message: one line naming what changed and how, tested two ways; verbs that name an action, not verbs that name an intention; a body only for what the diff cannot show. (4) What never appears: a trailer naming a tool or a session, Co-Authored-By, a count of what was done, emoji, an 'and' joining two unrelated halves. (5) Never leave a commit that fails a declared check. Carry the 44-to-9 measurement as the example, because it is what the rule is derived from." },
+  { id = "execute-cites", desc = "core/skills/flw-execute/SKILL.md: delete the commit-message block at the phase boundary — the subject test, the verb lists, the body rule, the trailer rule, and 'one commit per phase, and one subject per commit' — and cite $FLW/core/shared/commits.md in its place. Keep what is flw-execute's own and belongs nowhere else: that it proposes rather than performs, that a failure aborts the phase, and that under --auto it proposes and keeps going. Say that a phase is the usual unit and that commits.md decides when it is not." },
+  { id = "ambient-points", desc = "core/shared/ambient.md: two lines under a new heading saying commits have rules and naming $FLW/core/shared/commits.md. A pointer, not a summary — see the decision. This is the file installed into a user's top-level instructions, so it is what reaches work that never loads a skill." },
+  { id = "one-place-check", desc = "tests/: assert the commit rules are stated in exactly one file. Grep the tracked tree for the verb list and the trailer rule and require core/shared/commits.md to be the only hit outside specs/ — the property is that no skill restates them, and a restatement is what would drift. Pin the pointer too: ambient.md and flw-execute both name the file's path, so a rename cannot leave either citing nothing.", depends_on = ["commits-doc", "execute-cites", "ambient-points"] },
+]

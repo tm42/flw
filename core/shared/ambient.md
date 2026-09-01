@@ -58,6 +58,12 @@ Effort is asymmetric: maximum on understanding, minimum on producing.
 - **No busywork.** Do not re-read a file to confirm an edit landed. Do not run the suite
   after a comment change. Do not polish naming after the thing is correct.
 
+## Commits
+
+What a commit is, what its message says, and what never appears in one:
+`$FLW/core/shared/commits.md`. Read it once per session, before the first commit. It is
+short, and it is the only place those rules are written.
+
 ## When stuck
 
 Two approaches failed → stop and escalate with hypotheses and options. A flailing retry

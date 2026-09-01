@@ -137,22 +137,14 @@ At the phase boundary, **propose a commit** — the files touched and a message 
 the user or their agent make it, in whatever VCS the repo uses. flw does not commit or
 tag. It does stage, by name, and step 6 says why.
 
-**One line naming what changed and how.** Test the subject two ways: someone who has not
-seen the diff can say what it did, and someone scanning ten subjects that all touch this
-file can pick this one out.
+**What a commit is, and what its message says, are in `$FLW/core/shared/commits.md`.**
+Read it before proposing the first one. It is the only place those rules are written, so
+nothing here repeats them.
 
-- Verbs that name an action: add, delete, rename, refuse, pin, parse, stop, only.
-- Not verbs that name an intention: harden, improve, enhance, clean up, tidy, polish,
-  handle, address, better, robustify. They fit every commit ever made.
-- Not a count of what was done — "five fixes", "three lenses" — and not the reason
-  standing in for the change: "fix what a reader could not follow" names neither.
-
-A body only for what the diff cannot show: the reason, the rejected alternative, the trap.
-Most commits have none. Never a trailer naming the tool or the session — a phase's work is
-the user's, whoever typed it.
-
-**One commit per phase, and one subject per commit.** A subject needing "and" between two
-unrelated halves is telling you the phase did two things and wants two commits.
+**A phase is the usual unit.** It was authored as one coherent piece of work, so it
+normally maps to one commit. Split it only when it holds a change with its own blast
+radius — something a reviewer would want to revert alone. Merge across phases when two of
+them turn out to be the same part of the product; commits.md decides that, not the dag.
 
 Under `--auto`, propose and keep going rather than waiting. Then say clearly at the end
 that the commits were proposed and none were made, and list them in order — otherwise the

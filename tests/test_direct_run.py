@@ -63,6 +63,34 @@ def test_flw_own_specs_validate():
         assert result.returncode == 0, result.stderr
 
 
+def test_the_commit_rules_are_written_in_exactly_one_place():
+    """One authority, cited rather than restated. A second copy is what drifts,
+    and this file exists because the rules previously lived inside one skill
+    where nothing outside a flw-execute run could see them."""
+    authority = REPO / "core" / "shared" / "commits.md"
+    assert authority.is_file()
+
+    # The verb list and the trailer rule are the two passages a restatement
+    # would carry. Neither may appear anywhere else that a reader is steered to.
+    for phrase in ("robustify", "Co-Authored-By"):
+        holders = sorted(
+            path.relative_to(REPO).as_posix()
+            for path in (REPO / "core").rglob("*.md")
+            if phrase in path.read_text()
+        )
+        assert holders == ["core/shared/commits.md"], (phrase, holders)
+
+
+def test_every_pointer_at_the_commit_rules_resolves():
+    """A rename must not leave a skill citing nothing. Both files that steer a
+    reader there name the path, so both are checked against the real file."""
+    cited = "$FLW/core/shared/commits.md"
+    for rel in ("core/shared/ambient.md", "core/skills/flw-execute/SKILL.md"):
+        text = (REPO / rel).read_text()
+        assert cited in text, rel
+    assert (REPO / "core" / "shared" / "commits.md").is_file()
+
+
 def test_the_cli_works_as_a_command_not_only_as_an_import(tmp_path):
     """The whole cycle, invoked the way a user invokes it.
 

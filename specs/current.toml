@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.11.5"
+spec_version = "0.11.6"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -17,6 +17,7 @@ applied = [
   "report-the-real-state",
   "documents-match-the-program",
   "finish-the-repair",
+  "commits-name-a-part",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -143,6 +144,7 @@ provides = [
   "A user gets the same plain, hard-wrapped prose out of every reviewer and every report whether or not the style is installed in the host, because the skills read it themselves.",
   "A user reads a contract that records what shipped, not what was planned: it moves when the work lands rather than when the plan is agreed, so a version still in flight is a record the contract's applied list does not yet name.",
   "A user can install a build posture alongside the skills that requires one runnable check behind the non-trivial logic an agent writes, and requires saying what was not done rather than implying a completeness the work does not have.",
+  "A user gets commits that are one part of the product each, complete with the check that proves them, because what a commit is and what its message says are written once in one file every skill cites rather than restates — so an agent proposing a commit and an agent working outside a flw run follow the same rule.",
   "A user can spec two changes at once on separate branches without either having to be renumbered when it lands, because a version record is addressed by a name it keeps, the order they landed in is recorded by the contract rather than by the records, and the release number moves by itself when a run finishes.",
   "A user can run a version's work without waiting for its checks, and gets a report that says the version was built and not verified rather than one that reads as finished.",
   "A user gets a store that fills itself, because flw-execute, flw-research and each dispatched flw-review reviewer are offered a write at the point they have just finished learning something — and offered it, never blocked by it.",
