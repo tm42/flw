@@ -335,7 +335,10 @@ def test_a_duplicate_task_id_is_caught():
         ),
         "v1.1.toml",
     )
-    assert any("a" in e for e in errors), errors
+    # Not `"a" in e`: the duplicated id is the letter a, so that passes on any
+    # error text containing it — including one that names no id at all, which is
+    # the whole point of the message.
+    assert any("'a' is used more than once" in e for e in errors), errors
 
 
 def test_a_duplicate_component_name_is_caught():

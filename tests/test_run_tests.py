@@ -10,7 +10,9 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import signal
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -142,6 +144,40 @@ def test_a_hung_check_times_out_rather_than_hanging(project):
     result = engine.run_one(engine.Check("contract", "sleep 30"), project, "", 1, stream=False)
     assert result.state == "fail"
     assert "timed out" in result.output
+
+
+def test_a_timeout_kills_what_the_check_forked(project, tmp_path):
+    """The test above passes with a plain process.kill(), because bash execs a
+    single simple command in place and killing bash kills the sleep. This is the
+    case the process group exists for and the comment at run_tests.py:154 names:
+    whatever bash forked — a runner, a dev server, whatever holds the port.
+
+    Elapsed time is the assertion, not the child's pid, and that is measured
+    rather than chosen. --no-stream captures to a pipe, and a surviving
+    grandchild inherits the write end, so process.kill() leaves communicate()
+    blocking on EOF until that child exits by itself — 31s for the 30s sleep
+    below. By the time run_one returns, the pid is gone either way and a pid
+    check passes against both. What the mutant actually breaks is the timeout:
+    a 1s deadline that returns after 31.
+    """
+    pidfile = tmp_path / "child.pid"
+    started = time.monotonic()
+    result = engine.run_one(
+        engine.Check("contract", f"sleep 30 & echo $! > {pidfile}; sleep 30"),
+        project, "", 1, stream=False,
+    )
+    elapsed = time.monotonic() - started
+
+    assert result.state == "fail" and "timed out" in result.output
+    assert elapsed < 10, (
+        f"the 1s timeout took {elapsed:.1f}s: the check's forked child outlived "
+        "it and held the output pipe open"
+    )
+    pid = int(pidfile.read_text().strip())
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def test_a_prompting_check_fails_instead_of_hanging(project, tmp_path):

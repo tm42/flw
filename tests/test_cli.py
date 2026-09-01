@@ -87,8 +87,8 @@ def doctor() -> int:
     return flw.doctor(argparse.Namespace(verbose=False))
 
 
-def uninstall(*hosts: str) -> int:
-    return flw.uninstall(argparse.Namespace(hosts=list(hosts), dry_run=False))
+def uninstall(*hosts: str, dry: bool = False) -> int:
+    return flw.uninstall(argparse.Namespace(hosts=list(hosts), dry_run=dry))
 
 
 def sync(*, dry: bool = False, yes: bool = True) -> int:
@@ -101,8 +101,8 @@ def style_install(name: str | None = None, *hosts: str, yes: bool = True) -> int
     )
 
 
-def style_uninstall(*hosts: str) -> int:
-    return flw.style_uninstall(argparse.Namespace(host=list(hosts), dry_run=False))
+def style_uninstall(*hosts: str, dry: bool = False) -> int:
+    return flw.style_uninstall(argparse.Namespace(host=list(hosts), dry_run=dry))
 
 
 def style_install_dry(name: str | None = None, *hosts: str) -> int:
@@ -514,6 +514,12 @@ def test_sync_leaves_a_foreign_symlink_alone(home, bundle, capsys):
     assert not any(lk["skill"] == "flw-spec" for lk in flw.read_links())
     assert link.resolve() == elsewhere.resolve()
 
+    # untracked_links is bounded to symlinks resolving into the checkout. Lose
+    # that and doctor says "points into flw ... `flw sync` will adopt it" about
+    # a link pointing somewhere else that sync has just refused to adopt.
+    doctor()
+    assert "points into flw" not in capsys.readouterr().out
+
 
 def test_sync_leaves_a_present_but_unrecorded_host_untouched(home, monkeypatch, capsys):
     install("claude-code")
@@ -526,16 +532,102 @@ def test_sync_leaves_a_present_but_unrecorded_host_untouched(home, monkeypatch, 
 
 
 def test_sync_dry_run_writes_nothing(home, capsys):
+    """All three write branches, not just the one a missing link reaches.
+    Removal and creation were each unguarded-able with the suite green, and the
+    record assertion compared read_links() against itself — sync's dry run
+    recomputes the list it read, so writing it back is byte-identical either
+    way. The bytes on disk are the thing that must not move."""
     install()
-    (home / ".claude" / "skills" / "flw-spec").unlink()
-    before = flw.read_links()
+    skills = home / ".claude" / "skills"
+    source = Path(flw.read_links()[0]["target"])
+    # missing: the branch this test covered before, which relinks
+    (skills / "flw-spec").unlink()
+    # orphaned — healthy, recorded, and no longer a skill flw discovers. This is
+    # the removal branch; a symlink pointing anywhere else is "points elsewhere"
+    # and relinks instead, which is why the first attempt at this test missed it.
+    orphan = skills / "flw-gone"
+    orphan.symlink_to(source)
+    flw.write_links(
+        flw.read_links()
+        + [{"skill": "flw-gone", "path": str(orphan), "target": str(source)}]
+    )
+    # absent from disk and from the record: the creation branch
+    (skills / "flw-research").unlink()
+    flw.write_links([lk for lk in flw.read_links() if lk["skill"] != "flw-research"])
+    before = flw.LINKS.read_bytes()
     capsys.readouterr()
 
     sync(dry=True)
+    out = capsys.readouterr().out
+    assert "flw-gone — removed (orphaned" in out
+
+    assert not (skills / "flw-spec").exists()
+    assert orphan.is_symlink()
+    assert not (skills / "flw-research").exists()
+    assert flw.LINKS.read_bytes() == before
+
+
+def test_uninstall_dry_run_writes_nothing(home, capsys):
+    """Three separate mutations made -n destroy the install while the suite
+    stayed green, and the output a destroying dry run prints is the output a
+    correct one prints — so nothing a user reads distinguishes them."""
+    install(ambient=True)
+    instructions = home / ".claude" / "CLAUDE.md"
+    paths = [Path(lk["path"]) for lk in flw.read_links()]
+    assert paths and instructions.exists()
+    before_links = flw.LINKS.read_bytes()
+    before_block = instructions.read_bytes()
+    before_ambient = flw.AMBIENT.read_bytes()
     capsys.readouterr()
 
-    assert not (home / ".claude" / "skills" / "flw-spec").exists()
-    assert flw.read_links() == before
+    assert uninstall(dry=True) == 0
+    capsys.readouterr()
+
+    assert all(path.is_symlink() for path in paths)
+    assert flw.LINKS.read_bytes() == before_links
+    assert instructions.read_bytes() == before_block
+    # ambient.toml as well as links.toml: strip_ambient writes its own record,
+    # and that guard survived mutation with the suite green.
+    assert flw.AMBIENT.read_bytes() == before_ambient
+    assert flw.ROOT_POINTER.exists()
+
+
+def test_style_uninstall_dry_run_writes_nothing(home, capsys):
+    """settings.json decides what every response in every session looks like,
+    and a dry run that rewrites it — or deletes it, when flw created it — was
+    two mutations away with nothing failing."""
+    style_install(None, "claude-code")
+    style_file = home / ".claude" / "output-styles" / "flw-terse.md"
+    settings = home / ".claude" / "settings.json"
+    assert style_file.exists() and settings.exists()
+    before = (style_file.read_bytes(), settings.read_bytes(), flw.STYLE.read_bytes())
+    capsys.readouterr()
+
+    assert style_uninstall("claude-code", dry=True) == 0
+    capsys.readouterr()
+
+    assert style_file.read_bytes() == before[0]
+    assert settings.read_bytes() == before[1]
+    assert flw.STYLE.read_bytes() == before[2]
+
+
+def test_a_dry_run_writes_no_ambient_block(home, capsys):
+    """The only -n path that touches a file whose other lines are the user's.
+    install_block's `if dry: return False` could be deleted with the suite
+    green, for both commands that reach it."""
+    instructions = home / ".claude" / "CLAUDE.md"
+    instructions.parent.mkdir(parents=True)
+    instructions.write_text("# My own notes\n")
+    before = instructions.read_bytes()
+
+    assert install(dry=True, ambient=True) == 0
+    capsys.readouterr()
+    assert instructions.read_bytes() == before
+
+    codex = home / ".codex" / "AGENTS.md"
+    assert style_install_dry(None, "codex") == 0
+    capsys.readouterr()
+    assert not codex.exists()
 
 
 def test_sync_offers_and_refreshes_a_style_behind_its_source(home, capsys, monkeypatch):
@@ -1008,50 +1100,6 @@ def test_refresh_rewrites_the_tagged_block_for_a_host_without_a_style_slot(
     assert after[: after.index(flw.STYLE_BEGIN)] == head
 
 
-def test_sync_names_where_the_link_actually_pointed(home, bundle, capsys):
-    """The record still holds flw's own path when the user retargeted the link,
-    so the line read "was <flw's path> → <flw's path>" and never named the only
-    thing that had been there."""
-    install("claude-code")
-    link = home / ".claude" / "skills" / "flw-spec"
-    elsewhere = bundle("elsewhere") / "skills" / "elsewhere"
-    link.unlink()
-    link.symlink_to(elsewhere)
-    capsys.readouterr()
-
-    sync()
-    out = capsys.readouterr().out
-
-    assert "flw-spec — relinked" in out
-    assert flw.tilde(elsewhere) in out
-def test_a_style_install_over_flws_own_promises_nothing_it_cannot_keep(
-    home, capsys, monkeypatch
-):
-    """It printed "put back on uninstall" and then removed the very file it was
-    promising to restore, recording no `previous` — so uninstall cleared the
-    selection and put nothing back. The promise holds for a style the user owns
-    and only that path may make it."""
-    style_install(None, "claude-code")
-    capsys.readouterr()
-    install_mine(home)
-
-    style_install("mine", "claude-code")
-    out = capsys.readouterr().out
-
-    assert "put back on uninstall" not in out
-    assert "which flw installed" in out
-
-
-def test_a_style_install_over_the_users_own_still_promises_it(home, capsys):
-    """The other direction: this promise is kept, and style_uninstall keeps it."""
-    settings = home / ".claude" / "settings.json"
-    settings.parent.mkdir(parents=True)
-    settings.write_text(json.dumps({"outputStyle": "myown"}))
-
-    style_install(None, "claude-code")
-    out = capsys.readouterr().out
-
-    assert "replacing myown, put back on uninstall" in out
 def test_a_prompt_declines_when_fd_zero_is_closed(tmp_path):
     """`< /dev/null` raises EOFError; closing fd 0 outright raises
     RuntimeError("lost sys.stdin"), because CPython then sets sys.stdin to None.
@@ -1090,6 +1138,52 @@ def test_a_record_that_is_not_utf8_names_its_file(home, capsys, monkeypatch):
     assert "not UTF-8" in str(raised.value)
 
 
+def test_a_style_install_over_flws_own_promises_nothing_it_cannot_keep(
+    home, capsys, monkeypatch
+):
+    """It printed "put back on uninstall" and then removed the very file it was
+    promising to restore, recording no `previous` — so uninstall cleared the
+    selection and put nothing back. The promise holds for a style the user owns
+    and only that path may make it."""
+    style_install(None, "claude-code")
+    capsys.readouterr()
+    install_mine(home)
+
+    style_install("mine", "claude-code")
+    out = capsys.readouterr().out
+
+    assert "put back on uninstall" not in out
+    assert "which flw installed" in out
+
+
+def test_a_style_install_over_the_users_own_still_promises_it(home, capsys):
+    """The other direction: this promise is kept, and style_uninstall keeps it."""
+    settings = home / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"outputStyle": "myown"}))
+
+    style_install(None, "claude-code")
+    out = capsys.readouterr().out
+
+    assert "replacing myown, put back on uninstall" in out
+
+
+def test_sync_names_where_the_link_actually_pointed(home, bundle, capsys):
+    """The record still holds flw's own path when the user retargeted the link,
+    so the line read "was <flw's path> → <flw's path>" and never named the only
+    thing that had been there."""
+    install("claude-code")
+    link = home / ".claude" / "skills" / "flw-spec"
+    elsewhere = bundle("elsewhere") / "skills" / "elsewhere"
+    link.unlink()
+    link.symlink_to(elsewhere)
+    capsys.readouterr()
+
+    sync()
+    out = capsys.readouterr().out
+
+    assert "flw-spec — relinked" in out
+    assert flw.tilde(elsewhere) in out
 
 
 def test_a_settings_file_that_is_not_utf8_names_itself(home, capsys):
@@ -1135,8 +1229,6 @@ def test_a_style_refresh_keeps_the_line_endings_the_file_had(home, capsys, monke
     after = instructions.read_bytes()
     assert b"even more briefly" in after
     assert after[: after.index(flw.STYLE_BEGIN.encode())] == head
-
-
 
 
 def test_reinstalling_a_block_does_not_creep_up_the_file(home, capsys):
@@ -1787,6 +1879,31 @@ def test_a_dry_run_of_the_style_writes_nothing(home, capsys):
 
     assert not (home / ".claude" / "output-styles").exists()
     assert not (home / ".flw" / "style.toml").exists()
+
+
+def test_a_dry_run_of_the_style_writes_nothing_over_an_installed_one(home, capsys):
+    """Over nothing, most of style_install's write paths never run. Two guards
+    only reachable when a style is already there survived mutation with the
+    suite green: select_style's early return, which rewrites settings.json, and
+    the unlink of the style being replaced."""
+    style_install(None, "claude-code")
+    # The source only — install_mine would install it, which is the write this
+    # test exists to prove does not happen under -n.
+    styles = home / ".flw" / "styles"
+    styles.mkdir(parents=True, exist_ok=True)
+    (styles / "mine.md").write_text("## Mine\n\nWrite briefly.\n")
+    capsys.readouterr()
+    shipped = home / ".claude" / "output-styles" / "flw-terse.md"
+    settings = home / ".claude" / "settings.json"
+    before = (shipped.read_bytes(), settings.read_bytes(), flw.STYLE.read_bytes())
+
+    style_install_dry("mine", "claude-code")
+    capsys.readouterr()
+
+    assert shipped.read_bytes() == before[0], "the replaced style was deleted"
+    assert settings.read_bytes() == before[1], "settings.json was rewritten"
+    assert flw.STYLE.read_bytes() == before[2]
+    assert not (home / ".claude" / "output-styles" / "mine.md").exists()
 
 
 def test_declining_the_prompt_records_no_block(home, capsys, monkeypatch):

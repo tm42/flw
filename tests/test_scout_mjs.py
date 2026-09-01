@@ -235,6 +235,39 @@ def test_typescript_7_is_refused_by_name(tmp_path):
     assert "5.x or 6.x" in result.stderr
 
 
+def test_the_printed_scores_are_probabilities(tmp_path):
+    """The ordering tests survive both of these, because every score scales by
+    the same factor and the order does not move. The Python scout is pinned by
+    score for exactly this reason; this scout was pinned by order alone, and the
+    contract scopes neither property to one of the two.
+
+    Measured on this tree: 0.4293 correct, 1034484.3860 when a share is not
+    divided across the edges it flows down, 0.1118 when the dangling mass is
+    dropped instead of spread. The bounds below sit between those three."""
+    files = {"src/core.ts": "export class TransactionLedger { run() { return 1; } }\n"}
+    for i in range(12):
+        files[f"src/mid{i}.ts"] = (
+            "import { TransactionLedger } from './core';\n"
+            f"export class Mid{i} {{ use() {{ return TransactionLedger; }} }}\n"
+        )
+    files["src/top.ts"] = "".join(
+        f"import {{ Mid{i} }} from './mid{i}';\n" for i in range(12)
+    ) + "".join(f"export const t{i} = Mid{i};\n" for i in range(12))
+    files["src/lonely.ts"] = "export class Alone {}\n"
+    files["src/solo.ts"] = "export class Solo {}\n"
+
+    out = run(build(tmp_path, files), budget=30).stdout
+    scores = [
+        float(line.split()[-1])
+        for line in out.splitlines()
+        if line.startswith("  src/") and line.split()[-1].replace(".", "").isdigit()
+    ]
+
+    assert scores, out
+    assert max(scores) < 1, "a rank above 1 is not a probability — the iteration diverged"
+    assert max(scores) > 0.3, "the top rank collapsed — dangling mass is being dropped"
+
+
 def test_a_definition_reached_through_depended_on_files_outranks_a_flat_one(tmp_path):
     """Ten importers each side, so a ranking that counted importers would tie.
     The depended-on file is named last alphabetically on purpose: at DAMPING zero
