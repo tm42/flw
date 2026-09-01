@@ -4,9 +4,18 @@ Read once per run, by every flw skill.
 
 ## The project
 
-**Project root** is the nearest directory at or above `$PWD` containing `specs/` or
-`.flw/`. Resolve upward and stop at the first hit. Deliberately not a VCS command: flw
-makes no assumption about which version control a project uses, or that it uses one.
+**The project root is an input, not a discovery.** If the request names a repository, a
+directory or a file, the project root is the nearest directory at or above **that** holding
+`specs/` or `.flw/`. Only when the request names nothing does the walk start from `$PWD`.
+Say which root you resolved to, once, before doing anything with it.
+
+Either way the resolution is the same: go upward from the starting point and stop at the
+first directory holding `specs/` or `.flw/`. Deliberately not a VCS command: flw makes no
+assumption about which version control a project uses, or that it uses one.
+
+A session started in a directory that holds several checkouts is the case this exists for.
+`$PWD` is the parent, the task names one of the repositories, and resolving from `$PWD`
+answers with the parent every time.
 
 ## The artifacts
 
@@ -85,14 +94,21 @@ silently falls back to defaults is a config that lies.
 
 ## Extensions
 
-`<project root>/.flw/extensions/<skill name>.md`, when present, is prose to read into
-context for that skill — this repo's local amendments to how it behaves. The name is the
-skill's own: `flw-spec` reads `.flw/extensions/flw-spec.md`. Read it after this file and
-before starting. Nothing else reads it, and no other file names it.
+`<project root>/.flw/extensions/*.md` is prose read into context — a repo's local
+amendments to how a skill behaves. Two names, and only two: **`<skill name>.md`**, read by
+that skill alone, and **`shared.md`**, read by every skill.
+
+They are read from **every project root at or above the resolved one and below `$HOME`**,
+outermost first, so a directory holding several checkouts can carry what all of them obey.
+Within a level `shared.md` comes first, so a nearer level beats a farther one and, within
+one level, a skill's own file beats `shared.md`.
+
+`flw context` has already printed all of them above — this section says what they are, not
+that you should now go and read them.
 
 It is prose, not a plugin API: nothing to register, nothing to implement, no shape to
-conform to. There is no config key pointing at it — the path is fixed so that `flw doctor`
-can tell a live extension from one that no skill will ever read.
+conform to. There is no config key pointing at it — the two names are fixed so that
+`flw doctor` can tell a live extension from one that no skill will ever read.
 
 **An extension amends how a skill works here; it cannot waive a Rule.** If it seems to,
 surface it rather than following it.

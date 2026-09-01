@@ -1,0 +1,187 @@
+base    = "narrow-what-a-reviewer-loads"
+name    = "opening-is-one-call"
+summary = "a skill's opening becomes one command that takes the project root as an input, reads every extension from the outermost project root inward, and reads one shared file no skill owns"
+
+approach = """
+Part A of `plans/multi-root-projects.md`, which reviewers should read for the measurements
+this restates only where they change a decision. Parts B and C — `[project.roots]` and the
+cross-repo map — are deliberately out of scope: both rest on premises nobody has run, and
+neither is needed by anything here.
+
+The reported failure. A session started in a directory holding several checkouts resolves
+every skill to that directory, because `nearest_project()` walks up from `$PWD` and
+`core/shared/context.md` states that rule as the only one a skill has. The task names a
+repository; nothing in flw reads the task. So the fix is not a smarter walk, it is making
+the root an input the caller states, with `$PWD` as the fallback rather than the source.
+
+Why the four `SKILL.md` files are touched exactly once, in the last phase. The obvious
+order — teach the skills the chain, then build the command — writes prose that the command
+then deletes, and in the interval a skill executing a chain in prose has to walk above its
+own root itself, at every open, in all four skills, because `nearest_project()` stops at
+the first hit. A dispatched reviewer caught this; the dag exists to keep the order from
+drifting back. Phases 1 to 3 are inert for the skills by design: the chain exists, doctor
+reports it, and the skills go on reading the nearest extension until phase 4 switches them
+over in one move.
+
+What `flw context` prints, and why each part is bounded. It prints `core/shared/context.md`
+as a preamble — without that the opening is still two calls and the one-call claim is
+false. Contract shape is component names and their `paths` and nothing else: measured on
+this contract, names plus paths is ~163 tokens, names plus paths plus `provides` is ~3,011,
+and the whole file is 7,829. The narrow reading is what makes an invocation outside a skill
+affordable; a skill needing a component's `provides` reads the contract itself.
+`flw context flw-review` omits the note-store listing, because `flw-review`'s opening skips
+it on purpose — a read there is paid by the one context that produces no findings and
+reaches none of the ones that do.
+
+The ambient line is conditional and that is the whole of it. `ambient.md` is installed into
+a host's top-level instructions, so it is always on, in every session, in every repository;
+it is ~1,248 tokens today. The line says to run `flw context` before working in a flw
+project, never to run it at session start. An unconditional version bills every session for
+the one benefit here that is rare.
+
+Two argument shapes changed against the plan after reading the parser, and the plan is now
+wrong where they differ. `flw context [skill] [path]` as two optional positionals cannot be
+disambiguated — argparse binds `flw context ds` to the first one whatever was meant. And
+`flw doctor <path>` would have been the only path-taking command with no way to say which
+of its two scopes the path meant. Both take `--root PATH` instead.
+
+What this is not. It is not a fifth skill: `flw-prepare` would cost a SKILL.md loaded in
+every host for judgment nothing has yet shown the command lacks. It is not a merge of
+config or contract, which stay nearest-wins — a contract is one document, and concatenating
+two produces something nobody reviewed. And it is not the `--paths` flag: printing contents
+rather than paths is the assumption this ships with, and the flag is not declared because a
+surface the parser does not accept fails the check that keeps the two in agreement.
+
+One property here is about behaviour that already exists rather than about this change:
+`flw test <path>` walks upward and `flw scout <path>` does not. The plan asked for that
+difference to be recorded so nobody normalises the two later, and this is the version whose
+subject is the path argument — `--root` on two commands, the root as an input in
+`context.md`. Recording it anywhere else means recording it never.
+
+Where the two new surface lines are written, and why not in `contract_edit`.
+`test_the_cli_surface_matches_the_parser_in_both_directions` reads `specs/current.toml` off
+disk and asserts both directions, so a parser command the contract does not declare is red
+and a declared command the parser does not have is red too. Leaving the lines in
+`contract_edit` fails the first way, because `flw-execute` applies that only after the
+checks; pre-applying them to the contract fails the second, until the code exists. Each line
+therefore lands in `specs/current.toml` in the same phase as the parser change it describes:
+`flw doctor [-v|--verbose] [--root PATH]` with `doctor-chain`, and
+`flw context [skill] [--root PATH]` with `context-command`. That is what `commits.md`
+already says a commit carries — the code, the check that proves it, and the contract
+sentence that claims it. The rest of `contract_edit` is untouched by this and still applies
+at the end of the run.
+"""
+
+contract_edit = """
+In `final_state.components`, component **the flw CLI**:
+
+`provides` — replace:
+  "A user can see which of a repo's extensions a skill will actually read, and which sit
+  there read by nobody."
+with:
+  "A user can see which of a repo's extensions a skill will actually read at every level
+  from the outermost project root inward, how large each one is, and which sit there read
+  by nobody — for the repository they name rather than only the one they are standing in."
+
+`provides` — append:
+  "A user can print everything a skill reads at its opening — the shared context, the
+  resolved root and where it came from, this repo's extensions from the outermost project
+  root inward, the note store listing where that skill's own opening reads one, and the
+  contract's component names and paths — with one command, and can run it without invoking
+  a skill at all, so work flw has no skill for still starts from what the repository
+  records."
+
+`properties` — append:
+  "flw context run outside any project prints what it can and exits 0. A directory with no
+  contract and no configuration is a state rather than a fault, which is the reading flw
+  validate already takes."
+
+`properties` — append:
+  "flw test <path> walks upward from the path it is given and flw scout <path> does not,
+  deliberately: flw test src/ inside a project is a normal invocation, and a scout must not
+  walk out of the tree it was aimed at."
+
+(The two `flw <name>` surface lines this version adds are not here. They are applied to
+`specs/current.toml` inside the phase that adds the parser change each one describes — see
+`approach` and the dag. Applying them at the end, or all at the start, is red either way.)
+
+`surfaces` — append, after the config.toml line:
+  "<project root>/.flw/extensions/<skill name>.md and <project root>/.flw/extensions/shared.md
+  — prose read at a skill's opening, from every project root at or above the resolved one and
+  below $HOME, outermost first so the nearest overrides; within a level shared.md is read
+  before the skill's own file, so a nearer level beats a farther one and, within one level, a
+  skill's own file beats shared. shared.md is read by every skill; a file named for anything else is read by
+  nobody, and flw doctor says so."
+
+In `final_state.components`, component **the skills**:
+
+`provides` — replace:
+  "A user can amend how a skill behaves in one repo with prose that skill reads, without
+  forking the skill or maintaining a copy of it."
+with:
+  "A user can amend how a skill behaves in one repo with prose that skill reads, without
+  forking the skill or maintaining a copy of it — per skill, or in one file every skill
+  reads, at whichever directory above the work the convention belongs to."
+
+`provides` — append:
+  "A skill resolves its project root from what the request named rather than from where the
+  shell happens to be, and says which root it resolved to, so a session started in a
+  directory holding several checkouts works in the repository that was asked for."
+"""
+
+[[decisions]]
+topic     = "how flw context takes its two arguments"
+options   = ["skill positional, root as --root PATH", "both positional, flw context [skill] [path]", "both flags, flw context --skill NAME --root PATH"]
+chosen    = "skill positional, root as --root PATH"
+rationale = "Two optional positionals are ambiguous: argparse binds the first supplied value to the first declared positional, so `flw context ds` is read as a skill named ds whether or not a directory ds exists, and no validation recovers the intent. Making both flags is unambiguous and costs eight characters on the invocation every skill makes at every open, which is the common case; the root is the exception. This breaks positional-path consistency with `flw test`, `flw scout` and `flw validate`, knowingly — those take one path and have nothing to disambiguate it against."
+
+[[decisions]]
+topic     = "which component declares the extension file paths"
+options   = ["the flw CLI, beside the config file surface", "the skills, which currently declares no surfaces at all"]
+chosen    = "the flw CLI, beside the config file surface"
+rationale = "Every path-shaped surface in the contract is already on the CLI component — links.toml, style.toml, config.toml and its keys, the note store roots — and the code that reads and validates the extension directory is `report_extensions` and the new `flw context`, both CLI. Splitting path surfaces across two components makes them harder to find than the novelty of `the skills` having no surfaces makes it wrong."
+
+[[decisions]]
+topic     = "whether the four SKILL.md openings gain 'say which root you resolved to' before flw context exists"
+options   = ["no — context.md only, and the command prints the root header in phase 4", "yes — prose first, so phase 1 stands alone"]
+chosen    = "no — context.md only, and the command prints the root header in phase 4"
+rationale = "The command prints the root header itself, so the per-skill sentence is prose written to be deleted one phase later, in the same paragraphs phase 4 rewrites. Phase 1's durable half is the context.md paragraph, which every skill already reads once per run."
+
+[[decisions]]
+topic     = "when this version's two new CLI surface lines reach specs/current.toml"
+options   = ["in the phase that adds each parser change", "in contract_edit, applied at the end of the run", "pre-applied to the contract before the run starts"]
+chosen    = "in the phase that adds each parser change"
+rationale = "The drift check asserts both directions against the contract on disk. contract_edit is applied after flw test, so a parser command the contract has not yet gained fails the run; pre-applying both lines fails the opposite direction until the code exists. Only landing each line with its own parser change is green at every commit, and commits.md already requires a commit to carry the contract sentence that claims its code. The rest of contract_edit has no such coupling and still applies at the end."
+
+[[dag]]
+group = 1
+phase = "resolution"
+tasks = [
+  { id = "context-paragraph", desc = "core/shared/context.md: the project root is an input, not a discovery. If the request names a repository, a directory or a file, the root is the nearest directory at or above that holding specs/ or .flw/; only when the request names nothing does the walk start from $PWD. No SKILL.md is touched." },
+  { id = "project-chain", desc = "project_chain() beside nearest_project() in cli/flw.py: every directory from the outermost project root holding specs/ or .flw/ down to the nearest, outermost first, sharing nearest_project's $HOME guard. nearest_project keeps its signature and its callers." },
+]
+
+[[dag]]
+group = 2
+phase = "the chain in code"
+tasks = [
+  { id = "shared-name", desc = "Reserve .flw/extensions/shared.md: report_extensions accepts it alongside the installed skill names, so an unknown filename is still reported as read by nobody.", depends_on = ["project-chain"] },
+  { id = "doctor-chain", desc = "report_extensions walks project_chain() rather than one directory, prints each level and each file's size, and takes a --root PATH so it can be aimed at one repository from a directory above it. In the same step, replace `flw doctor [-v|--verbose]` with `flw doctor [-v|--verbose] [--root PATH]` in the CLI component's surfaces in specs/current.toml — the drift check reads both directions and either half alone is red.", depends_on = ["shared-name"] },
+]
+
+[[dag]]
+group = 3
+phase = "the command"
+tasks = [
+  { id = "context-command", desc = "flw context [skill] [--root PATH]: prints core/shared/context.md, then the resolved root and where it came from, then the extension chain — walking levels from the outermost inward and, within each level, that level's shared.md before that level's file for the named skill — then the note-store listing, then the contract's component names and paths. Outside any project it prints what it can and exits 0. In the same step, append `flw context [skill] [--root PATH]` to the CLI component's surfaces in specs/current.toml, after the flw doctor line.", depends_on = ["doctor-chain"] },
+  { id = "review-omits-kb", desc = "flw context flw-review omits the note-store listing, matching flw-review's own opening.", depends_on = ["context-command"] },
+  { id = "context-tests", desc = "Checks for the chain order, the reserved name, the flw-review omission, and the exit-0 no-project case.", depends_on = ["review-omits-kb"] },
+]
+
+[[dag]]
+group = 4
+phase = "the switch"
+tasks = [
+  { id = "openings", desc = "The opening step of all four SKILL.md files becomes one call to flw context <skill>, replacing the three-read prose rather than adding to it. This is the only edit those files take in this version.", depends_on = ["context-tests"] },
+  { id = "ambient-line", desc = "One conditional line in core/shared/ambient.md: run flw context before working in a flw project. Not at session start.", depends_on = ["openings"] },
+]

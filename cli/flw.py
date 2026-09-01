@@ -1380,6 +1380,19 @@ def refresh_style(
 
 
 def doctor(args: argparse.Namespace) -> int:
+    if args.root is not None:
+        # `Path(args.root).resolve()` is non-strict, so a mistyped relative path
+        # resolves under $PWD and the walk answers with whatever project contains
+        # the current directory — the exact failure this flag exists to prevent,
+        # reported as `(from --root)` so the provenance line confirms it. And
+        # `--root ""` is falsy, so a truthiness test drops it before Path() sees it.
+        if not args.root.strip():
+            print("error: --root was given an empty path", file=sys.stderr)
+            return 1
+        if not Path(args.root).exists():
+            print(f"error: --root: no such path: {args.root}", file=sys.stderr)
+            return 1
+
     problems = 0
     root = checkout()
     print(f"flw: {root}")
@@ -1497,50 +1510,80 @@ def doctor(args: argparse.Namespace) -> int:
             print(f"      {host.note}")
 
     problems += report_style()
-    problems += report_extensions(sorted(known))
+    problems += report_extensions(sorted(known), Path(args.root) if args.root else None)
 
     print(f"\n{'OK' if not problems else f'{problems} problem(s)'}")
     return 1 if problems else 0
 
 
-def report_extensions(known: list[str]) -> int:
-    """Which of this project's extensions a skill will actually read.
+SHARED_EXTENSION = "shared"
+"""The one extension filename that is not a skill's name, read by every skill.
+
+Reserved rather than configurable, for the same reason the per-skill names are:
+`report_extensions` can only tell a live extension from a dead one by comparing
+the filename against a fixed set.
+"""
+
+
+def _extension_note(entry: Path) -> str:
+    """Size, and the target when the file is a symlink pointing elsewhere.
+
+    Size because the chain is read at every skill open and nothing else would show
+    it growing; the target because `stat` follows the link, so a `shared.md`
+    pointing outside the repository reports the target's bytes under the
+    repository's path and every skill treats the content as its instructions.
+    """
+    real = entry.resolve()
+    size = f"{entry.stat().st_size:,} B"
+    return f" ({size})" if real == entry else f" ({size}, -> {tilde(real)})"
+
+
+def report_extensions(known: list[str], start: Path | None = None) -> int:
+    """Which of this project's extensions a skill will actually read, per level.
 
     The failure worth catching: `.flw/extensions/spec.md` when the skill is named
     `flw-spec`. Nothing reads it, nothing complains, and it looks fine forever.
     Only possible to catch because the filename is fixed — a configurable path
     could point anywhere, so there would be nothing to compare against.
 
+    Walks `project_chain` rather than one directory, because a skill reads every
+    level from the outermost project root inward. Sizes are printed because that
+    tax is paid at every skill open and nothing else would show it growing.
+
     Project-scoped, inside an otherwise install-scoped command: silent when run
     from somewhere that is not a project, or from one with no extensions.
     """
-    root = nearest_project()
-    if root is None:
-        return 0
-    directory = root / ".flw" / "extensions"
-    if not directory.is_dir():
-        return 0
-
-    entries = [e for e in sorted(directory.iterdir()) if not e.name.startswith(".")]
-    if not entries:
-        return 0
-
-    print(f"\nextensions: {tilde(directory)}")
     problems = 0
-    for entry in entries:
-        if not entry.is_file():
-            why = "an extension is a file, not a directory"
-        elif entry.suffix != ".md":
-            why = "an extension is a .md file named for its skill"
-        elif entry.stem not in known:
-            why = f"no installed skill is named {entry.stem!r}"
-        else:
-            print(f"  ✓ {entry.name} — read by {entry.stem}")
+    for root in project_chain(start):
+        directory = root / ".flw" / "extensions"
+        if not directory.is_dir():
             continue
-        print(f"  ✗ {entry.name} — read by nobody: {why}")
-        problems += 1
+
+        entries = [e for e in sorted(directory.iterdir()) if not e.name.startswith(".")]
+        if not entries:
+            continue
+
+        print(f"\nextensions: {tilde(directory)}")
+        for entry in entries:
+            if entry.is_symlink() and not entry.exists():
+                why = f"a symlink to {os.readlink(entry)}, which is not there"
+            elif not entry.is_file():
+                why = "an extension is a file, not a directory"
+            elif entry.suffix != ".md":
+                why = "an extension is a .md file named for its skill"
+            elif entry.stem == SHARED_EXTENSION:
+                print(f"  ✓ {entry.name} — read by every skill{_extension_note(entry)}")
+                continue
+            elif entry.stem not in known:
+                why = f"no installed skill is named {entry.stem!r}"
+            else:
+                print(f"  ✓ {entry.name} — read by {entry.stem}{_extension_note(entry)}")
+                continue
+            print(f"  ✗ {entry.name} — read by nobody: {why}")
+            problems += 1
+
     if problems:
-        print(f"      skills here: {', '.join(known)}")
+        print(f"      skills here: {', '.join(known)}, and {SHARED_EXTENSION}.md")
     return problems
 
 
@@ -1929,7 +1972,7 @@ def update(args: argparse.Namespace) -> int:
         sync(argparse.Namespace(dry_run=True, yes=args.yes))
         print("\n  nothing written — drop -n to apply")
         print()
-        return doctor(argparse.Namespace(verbose=False))
+        return doctor(argparse.Namespace(verbose=False, root=None))
 
     fast_forward = git("pull", "--ff-only")
     if fast_forward.returncode == 0:
@@ -1960,7 +2003,7 @@ def update(args: argparse.Namespace) -> int:
     sync(argparse.Namespace(dry_run=args.dry_run, yes=args.yes))
 
     print()
-    return doctor(argparse.Namespace(verbose=False))
+    return doctor(argparse.Namespace(verbose=False, root=None))
 
 
 def version(_args: argparse.Namespace) -> int:
@@ -1990,6 +2033,31 @@ def nearest_project(start: Path | None = None) -> Path | None:
         if (candidate / "specs").is_dir() or (candidate / ".flw").is_dir():
             return candidate
     return None
+
+
+def project_chain(start: Path | None = None) -> list[Path]:
+    """Every project root from the outermost down to the nearest, outermost first.
+
+    `nearest_project` answers "which project is this" and stops at the first hit,
+    because one project is one root — the contract, the config and the checks all
+    resolve that way. Extensions want the other question: a directory holding
+    several checkouts can carry conventions every one of them obeys, and a skill
+    working inside one of them should read those as well as its own.
+
+    Bounded above by $HOME for the same reason `nearest_project` breaks there —
+    `flw install` writes ~/.flw, so an unbounded walk would put the home directory
+    at the head of every chain for every project underneath it.
+    """
+    here = (start or Path.cwd()).resolve()
+    home = Path.home().resolve()
+    found: list[Path] = []
+    for candidate in (here, *here.parents):
+        if candidate == home:
+            break
+        if (candidate / "specs").is_dir() or (candidate / ".flw").is_dir():
+            found.append(candidate)
+    found.reverse()
+    return found
 
 
 def project_root(start: Path | None = None) -> Path:
@@ -2440,6 +2508,132 @@ def _kb_category(root: Path) -> str:
     return name if isinstance(name, str) and name.strip() else root.name
 
 
+def _context_extensions(chain: list[Path], skill: str | None) -> None:
+    """Every extension a skill reads, in the order it reads them.
+
+    Outermost level first so the nearest overrides; within a level shared.md
+    before the skill's own file, so a skill's own text beats shared and a nearer
+    level beats a farther one. Both axes matter and both are easy to invert,
+    which is why the order is here rather than described to an agent.
+    """
+    wanted = [SHARED_EXTENSION] + ([skill] if skill else [])
+    printed = False
+    for root in chain:
+        for stem in wanted:
+            path = root / ".flw" / "extensions" / f"{stem}.md"
+            if not path.is_file():
+                continue
+            real = path.resolve()
+            where = tilde(path) if real == path else f"{tilde(path)} -> {tilde(real)}"
+            print(f"\n--- {where} ({path.stat().st_size:,} B) ---")
+            print(read_flw_text(path).rstrip("\n"))
+            printed = True
+    if not printed:
+        print("\n(no extensions on this chain)")
+
+
+def _context_contract(root: Path | None) -> None:
+    """The contract's component names and the paths each one covers, and no more.
+
+    Measured on flw's own: names and paths is ~650 bytes where the whole file is
+    ~31,000. This runs at every skill open and, through the ambient line, outside
+    one — the narrow reading is what makes that affordable. A skill that needs a
+    component's `provides` reads the contract itself.
+    """
+    if root is None:
+        return
+    contract = root / _specs_dir(root) / "current.toml"
+    if not contract.is_file():
+        print(f"\ncontract: none at {tilde(contract)}")
+        return
+    try:
+        document = tomllib.loads(read_flw_text(contract))
+    except tomllib.TOMLDecodeError as exc:
+        print(f"\ncontract: {tilde(contract)} does not parse ({exc})")
+        return
+    print(f"\ncontract: {tilde(contract)}  ·  {document.get('spec_version', '?')}")
+    for component in document.get("final_state", {}).get("components", []):
+        paths = ", ".join(component.get("paths", [])) or "—"
+        print(f"  {component.get('name', '?')}: {paths}")
+
+
+def _context_notes(root: Path | None, skill: str | None) -> None:
+    """The note store listing a skill's opening would read.
+
+    Omitted for flw-review, matching that skill's own opening: it orchestrates and
+    reviews nothing, so a read here is paid by the one context that produces no
+    findings and reaches none of the ones that do.
+    """
+    if skill == "flw-review":
+        return
+    scripts = checkout() / "core" / "scripts"
+    sys.path.insert(0, str(scripts))
+    import store as engine
+
+    category = _kb_category(root) if root else ""
+    print(f"\nnotes: category {category or 'none'}")
+    skipped: list = []
+    everything = engine.walk(FLW_HOME, root, project_category=category, skipped=skipped)
+    _kb_skipped(skipped)
+    notes = engine.filtered(everything, category=category, tags=[], type_="")
+    empty = engine.nothing_matched(notes, everything, bool(category))
+    print(empty or engine.render_index(engine.group(notes, project_category=category)))
+
+
+def context(args: argparse.Namespace) -> int:
+    """Everything a skill reads at its opening, in one call.
+
+    Four skills opened with three reads each, described in prose that four files
+    had to keep in step — and the extension chain in particular is an order no
+    agent can execute from a sentence, because `nearest_project` stops at the
+    first hit and walking above it is work nothing in flw did. One command is one
+    mechanism.
+
+    Prints rather than refuses outside a project: a directory with no contract and
+    no configuration is a state, not a fault, which is the reading `flw validate`
+    already takes.
+    """
+    if args.root is not None:
+        # `Path(args.root).resolve()` is non-strict, so a mistyped relative path
+        # resolves under $PWD and the walk answers with whatever project contains
+        # the current directory — the exact failure this flag exists to prevent,
+        # reported as `(from --root)` so the provenance line confirms it. And
+        # `--root ""` is falsy, so a truthiness test drops it before Path() sees it.
+        if not args.root.strip():
+            print("error: --root was given an empty path", file=sys.stderr)
+            return 1
+        if not Path(args.root).exists():
+            print(f"error: --root: no such path: {args.root}", file=sys.stderr)
+            return 1
+
+    skills, _ = discover()
+    known = sorted(skill.name for skill in skills)
+    skill = args.skill
+    if skill is not None and skill not in known:
+        print(
+            f"error: no installed skill is named {skill!r}. Installed: "
+            f"{', '.join(known) or 'none'}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    start = Path(args.root).resolve() if args.root else None
+    root = nearest_project(start)
+
+    print(read_flw_text(checkout() / "core" / "shared" / "context.md").rstrip("\n"))
+
+    came_from = "--root" if args.root else "$PWD"
+    if root is None:
+        print(f"\nroot: none at or above {tilde(start or Path.cwd())} (from {came_from})")
+    else:
+        print(f"\nroot: {tilde(root)} (from {came_from})")
+
+    _context_extensions(project_chain(start), skill)
+    _context_notes(root, skill)
+    _context_contract(root)
+    return 0
+
+
 def kb(args: argparse.Namespace) -> int:
     """The note store: what an agent worked out, kept where the next one finds it.
 
@@ -2777,8 +2971,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-y", "--yes", action="store_true", help="do not prompt")
     p.set_defaults(handler=sync)
 
+    p = sub.add_parser(
+        "context",
+        help="everything a skill reads at its opening, in one call",
+    )
+    p.add_argument("skill", nargs="?", help="also print this skill's own extensions")
+    p.add_argument(
+        "--root",
+        metavar="PATH",
+        help="the project to resolve from (default: found from cwd)",
+    )
+    p.set_defaults(handler=context)
+
     p = sub.add_parser("doctor", help="verify links, overrides and orphans")
     p.add_argument("-v", "--verbose", action="store_true", help="include host notes")
+    p.add_argument(
+        "--root",
+        metavar="PATH",
+        help="the project whose extensions to report (default: found from cwd)",
+    )
     p.set_defaults(handler=doctor)
 
     p = sub.add_parser("add", help="register a local bundle of extra skills")

@@ -8,23 +8,31 @@ argument-hint: "[path]"
 
 ## Start here, silently
 
-Three reads, no narration — do not announce them, do not report them, just do them and
-begin. The user asked for the work, not for a description of you preparing to do it.
+One command, no narration — do not announce it, do not report it, just run it and begin.
+The user asked for the work, not for a description of you preparing to do it.
 
-1. **`$FLW`** is the path in `${FLW_HOME:-$HOME/.flw}/root`. Read
-   **`$FLW/core/shared/context.md`**; everything below assumes it.
-2. **`<project root>/.flw/extensions/flw-research.md`**, if it exists — this repo's local
-   amendments to how you work, and part of your instructions from here on.
-3. **`flw kb -c <the project's category>`** — the note store, this project's category
-   only. Not the whole store: that prints every category on the machine, spent mostly on
-   other repositories.
+```sh
+flw context flw-research
+```
 
-**It must be an absolute path.** A skill folder is installed as a symlink, and while the
-filesystem resolves `../../shared/` through it correctly, the file-reading tool collapses
-`..` lexically first and lands somewhere that does not exist. Measured, not assumed.
+It prints everything this skill opens with: the shared context, the project root it
+resolved and where that came from, this repo's extensions from the outermost project root
+inward, the note store listing for this project's category, and the contract's components
+with the paths each one covers. Everything below assumes it.
 
-**If that pointer is missing:** you may be inside flw's own checkout, so walk up from
-the project root for a directory holding both `core/skills/` and `cli/flw.py`.
+**If the request names a repository, a directory or a file, pass it** —
+`flw context flw-research --root <that path>`. The rule and its reason are in the shared
+context the command just printed; this is the only part of it the command cannot tell you,
+because you have to call it first.
+
+**Every extension it printed is part of your instructions from here on.**
+
+**If `flw` is not on PATH:** run it out of the checkout — `<interpreter> "$FLW/cli/flw.py"
+context flw-research` — where `$FLW` is the absolute path in `${FLW_HOME:-$HOME/.flw}/root`.
+It must be an absolute path: a skill folder is installed as a symlink, and the file-reading
+tool collapses `..` lexically before the filesystem resolves it, landing somewhere that
+does not exist. If that pointer is missing you may be inside flw's own checkout, so walk up
+from the project root for a directory holding both `core/skills/` and `cli/flw.py`.
 Nothing → stop and say to run `flw install`.
 
 ## Lane
@@ -43,6 +51,7 @@ version file. If what you learn suggests the contract is wrong, say so and hand 
 |---|---|
 | `.flw/config.toml` | `[tests]` — the check commands, the setup line, what cannot run here. `run_tests.py` reads these as data and runs them verbatim |
 | `.flw/extensions/<skill name>.md` | how the place works, in prose, for the skill that needs it |
+| `.flw/extensions/shared.md` | the same, for what every skill needs — one file, not four |
 
 A command written as prose gets reconstructed on every run, and it drifts — `make style`
 becomes `ruff check .` because that is what the agent already knows. A command in config
@@ -195,14 +204,21 @@ that what was recorded is stale, and a re-run that writes the file fresh drops t
 path, the interview mode and the note-store category the user chose. Leave every key you
 did not measure exactly as you found it.
 
-**Then the extensions**, one file per skill that needs one, each holding only what that
-skill needs. Do not restate across them.
+**Then the extensions**, each holding only what its readers need. Do not restate across
+them: a fact every skill needs goes in `shared.md` once, not into three files.
 
 | File | What belongs in it |
 |---|---|
+| `shared.md` | what every skill here needs whatever it is doing — how the place is laid out, what it is for, the conventions that are not one skill's business |
 | `flw-execute.md` | how tests and checks are actually invoked; what is normally handed back; what a commit looks like here |
-| `flw-spec.md` | what the project is for, where the work lives, what the core modules are, where a new thing goes |
+| `flw-spec.md` | where the work lives, what the core modules are, where a new thing goes |
 | `flw-review.md` | the conventions and standards a reviewer should judge against |
+
+**Which directory each file goes in.** Extensions are read from every project root at or
+above the one being worked in, so a convention belongs at the level it is true of. A repo's
+own quirks go in that repo; something every checkout under a parent directory obeys goes in
+the parent, which needs only a `.flw/` to become a level. Writing it once above beats
+writing it into six repos that then drift.
 
 **Show the user everything before writing.** These files become instructions to every later
 run, so a wrong line is a wrong instruction repeated silently. One block, their edits,

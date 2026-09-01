@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.11.7"
+spec_version = "0.11.8"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -19,6 +19,7 @@ applied = [
   "finish-the-repair",
   "commits-name-a-part",
   "narrow-what-a-reviewer-loads",
+  "opening-is-one-call",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -69,7 +70,8 @@ provides = [
   "A user can verify an install — that every link resolves, no bundle silently overrides a core skill, and no orphan remains from a removed bundle.",
   "A user who updates flw is never left with a host silently running older material: what a host holds as a symlink is live the moment the pull lands, and what it holds as a copy is reported and offered for refresh in the same run.",
   "A user can register a local bundle of extra skills and have it install and uninstall exactly like flw's own.",
-  "A user can see which of a repo's extensions a skill will actually read, and which sit there read by nobody.",
+  "A user can see which of a repo's extensions a skill will actually read at every level from the outermost project root inward, how large each one is, and which sit there read by nobody — for the repository they name rather than only the one they are standing in.",
+  "A user can print everything a skill reads at its opening — the shared context, the resolved root and where it came from, this repo's extensions from the outermost project root inward, the note store listing where that skill's own opening reads one, and the contract's component names and paths — with one command, and can run it without invoking a skill at all, so work flw has no skill for still starts from what the repository records.",
   "A user can see, per host, where skills install and what that host does and does not support, before installing — and is told when a host cannot do something a skill wants, rather than the skill silently not working.",
   "A user can install flw's writing style into every host as a separate opt-in step, and remove it exactly, because a style reshapes every response in a session rather than only the ones a skill handles.",
   "Nothing flw installs destroys what was already there: it never overwrites a file it did not write, and never deletes one it did not create.",
@@ -91,6 +93,8 @@ properties = [
   "-n never writes what the command would otherwise write: no link, no file, no host configuration. On flw update a dry run may fetch, because a fetch writes only inside .git, and it moves neither HEAD nor the working tree.",
   "flw doctor and flw install describe a machine the same way, in every state: a host present with healthy links, present with broken ones, present and never installed into, absent but reachable through another host's directory, and absent entirely are five distinct lines and no two of them are the same. What counts as present is evidence the host left — never a directory or a file flw itself created, because that would make every install prove the host it installed for.",
   "A dry run predicts the run it is a dry run of. flw update -n says which of a fast-forward and a rebase a real pull would do, and says when it could not find out, rather than reporting a clean state it did not verify.",
+  "flw context run outside any project prints what it can and exits 0. A directory with no contract and no configuration is a state rather than a fault, which is the reading flw validate already takes.",
+  "flw test <path> walks upward from the path it is given and flw scout <path> does not, deliberately: flw test src/ inside a project is a normal invocation, and a scout must not walk out of the tree it was aimed at.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -101,6 +105,7 @@ surfaces = [
   "~/.flw/style.toml — [[host]], keys: host, name, source, path, previous, installed_sha, created, settings_created, selected. `previous` is the user's own outputStyle, restored on uninstall.",
   "~/.flw/styles/<name>.md — a style of the user's own, installed by name.",
   "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests] setup, checks, yours; [kb] category.",
+  "<project root>/.flw/extensions/<skill name>.md and <project root>/.flw/extensions/shared.md — prose read at a skill's opening, from every project root at or above the resolved one and below $HOME, outermost first so the nearest overrides; within a level shared.md is read before the skill's own file, so a nearer level beats a farther one and, within one level, a skill's own file beats shared. shared.md is read by every skill; a file named for anything else is read by nobody, and flw doctor says so.",
   "<!-- flw:begin --> / <!-- flw:end --> and <!-- flw:style:begin --> / <!-- flw:style:end --> — the marker pairs bounding flw's skills block and its style block in a host's instructions file. What lies between a pair is flw's to rewrite; what lies outside is the user's and is never touched.",
   "flw install [hosts...] [-n|--dry-run] [--ambient] [-y|--yes]",
   "flw uninstall [hosts...] [-n|--dry-run]",
@@ -108,7 +113,8 @@ surfaces = [
   "flw style uninstall [-H|--host] [-n|--dry-run]",
   "flw sync [-n|--dry-run] [-y|--yes]",
   "flw update [-y|--yes] [-n|--dry-run]",
-  "flw doctor [-v|--verbose]",
+  "flw doctor [-v|--verbose] [--root PATH]",
+  "flw context [skill] [--root PATH]",
   "flw add <path> [--name]",
   "flw remove <name>",
   "flw list",
@@ -141,7 +147,8 @@ provides = [
   "A user can have a second reader check a contract for the semantic gaps validation structurally cannot see.",
   "A user can run a configurable review team over the work at any stage, including a perspective that probes rather than reads.",
   "A user can bring flw to a repo they did not set up and have its conventions, test invocation and structure written into that repo's flw configuration, so later work builds on what exists instead of duplicating it.",
-  "A user can amend how a skill behaves in one repo with prose that skill reads, without forking the skill or maintaining a copy of it.",
+  "A user can amend how a skill behaves in one repo with prose that skill reads, without forking the skill or maintaining a copy of it — per skill, or in one file every skill reads, at whichever directory above the work the convention belongs to.",
+  "A skill resolves its project root from what the request named rather than from where the shell happens to be, and says which root it resolved to, so a session started in a directory holding several checkouts works in the repository that was asked for.",
   "A user gets the same plain, hard-wrapped prose out of every reviewer and every report whether or not the style is installed in the host, because the skills read it themselves.",
   "A user reads a contract that records what shipped, not what was planned: it moves when the work lands rather than when the plan is agreed, so a version still in flight is a record the contract's applied list does not yet name.",
   "A user can install a build posture alongside the skills that requires one runnable check behind the non-trivial logic an agent writes, and requires saying what was not done rather than implying a completeness the work does not have.",

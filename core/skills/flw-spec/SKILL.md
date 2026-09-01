@@ -8,23 +8,31 @@ argument-hint: "[plan path] [--thrifty]"
 
 ## Start here, silently
 
-Three reads, no narration — do not announce them, do not report them, just do them and
-begin. The user asked for the work, not for a description of you preparing to do it.
+One command, no narration — do not announce it, do not report it, just run it and begin.
+The user asked for the work, not for a description of you preparing to do it.
 
-1. **`$FLW`** is the path in `${FLW_HOME:-$HOME/.flw}/root`. Read
-   **`$FLW/core/shared/context.md`**; everything below assumes it.
-2. **`<project root>/.flw/extensions/flw-spec.md`**, if it exists — this repo's local
-   amendments to how you work, and part of your instructions from here on.
-3. **`flw kb -c <the project's category>`** — the note store, this project's category
-   only. Not the whole store: that prints every category on the machine, spent mostly on
-   other repositories.
+```sh
+flw context flw-spec
+```
 
-**It must be an absolute path.** A skill folder is installed as a symlink, and while the
-filesystem resolves `../../shared/` through it correctly, the file-reading tool collapses
-`..` lexically first and lands somewhere that does not exist. Measured, not assumed.
+It prints everything this skill opens with: the shared context, the project root it
+resolved and where that came from, this repo's extensions from the outermost project root
+inward, the note store listing for this project's category, and the contract's components
+with the paths each one covers. Everything below assumes it.
 
-**If that pointer is missing:** you may be inside flw's own checkout, so walk up from
-the project root for a directory holding both `core/skills/` and `cli/flw.py`.
+**If the request names a repository, a directory or a file, pass it** —
+`flw context flw-spec --root <that path>`. The rule and its reason are in the shared
+context the command just printed; this is the only part of it the command cannot tell you,
+because you have to call it first.
+
+**Every extension it printed is part of your instructions from here on.**
+
+**If `flw` is not on PATH:** run it out of the checkout — `<interpreter> "$FLW/cli/flw.py"
+context flw-spec` — where `$FLW` is the absolute path in `${FLW_HOME:-$HOME/.flw}/root`.
+It must be an absolute path: a skill folder is installed as a symlink, and the file-reading
+tool collapses `..` lexically before the filesystem resolves it, landing somewhere that
+does not exist. If that pointer is missing you may be inside flw's own checkout, so walk up
+from the project root for a directory holding both `core/skills/` and `cli/flw.py`.
 Nothing → stop and say to run `flw install`.
 
 ## Lane
@@ -148,7 +156,7 @@ validation.
      The contract moves when `flw-execute` finishes this version's run, which is when the
      name joins `applied`.
    - **This classification is flw's default, not law.** A project may replace it in
-     `.flw/extensions/flw-spec.md` — the file step 2 already reads on an amend. What a
+     `.flw/extensions/flw-spec.md` — the file `flw context flw-spec` already printed. What a
      project usually redefines: what major and minor mean for it, and where 1.0 sits,
      which in a service is often whatever reached production. A project also scopes its
      versions by where `specs/` lives — `nearest_project()` resolves the nearest one, so a

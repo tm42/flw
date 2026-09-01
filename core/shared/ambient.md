@@ -12,6 +12,12 @@ project declares its own commands and flw runs them.
 | `/flw-review` | Run a configurable team of reviewers over the work at any stage. Reports; fixes nothing. |
 | `/flw-research` | Bring flw to a repo you did not set up: learn how it is tested and built, write that into its own config. |
 
+**Before working in a repository that has a `specs/` or a `.flw/`, run `flw context`** —
+it prints that project's shared context, its extensions from the outermost project root
+inward, its note store listing and its contract's components, in one call. Not at session
+start, and not in a repository that has neither: it costs nothing to skip and it is the
+only way work flw has no skill for still starts from what the repository records.
+
 `flw scout` ranks a repo by what depends on what — orientation to a codebase nobody has
 read, in about a second, with nothing to install and nothing cached. `flw test` runs the
 project's declared checks. `flw doctor` verifies the install; `flw update` pulls and

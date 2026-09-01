@@ -8,20 +8,35 @@ argument-hint: "[config[:role,role]] [path...] [--inline]"
 
 ## Start here, silently
 
-Two reads, no narration — do not announce them, do not report them, just do them and
-begin. The user asked for the work, not for a description of you preparing to do it.
+One command, no narration — do not announce it, do not report it, just run it and begin.
+The user asked for the work, not for a description of you preparing to do it.
 
-1. **`$FLW`** is the path in `${FLW_HOME:-$HOME/.flw}/root`. Read
-   **`$FLW/core/shared/context.md`**; everything below assumes it.
-2. **`<project root>/.flw/extensions/flw-review.md`**, if it exists — this repo's local
-   amendments to how you work, and part of your instructions from here on.
+```sh
+flw context flw-review
+```
 
-**It must be an absolute path.** A skill folder is installed as a symlink, and while the
-filesystem resolves `../../shared/` through it correctly, the file-reading tool collapses
-`..` lexically first and lands somewhere that does not exist. Measured, not assumed.
+It prints everything this skill opens with: the shared context, the project root it
+resolved and where that came from, this repo's extensions from the outermost project root
+inward, and the contract's components with the paths each one covers. Everything below
+assumes it.
 
-**If that pointer is missing:** you may be inside flw's own checkout, so walk up from
-the project root for a directory holding both `core/skills/` and `cli/flw.py`.
+The note store is deliberately absent from that output: you orchestrate and review nothing,
+so the read would be paid by the one context that produces no findings and reaches none of
+the ones that do. Each dispatched reviewer gets it instead, per §3.
+
+**If the request names a repository, a directory or a file, pass it** —
+`flw context flw-review --root <that path>`. The rule and its reason are in the shared
+context the command just printed; this is the only part of it the command cannot tell you,
+because you have to call it first.
+
+**Every extension it printed is part of your instructions from here on.**
+
+**If `flw` is not on PATH:** run it out of the checkout — `<interpreter> "$FLW/cli/flw.py"
+context flw-review` — where `$FLW` is the absolute path in `${FLW_HOME:-$HOME/.flw}/root`.
+It must be an absolute path: a skill folder is installed as a symlink, and the file-reading
+tool collapses `..` lexically before the filesystem resolves it, landing somewhere that
+does not exist. If that pointer is missing you may be inside flw's own checkout, so walk up
+from the project root for a directory holding both `core/skills/` and `cli/flw.py`.
 Nothing → stop and say to run `flw install`.
 
 ## Lane

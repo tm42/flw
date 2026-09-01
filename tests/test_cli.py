@@ -84,7 +84,7 @@ def install(*hosts: str, ambient: bool = False, dry: bool = False) -> int:
 
 
 def doctor() -> int:
-    return flw.doctor(argparse.Namespace(verbose=False))
+    return flw.doctor(argparse.Namespace(verbose=False, root=None))
 
 
 def uninstall(*hosts: str, dry: bool = False) -> int:
@@ -2163,6 +2163,302 @@ def test_a_project_paths_specs_wins_over_the_global_one(tmp_path, monkeypatch):
     (project / ".flw").mkdir(parents=True)
     (project / ".flw" / "config.toml").write_text('[paths]\nspecs = "mine"\n')
     assert flw._specs_dir(project) == "mine"
+
+
+# --- the chain of project roots an extension is read from ----------------- #
+
+
+def test_project_chain_returns_every_root_outermost_first(tmp_path, monkeypatch):
+    """A directory holding several checkouts can carry conventions all of them
+    obey. nearest_project stops at the first hit and cannot see them; the chain is
+    the other question, and its order is what decides which file overrides which."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    parent = tmp_path / "work"
+    (parent / ".flw").mkdir(parents=True)
+    inner = parent / "ds"
+    (inner / ".flw").mkdir(parents=True)
+
+    assert flw.project_chain(inner) == [parent, inner]
+
+
+def test_project_chain_stops_at_home(tmp_path, monkeypatch):
+    """flw install writes ~/.flw, so an unbounded walk puts the home directory at
+    the head of every chain for every project underneath it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".flw").mkdir()
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+
+    assert flw.project_chain(project) == [project]
+
+
+def test_project_chain_is_empty_where_there_is_no_project(tmp_path, monkeypatch):
+    """Nothing to read is a state, not a fault — the callers print what they have."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    plain = tmp_path / "somewhere"
+    plain.mkdir()
+
+    assert flw.project_chain(plain) == []
+
+
+# --- doctor reports the whole extension chain ----------------------------- #
+
+
+def _doctor_extensions(start, known=("flw-spec", "flw-execute")):
+    return flw.report_extensions(sorted(known), start)
+
+
+def test_doctor_reports_an_extension_at_every_level(tmp_path, capsys, monkeypatch):
+    """A parent holding several checkouts can carry conventions all of them obey.
+    Reporting only the nearest level called the outer file read by nobody."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    parent = tmp_path / "work"
+    (parent / ".flw" / "extensions").mkdir(parents=True)
+    (parent / ".flw" / "extensions" / "flw-spec.md").write_text("outer\n")
+    inner = parent / "ds"
+    (inner / ".flw" / "extensions").mkdir(parents=True)
+    (inner / ".flw" / "extensions" / "flw-spec.md").write_text("inner\n")
+
+    assert _doctor_extensions(inner) == 0
+    out = capsys.readouterr().out
+    assert flw.tilde(parent / ".flw" / "extensions") in out
+    assert flw.tilde(inner / ".flw" / "extensions") in out
+    outer_at = out.index(flw.tilde(parent / ".flw" / "extensions"))
+    inner_at = out.index(flw.tilde(inner / ".flw" / "extensions"))
+    assert outer_at < inner_at, "outermost first"
+
+
+def test_doctor_accepts_the_reserved_shared_name(tmp_path, capsys, monkeypatch):
+    """shared.md is read by every skill, so it is not read by nobody — but it is
+    also the only filename that is not a skill's, and every other one still is."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    root = tmp_path / "work"
+    (root / ".flw" / "extensions").mkdir(parents=True)
+    (root / ".flw" / "extensions" / "shared.md").write_text("every skill reads this\n")
+    (root / ".flw" / "extensions" / "spec.md").write_text("nobody reads this\n")
+
+    assert _doctor_extensions(root) == 1
+    out = capsys.readouterr().out
+    assert "shared.md — read by every skill" in out
+    assert "spec.md — read by nobody" in out
+
+
+def test_doctor_prints_the_size_of_every_live_extension(tmp_path, capsys, monkeypatch):
+    """The tax is paid at every skill open, and nothing else would show it growing."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    root = tmp_path / "work"
+    (root / ".flw" / "extensions").mkdir(parents=True)
+    (root / ".flw" / "extensions" / "flw-spec.md").write_text("x" * 1234)
+
+    assert _doctor_extensions(root) == 0
+    assert "(1,234 B)" in capsys.readouterr().out
+
+
+# --- flw context: one call for what a skill opens with --------------------- #
+
+
+def _body(out: str) -> str:
+    """Everything below the root line: what this command decided, not the prose
+    preamble it copies out of core/shared/context.md."""
+    return out.split("\nroot: ", 1)[1]
+
+
+def _context(tmp_path, monkeypatch, skill=None, root=None):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
+    return flw.context(argparse.Namespace(skill=skill, root=root))
+
+
+def test_context_prints_extensions_outermost_first_and_shared_before_the_skills_own(
+    tmp_path, capsys, monkeypatch
+):
+    """Two axes, both invertible, and a chain read the wrong way round still looks
+    right. Nearer beats farther and a skill's own file beats shared, so the reads
+    go outer-shared, outer-skill, inner-shared, inner-skill."""
+    parent = tmp_path / "work"
+    (parent / ".flw" / "extensions").mkdir(parents=True)
+    (parent / ".flw" / "extensions" / "shared.md").write_text("OUTER-SHARED\n")
+    (parent / ".flw" / "extensions" / "flw-spec.md").write_text("OUTER-SPEC\n")
+    inner = parent / "ds"
+    (inner / ".flw" / "extensions").mkdir(parents=True)
+    (inner / ".flw" / "extensions" / "shared.md").write_text("INNER-SHARED\n")
+    (inner / ".flw" / "extensions" / "flw-spec.md").write_text("INNER-SPEC\n")
+
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(inner)) == 0
+    out = capsys.readouterr().out
+    markers = (
+        # The preamble is the only way any skill now gets the shared context, and
+        # deleting the one print that emits it passed the whole suite.
+        "The project root is an input, not a discovery.",
+        "OUTER-SHARED", "OUTER-SPEC", "INNER-SHARED", "INNER-SPEC",
+    )
+    order = [out.index(m) for m in markers]
+    assert order == sorted(order), out
+
+
+def test_context_for_flw_review_omits_the_note_store(tmp_path, capsys, monkeypatch):
+    """flw-review's own opening skips the store: it orchestrates and reviews
+    nothing, so that read is paid by the one context producing no findings."""
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+
+    # Search below the root line only: everything above it is context.md, which
+    # this test does not control, and one plausible sentence added there turned
+    # both assertions red with no behaviour changed.
+    assert _context(tmp_path, monkeypatch, skill="flw-review", root=str(root)) == 0
+    assert "notes:" not in _body(capsys.readouterr().out)
+
+    assert _context(tmp_path, monkeypatch, skill="flw-execute", root=str(root)) == 0
+    assert "notes:" in _body(capsys.readouterr().out)
+
+
+def test_context_outside_any_project_prints_what_it_can_and_exits_zero(
+    tmp_path, capsys, monkeypatch
+):
+    """A directory with no contract and no config is a state, not a fault — the
+    reading flw validate already takes."""
+    plain = tmp_path / "somewhere"
+    plain.mkdir()
+
+    assert _context(tmp_path, monkeypatch, root=str(plain)) == 0
+    out = capsys.readouterr().out
+    assert "root: none" in out
+    assert "contract:" not in _body(out)
+
+
+def test_context_refuses_a_skill_nobody_installed(tmp_path, capsys, monkeypatch):
+    """Reading no extension because the name was wrong is indistinguishable from
+    reading no extension because there is none, and both exit 0."""
+    assert _context(tmp_path, monkeypatch, skill="flw-spek") == 1
+    assert "no installed skill is named" in capsys.readouterr().err
+
+
+def test_context_names_each_component_and_its_paths_and_no_more(
+    tmp_path, capsys, monkeypatch
+):
+    """Component names and paths, never `provides`. The whole cost argument for
+    running this at every skill open — and through the ambient line, outside one —
+    is that the narrow reading is ~163 tokens where the wide one is ~3,011."""
+    root = tmp_path / "work"
+    (root / "specs").mkdir(parents=True)
+    (root / "specs" / "current.toml").write_text(
+        'schema_version = 4\n'
+        'spec_version = "2.1.0"\n'
+        '[[final_state.components]]\n'
+        'name = "the engine"\n'
+        'paths = ["src/", "lib/"]\n'
+        'provides = ["A user can render a page."]\n'
+        '[[final_state.components]]\n'
+        'name = "the surface"\n'
+        'paths = ["web/"]\n'
+        'provides = ["A user can click a button."]\n'
+    )
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    body = _body(capsys.readouterr().out)
+    assert "2.1.0" in body
+    assert "the engine: src/, lib/" in body
+    assert "the surface: web/" in body
+    assert "render a page" not in body
+    assert "click a button" not in body
+
+
+def test_context_reads_the_contract_where_paths_specs_says_it_is(
+    tmp_path, capsys, monkeypatch
+):
+    """A project that moved specs/ gets `contract: none` if this hardcodes the
+    default, and no other test in the suite reaches this code path."""
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+    (root / ".flw" / "config.toml").write_text('[paths]\nspecs = "contracts"\n')
+    (root / "contracts").mkdir()
+    (root / "contracts" / "current.toml").write_text(
+        'schema_version = 4\nspec_version = "9.9.9"\n'
+        '[[final_state.components]]\nname = "moved"\npaths = ["elsewhere/"]\n'
+    )
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    body = _body(capsys.readouterr().out)
+    assert "moved: elsewhere/" in body
+    assert "9.9.9" in body
+
+
+def test_context_refuses_a_root_that_is_not_there(tmp_path, capsys, monkeypatch):
+    """Path.resolve() is non-strict, so a mistyped relative --root resolved under
+    $PWD and the walk answered with whatever project held the current directory —
+    the exact failure the flag exists to prevent, reported as `(from --root)`."""
+    assert _context(tmp_path, monkeypatch, root=str(tmp_path / "typo")) == 1
+    assert "no such path" in capsys.readouterr().err
+
+    # "" is falsy, so a truthiness test drops it before Path() sees it and the
+    # command reports $PWD as the source having been handed a flag.
+    assert _context(tmp_path, monkeypatch, root="") == 1
+    assert "empty path" in capsys.readouterr().err
+
+
+def test_doctor_root_reports_a_project_you_are_not_standing_in(
+    tmp_path, capsys, monkeypatch
+):
+    """The second half of the claim: for the repository they name rather than only
+    the one they are standing in. Ignoring --root entirely passed the whole suite."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    other = tmp_path / "other"
+    (other / ".flw" / "extensions").mkdir(parents=True)
+    (other / ".flw" / "extensions" / "flw-spec.md").write_text("elsewhere\n")
+
+    flw.doctor(argparse.Namespace(verbose=False, root=str(other)))
+    assert flw.tilde(other / ".flw" / "extensions") in capsys.readouterr().out
+
+
+def test_doctor_refuses_a_root_that_is_not_there(tmp_path, capsys):
+    """A typo and a project with no extensions printed the same nothing, against
+    the property that a missing directory says which path it was reading."""
+    assert flw.doctor(argparse.Namespace(verbose=False, root=str(tmp_path / "typo"))) == 1
+    assert "no such path" in capsys.readouterr().err
+
+
+def test_context_shows_where_a_symlinked_extension_really_points(
+    tmp_path, capsys, monkeypatch
+):
+    """Every opening says each printed extension is part of the agent's
+    instructions, and stat() follows the link — so a shared.md pointing outside
+    the repository was printed under the repository's own path."""
+    outside = tmp_path / "outside.md"
+    outside.write_text("FROM-OUTSIDE\n")
+    root = tmp_path / "work"
+    (root / ".flw" / "extensions").mkdir(parents=True)
+    (root / ".flw" / "extensions" / "shared.md").symlink_to(outside)
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    assert f"-> {flw.tilde(outside)}" in _body(capsys.readouterr().out)
+
+
+def test_doctor_names_a_dangling_extension_symlink_for_what_it_is(
+    tmp_path, capsys, monkeypatch
+):
+    """is_file() is false for a broken link, and the first branch assumed that
+    meant a directory — sending the reader after one that is not there."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    root = tmp_path / "work"
+    (root / ".flw" / "extensions").mkdir(parents=True)
+    (root / ".flw" / "extensions" / "flw-spec.md").symlink_to(tmp_path / "gone.md")
+
+    assert flw.report_extensions(["flw-spec"], root) == 1
+    assert "which is not there" in capsys.readouterr().out
+
+
+def test_context_names_a_note_the_store_could_not_read(tmp_path, capsys, monkeypatch):
+    """Every read verb says how many were skipped. Three of the four openings used
+    to run `flw kb -c <category>`, which printed it; they now run this."""
+    home = tmp_path / "flw-home"
+    (home / "kb" / "work").mkdir(parents=True)
+    (home / "kb" / "work" / "good.md").write_text("# good\n\nreadable\n")
+    (home / "kb" / "work" / "bad.md").write_bytes(b"# bad\n\n\xff\xfe not utf-8\n")
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    assert "could not be read" in capsys.readouterr().err
 
 
 # --- the CLI's declared surface cannot drift from the parser --------------- #
