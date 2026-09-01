@@ -52,14 +52,19 @@ Three reasons, none of them tidiness:
   only one working tree can honour.
 - `git status` is never clean, so a genuinely accidental file has somewhere to hide.
 
-Today one thing is ignored:
+Today two kinds of flw record are ignored:
 
 ```text
 .flw/reports/                       review reports — scaffolding, disposable once specced from
+.flw/reviews/publish*.toml          a reviewer team written for one round, not for reuse
 ```
 
 A review report is disposable because what survives it is the version record `flw-spec` drafts
 from it, carrying the coverage line and any measurement forward. The report itself can then go.
+
+A team config is normally tracked — the four in `.flw/reviews/` are, and a project copy of a
+shipped team is meant to travel with the repo. The ignored pattern is for one written against a
+particular round, whose lenses name what that round was worried about and mean nothing after it.
 
 ## References that do not resolve
 
@@ -69,7 +74,7 @@ Version records and design documents cite two kinds of thing you cannot open.
 repository's history begins.
 
 **Paths to files that are gone**: `docs/verified.md`, deleted with its rationale at
-`specs/current.toml:53`; `.flw/reports/*`, gitignored by the rule above; and two `plans/`
+`specs/current.toml:58`; `.flw/reports/*`, gitignored by the rule above; and two `plans/`
 documents retired during the v3 build.
 
 **Both are labels, not directions.** They are kept because the sentence around each one is

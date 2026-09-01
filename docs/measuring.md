@@ -133,25 +133,34 @@ cProfile.run('store.lint(notes)', sort='tottime')" 2>&1 | head -20
 
 ## The baseline
 
-Apple M3 Pro, macOS 26.6.2, Python 3.11.14, at commit `1aa8775`. Wall clock, second run.
+Apple M3 Pro, macOS 26.6.2, Python 3.12.14, at flw 0.11.5. Wall clock, second run.
 
 | command | corpus | time |
 |---|---|---|
-| `flw kb -s` | 1,000 notes | 0.08 s |
-| `flw kb -s` | 4,000 notes | 0.19 s |
-| `flw kb search proxy` | 4,000 notes | 0.03 s |
-| `flw kb lint` | 1,000 notes, varied titles | 0.22 s |
-| `flw kb lint` | 4,000 notes, varied titles | 0.87 s |
-| `flw kb lint` | 1,000 notes, `--degenerate` | 1.00 s |
-| `flw scout` | 500 files | 0.10 s |
-| `flw scout` | 2,000 files | 0.32 s |
-| `flw scout` | 8,000 files | 1.31 s |
+| `flw kb -s` | 1,000 notes | 0.10 s |
+| `flw kb -s` | 4,000 notes | 0.27 s |
+| `flw kb search proxy` | 4,000 notes | 0.44 s |
+| `flw kb lint` | 1,000 notes, varied titles | 0.24 s |
+| `flw kb lint` | 4,000 notes, varied titles | 0.94 s |
+| `flw kb lint` | 1,000 notes, `--degenerate` | 0.84 s |
+| `flw scout` | 500 files | 0.18 s |
+| `flw scout` | 2,000 files | 0.59 s |
+| `flw scout` | 8,000 files | 2.25 s |
 | `flw ledger locking` | this repository | 0.08 s |
-| `flw doctor` | this repository | 0.04 s |
-| `flw validate` | this repository | 0.07 s |
+| `flw doctor` | this repository | 0.05 s |
+| `flw validate` | this repository | 0.09 s |
 
-About 40 ms of every one of those is interpreter startup, so the small numbers are mostly Python
+About 20 ms of every one of those is interpreter startup, so the small numbers are partly Python
 booting rather than flw working.
+
+**This table replaces one measured on Python 3.11.14, and the whole table was re-run rather than
+corrected row by row, because a table measured on two interpreters is not a baseline.** Two
+things a reader comparing against the old one should know. The `flw kb search proxy` row read
+0.03 s and was wrong: it sat below the interpreter's own startup floor, and the store is parsed
+in full on every query, so a search cannot beat `flw kb -s` over the same corpus. It was never
+0.03 s. The three `flw scout` rows are genuinely about 1.7x their 3.11 figures, which is the
+3.12 slowdown already recorded in `specs/versions/declared-behaviour-major.toml` and not a
+regression in flw.
 
 ## What is already known, so nobody re-finds it
 

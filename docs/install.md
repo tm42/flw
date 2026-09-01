@@ -38,13 +38,18 @@ directory. A host that is not installed is named and skipped:
 
 ```
   codex: not on this machine — skipping
+  opencode: not on this machine — skipping
   claude-code: ~/.claude/skills
     + flw-execute
     + flw-research
     + flw-review
     + flw-spec
 
+  ~/.flw/root -> /path/to/flw
+
   style: flw ships a writing style and has not installed it — `flw style install`
+
+Run `flw doctor` to verify.
 ```
 
 Name a host to install regardless — `flw install claude-code` — which is what you want when
@@ -87,9 +92,12 @@ OK
 is not here, but reads the same one, so its skills would resolve the moment it arrived —
 which is why `flw install` calls it absent and `flw doctor` still ticks it.
 
-**`·` is not a failure.** It means the host is not on this machine and nothing reaches
-it. `✗` is a failure — a link that is dangling, hijacked, stale, or recorded but no
-longer there. `flw doctor -v` adds each host's notes and quirks.
+**`·` is not a failure.** It means nothing of flw's reaches that host, and the line says
+which of the two reasons applies: `not installed` is a host that is not on this machine,
+and `on this machine, not installed into` is one that is here and was never named. A host
+that is here and whose links are all broken gets `!` instead, because that one is worth
+acting on. `✗` is a failure — a link that is dangling, hijacked, stale, or recorded but
+no longer there. `flw doctor -v` adds each host's notes and quirks.
 
 Run inside a project, `doctor` also reports which of that repo's `.flw/extensions/` files
 an installed skill will actually read, and which sit there read by nobody.

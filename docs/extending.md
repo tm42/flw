@@ -110,7 +110,12 @@ that is the control, not a test suite.
 
 Resolution is core first, then bundles in registration order, later winning. A bundle skill
 that shadows a core one is powerful and a debugging nightmare when implicit, so `flw
-install` and `flw doctor` both name it:
+install` and `flw doctor` both name it — in different words, because install has the
+shadowed path to hand and doctor is reporting a state:
+
+```
+  override: flw-spec from [my-bundle] shadows [core] (/path/to/flw/core/skills/flw-spec)
+```
 
 ```
   ! flw-spec: [my-bundle] shadows [core]
