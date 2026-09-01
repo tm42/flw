@@ -10,6 +10,12 @@ Python 3.11 or later as a system interpreter. Nothing else — flw has no runtim
 dependencies, and an installer that exists to stop a workflow assuming a package manager
 cannot itself require one.
 
+**Running flw's own checks is the exception.** `flw test` inside this checkout runs
+`python3 -m venv .venv && .venv/bin/pip install -q pytest ruff` the first time, because
+that is what flw's own `.flw/config.toml` declares as `[tests] setup`. It needs the
+network once and takes a fresh clone from 2 MB to 63 MB. Every other project declares its
+own `setup` or none, so nothing here is inherited.
+
 ## Put `flw` on PATH
 
 Clone wherever you keep things, then link the CLI onto PATH:

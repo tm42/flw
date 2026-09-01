@@ -172,6 +172,10 @@ not move — the same thing `-n` means on `install`, `sync` and `style install`.
 
 Python 3.11 or later, as a system interpreter. No runtime dependencies at all.
 
+Running flw's own checks is the one exception: `flw test` in this checkout creates
+`.venv/` and pip-installs pytest and ruff, because flw's `.flw/config.toml` declares that
+as its `[tests] setup`. It is one project's own line and nothing inherits it.
+
 ## Layout
 
 ```
