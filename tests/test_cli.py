@@ -1430,9 +1430,6 @@ def test_presence_ignores_the_skills_directory_flw_itself_creates(home, monkeypa
     assert flw.present(codex)
 
 
-# --- the writing style ---------------------------------------------------- #
-
-
 def test_an_ambient_file_flw_made_and_removed_leaves_no_evidence_behind(
     home, monkeypatch, capsys
 ):
@@ -2530,19 +2527,25 @@ def test_update_dry_run_reports_a_failed_fetch_rather_than_stale_history(
 
     monkeypatch.setattr(flw, "git", offline_git)
     flw.update(argparse.Namespace(dry_run=True, yes=True))
-    out = capsys.readouterr().out
-    assert "could not fetch" in out and "could not resolve host" in out
-    assert "last successful fetch" in out
+    captured = capsys.readouterr()
+    # stderr, not stdout: on stdout it read as part of the report a caller
+    # parses, and git's own multi-line stderr put the explanatory line several
+    # lines below the one it explains.
+    assert "could not fetch" in captured.err and "could not resolve host" in captured.err
+    assert "last successful fetch" in captured.err
+    assert "could not fetch" not in captured.out
 
 
 GIT = shutil.which("git")
 
 
-@pytest.mark.skipif(GIT is None, reason="git not on PATH")
-def test_update_dry_run_leaves_head_where_it_was(tmp_path, monkeypatch, capsys):
-    """The expensive half, and the one that answers the actual finding: a real
-    repository behind a real origin, and HEAD does not move. Every other update
-    test stubs `git` out, so none of them could have caught this."""
+def real_repos(tmp_path):
+    """A bare origin, a seed clone with one commit pushed, and a second clone.
+
+    Lifted out of the first test that needed it: the dry run's remaining claims
+    can only be checked against real refs, because every other update test stubs
+    `flw.git` and a stub answers whatever the test already believes.
+    """
     ident = [
         "-c", "user.email=flw@example.invalid",
         "-c", "user.name=flw",
@@ -2565,7 +2568,15 @@ def test_update_dry_run_leaves_head_where_it_was(tmp_path, monkeypatch, capsys):
     run("commit", "-m", "first", cwd=seed)
     run("push", "-u", "origin", "main", cwd=seed)
     subprocess.run([GIT, "clone", str(origin), str(clone)], capture_output=True, check=True)
+    return origin, seed, clone, run
 
+
+@pytest.mark.skipif(GIT is None, reason="git not on PATH")
+def test_update_dry_run_leaves_head_where_it_was(tmp_path, monkeypatch, capsys):
+    """The expensive half, and the one that answers the actual finding: a real
+    repository behind a real origin, and HEAD does not move. Every other update
+    test stubs `git` out, so none of them could have caught this."""
+    _origin, seed, clone, run = real_repos(tmp_path)
     # Put the clone behind by one commit.
     (seed / "b.txt").write_text("two\n")
     run("add", "b.txt", cwd=seed)
@@ -2582,6 +2593,61 @@ def test_update_dry_run_leaves_head_where_it_was(tmp_path, monkeypatch, capsys):
     assert run("rev-parse", "HEAD", cwd=clone).stdout.strip() == before
     assert not (clone / "b.txt").exists()
     assert "would pull 1 commit(s)" in capsys.readouterr().out
+
+
+@pytest.mark.skipif(GIT is None, reason="git not on PATH")
+def test_update_dry_run_says_a_diverged_pull_will_rebase(tmp_path, monkeypatch, capsys):
+    """HEAD..upstream counts only what the checkout is behind, so a diverged
+    checkout read exactly like a clean fast-forward: "would pull 1 commit(s)",
+    and then the real command runs `git pull --rebase` and rewrites the local
+    sha. That is the one state a user most wants the warning for."""
+    _origin, seed, clone, run = real_repos(tmp_path)
+    (seed / "b.txt").write_text("two\n")
+    run("add", "b.txt", cwd=seed)
+    run("commit", "-m", "second", cwd=seed)
+    run("push", cwd=seed)
+    (clone / "mine.txt").write_text("local\n")
+    run("add", "mine.txt", cwd=clone)
+    run("commit", "-m", "local work", cwd=clone)
+
+    monkeypatch.setattr(flw, "checkout", lambda: clone)
+    monkeypatch.setattr(flw, "sync", lambda _a: 0)
+    monkeypatch.setattr(flw, "doctor", lambda _a: 0)
+    before = run("rev-parse", "HEAD", cwd=clone).stdout.strip()
+
+    flw.update(argparse.Namespace(dry_run=True, yes=True))
+
+    out = capsys.readouterr().out
+    assert "would rebase 1 local commit(s) onto 1 from origin/main" in out
+    assert "would pull" not in out
+    assert run("rev-parse", "HEAD", cwd=clone).stdout.strip() == before
+
+
+@pytest.mark.skipif(GIT is None, reason="git not on PATH")
+def test_update_dry_run_does_not_report_an_unreadable_range_as_up_to_date(
+    tmp_path, monkeypatch, capsys
+):
+    """`git log HEAD..origin/main` exits 128 with empty stdout when the ref is
+    gone, and reading stdout alone printed "already up to date with
+    origin/main" — from the same invocation whose fetch had just pruned it,
+    and for a state where the real command exits 1 instead of pulling."""
+    origin, _seed, clone, _run = real_repos(tmp_path)
+    # No fetch.prune here on purpose: update -n passes --prune itself, and
+    # without that the deleted ref stays in refs/remotes/ and the range reads
+    # clean for a checkout whose real pull fails.
+    subprocess.run([GIT, "update-ref", "-d", "refs/heads/main"], cwd=origin,
+                   capture_output=True, check=True)
+
+    monkeypatch.setattr(flw, "checkout", lambda: clone)
+    monkeypatch.setattr(flw, "sync", lambda _a: 0)
+    monkeypatch.setattr(flw, "doctor", lambda _a: 0)
+
+    flw.update(argparse.Namespace(dry_run=True, yes=True))
+
+    captured = capsys.readouterr()
+    assert "already up to date" not in captured.out
+    assert "cannot read origin/main" in captured.err
+    assert "unknown" in captured.err
 
 
 def test_doctor_separates_a_host_that_is_here_from_one_merely_reachable(

@@ -545,6 +545,11 @@ def wrap(body: str, begin: str, end: str) -> str:
     return f"{begin}\n{body.strip()}\n{end}\n"
 
 
+def first_line(text: str) -> str:
+    """git writes several lines to stderr and the useful one is the first."""
+    return (text.strip().splitlines() or ["unknown error"])[0]
+
+
 def read_host_text(path: Path) -> str:
     """A host's own file, read so that one stray byte names the file it came from.
 
@@ -1849,15 +1854,46 @@ def update(args: argparse.Namespace) -> int:
         # exception it is allowed, because it writes only inside .git and moves
         # neither HEAD nor the working tree.
         upstream = tracking.stdout.strip()
-        fetched = git("fetch")
+        # --prune, or the branch below never fires on a default git: an
+        # upstream ref deleted on the remote stays in refs/remotes/ unless
+        # pruned, so the range reads clean for a checkout whose real pull
+        # fails. Pruning writes only inside .git, which is the exception -n
+        # already grants the fetch.
+        fetched = git("fetch", "--prune")
         if fetched.returncode != 0:
             # refs/remotes/ answers HEAD..upstream offline, so without this a
-            # machine with no network reads days-old history as news.
-            print(f"  could not fetch: {fetched.stderr.strip() or 'unknown error'}")
-            print("  the range below is whatever the last successful fetch left")
-        ahead = git("log", "--oneline", f"HEAD..{upstream}").stdout.strip()
-        if ahead:
-            print(f"  would pull {len(ahead.splitlines())} commit(s) from {upstream}:")
+            # machine with no network reads days-old history as news. To stderr,
+            # like every other error here — on stdout it read as part of the
+            # report — and first line only, because git's own stderr runs to
+            # several and put the explanation nowhere near what it explains.
+            print(f"  could not fetch: {first_line(fetched.stderr)}", file=sys.stderr)
+            print(
+                "  the range below is whatever the last successful fetch left",
+                file=sys.stderr,
+            )
+        behind = git("log", "--oneline", f"HEAD..{upstream}")
+        if behind.returncode != 0:
+            # The exit status, not the output alone. An unresolvable ref — one
+            # this fetch may itself have just pruned — exits 128 with empty
+            # stdout, and reading only stdout reported the checkout as current
+            # seconds after the ref it names stopped existing, while the real
+            # command exits 1 because @{upstream} no longer resolves.
+            print(f"  cannot read {upstream}: {first_line(behind.stderr)}", file=sys.stderr)
+            print("  what a pull would bring is unknown", file=sys.stderr)
+        elif behind.stdout.strip():
+            ahead = behind.stdout.strip()
+            local = git("log", "--oneline", f"{upstream}..HEAD").stdout.strip()
+            if local:
+                # HEAD..upstream counts only what is behind, so a diverged
+                # checkout read exactly like a clean fast-forward. This is the
+                # one state worth the warning: the real command refuses the
+                # fast-forward and runs `git pull --rebase`, rewriting these.
+                print(
+                    f"  would rebase {len(local.splitlines())} local commit(s) onto "
+                    f"{len(ahead.splitlines())} from {upstream}:"
+                )
+            else:
+                print(f"  would pull {len(ahead.splitlines())} commit(s) from {upstream}:")
             print("    " + ahead.replace("\n", "\n    "))
         else:
             print(f"  already up to date with {upstream}")
