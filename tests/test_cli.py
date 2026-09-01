@@ -1007,6 +1007,24 @@ def test_refresh_rewrites_the_tagged_block_for_a_host_without_a_style_slot(
     assert after[: after.index(flw.STYLE_BEGIN)] == head
 
 
+def test_sync_names_where_the_link_actually_pointed(home, bundle, capsys):
+    """The record still holds flw's own path when the user retargeted the link,
+    so the line read "was <flw's path> → <flw's path>" and never named the only
+    thing that had been there."""
+    install("claude-code")
+    link = home / ".claude" / "skills" / "flw-spec"
+    elsewhere = bundle("elsewhere") / "skills" / "elsewhere"
+    link.unlink()
+    link.symlink_to(elsewhere)
+    capsys.readouterr()
+
+    sync()
+    out = capsys.readouterr().out
+
+    assert "flw-spec — relinked" in out
+    assert flw.tilde(elsewhere) in out
+
+
 def test_reinstalling_a_block_does_not_creep_up_the_file(home, capsys):
     """strip_block eats the blank separator, because uninstall must leave the
     file as it found it. Install and refresh both rewrite in place, so each one
@@ -1036,7 +1054,12 @@ def test_a_host_is_not_covered_by_a_root_with_a_broken_skill(home, capsys):
     capsys.readouterr()
 
     assert doctor() == 1
-    assert "claude-code: not installed" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    # Not "not installed": the host is on this machine and the links section
+    # four lines above says which of its skills are broken. Saying it is absent
+    # in the same report is the contradiction the ✓ would have been.
+    assert "claude-code: on this machine, and nothing here resolves" in out
+    assert "✓ claude-code" not in out
 
 
 def test_uninstalling_a_host_does_not_unlink_a_root_another_host_owns(home, capsys):
@@ -1061,6 +1084,64 @@ def test_uninstalling_opencode_alone_removes_its_own_root(home, capsys):
     uninstall("opencode")
     capsys.readouterr()
     assert not (home / ".config" / "opencode" / "skills" / "flw-spec").exists()
+
+
+def test_a_bare_uninstall_reaches_an_install_in_a_hosts_own_root(home, capsys):
+    """Naming the host hides this, which is why the test above passed over the
+    bug: with opencode the only host to assign, plan_roots gives it its own
+    root. Bare, claude-code takes ~/.claude/skills first and satisfied_by then
+    calls opencode covered by it whatever links.toml records — so the command
+    printed "nothing to remove" and exited 0 over four live symlinks."""
+    install("opencode")
+    root = home / ".config" / "opencode" / "skills"
+    assert (root / "flw-spec").is_symlink()
+    capsys.readouterr()
+
+    uninstall()
+    out = capsys.readouterr().out
+
+    assert "nothing to remove" not in out
+    assert list(root.iterdir()) == []
+    assert flw.read_links() == []
+
+
+def test_uninstalling_opencode_leaves_a_claude_code_only_install_alone(home, capsys):
+    """The fallback that keeps the fix honest. opencode's own root holds no
+    recorded link, so the record decides nothing here and plan_roots still
+    reports it covered by Claude Code's directory rather than reaching in."""
+    install("claude-code")
+    capsys.readouterr()
+
+    uninstall("opencode")
+    out = capsys.readouterr().out
+
+    assert "nothing to remove" in out
+    assert (home / ".claude" / "skills" / "flw-spec").is_symlink()
+    assert len(flw.read_links()) == 4
+
+
+def test_sync_does_not_adopt_into_a_root_the_record_does_not_name(home, capsys):
+    """untracked_links scans every root every host reads. Adopting out of any of
+    them let two sync runs build a whole install in a directory nobody chose:
+    the first adopted the hand-made symlink, the second found its root in
+    by_root and linked the other three into it — in the same run that prints
+    "sync will not widen the install"."""
+    install("codex")
+    skills_source = Path(flw.read_links()[0]["target"]).parent
+    capsys.readouterr()
+
+    foreign = home / ".claude" / "skills"
+    foreign.mkdir(parents=True, exist_ok=True)
+    (foreign / "flw-spec").symlink_to(skills_source / "flw-spec")
+
+    assert sync() == 0
+    assert sync() == 0
+    capsys.readouterr()
+
+    assert sorted(entry.name for entry in foreign.iterdir()) == ["flw-spec"]
+    assert {Path(lk["path"]).parent for lk in flw.read_links()} == {
+        home / ".agents" / "skills"
+    }
 
 
 # --- extensions ----------------------------------------------------------- #
@@ -1202,6 +1283,72 @@ def test_uninstall_still_reaches_a_host_that_is_gone(home, monkeypatch, capsys):
     assert (home / ".claude" / "skills" / "flw-spec").is_symlink()
 
 
+def test_installing_a_host_does_not_make_it_present(home, monkeypatch, capsys):
+    """`flw install claude-code` creates ~/.claude/skills, and so ~/.claude —
+    which is the ambient path's parent, and was read as proof Claude Code was
+    here. Installing proved the host it installed for, which is the one thing
+    present()'s docstring says it must never do."""
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(flw, "present", REAL_PRESENT)
+    claude = flw.BY_NAME["claude-code"]
+    assert not flw.present(claude)
+
+    install("claude-code")
+    capsys.readouterr()
+
+    assert not flw.present(claude)
+    doctor()
+    out = capsys.readouterr().out
+    assert "claude-code: reachable via" in out
+
+
+def test_an_ambient_block_flw_wrote_is_not_evidence_either(home, monkeypatch, capsys):
+    """--ambient creates the instructions file and its parent, so both halves of
+    the parent rule are flw's own output on that path. ambient.toml already
+    records which files flw made, because uninstall needs to know."""
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(flw, "present", REAL_PRESENT)
+    codex = flw.BY_NAME["codex"]
+
+    install("codex", ambient=True)
+    capsys.readouterr()
+    assert (home / ".codex" / "AGENTS.md").is_file()
+    assert not flw.present(codex)
+
+
+def test_an_instructions_file_the_user_wrote_is_evidence(home, monkeypatch):
+    """The other direction, so the fix cannot be "always say absent"."""
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(flw, "present", REAL_PRESENT)
+    claude = flw.BY_NAME["claude-code"]
+    (home / ".claude").mkdir()
+    (home / ".claude" / "CLAUDE.md").write_text("# mine\n")
+    assert flw.present(claude)
+
+
+def test_doctor_and_install_agree_about_every_host(home, monkeypatch, capsys):
+    """Asserted against each other rather than against a literal: whatever the
+    two commands say, they may not disagree about the same machine."""
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(flw, "present", REAL_PRESENT)
+    (home / ".codex").mkdir()
+
+    install("claude-code", "codex")
+    capsys.readouterr()
+    install(dry=True)
+    installs = capsys.readouterr().out
+    doctor()
+    doctors = capsys.readouterr().out
+
+    for host in flw.HOSTS:
+        skipped = f"{host.name}: not on this machine" in installs
+        absent = (
+            f"· {host.name}: not installed" in doctors
+            or f"{host.name}: reachable via" in doctors
+        )
+        assert skipped == absent, (host.name, installs, doctors)
+
+
 def test_presence_ignores_the_skills_directory_flw_itself_creates(home, monkeypatch):
     """A skills dir is flw's own output. Treating it as evidence would make
     every install self-justifying: install once by accident, and the host looks
@@ -1212,8 +1359,89 @@ def test_presence_ignores_the_skills_directory_flw_itself_creates(home, monkeypa
     (home / ".agents" / "skills").mkdir(parents=True)
     assert not flw.present(codex)
 
+    # Nor the config directory. flw makes that one too — install_block runs
+    # mkdir on the ambient file's parent — so ~/.codex is flw's output on the
+    # same footing as ~/.agents/skills. Only the file, and only where flw's own
+    # records do not claim flw wrote it.
     (home / ".codex").mkdir()
+    assert not flw.present(codex)
+
+    (home / ".codex" / "AGENTS.md").write_text("# mine\n")
     assert flw.present(codex)
+
+
+# --- the writing style ---------------------------------------------------- #
+
+
+def test_an_ambient_file_flw_made_and_removed_leaves_no_evidence_behind(
+    home, monkeypatch, capsys
+):
+    """The route the HOSTS-derived rule walked around. install_block makes
+    ~/.codex on the way to ~/.codex/AGENTS.md; uninstall removes the file and
+    leaves the directory, which the records call a cosmetic leftover. It was not
+    cosmetic: the next bare install linked into ~/.agents/skills for a Codex
+    that is not there, which is the failure present() exists to prevent."""
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(flw, "present", REAL_PRESENT)
+
+    install("codex", ambient=True)
+    uninstall("codex")
+    capsys.readouterr()
+    assert (home / ".codex").is_dir()
+
+    # The directory survives the first install — uninstall leaves the empty
+    # directories it made, which the records call a cosmetic leftover. What must
+    # not survive is anything in it.
+    assert list((home / ".agents" / "skills").iterdir()) == []
+
+    assert install() == 1
+    out = capsys.readouterr()
+    assert "codex: not on this machine — skipping" in out.out
+    assert list((home / ".agents" / "skills").iterdir()) == []
+
+
+def test_a_lost_links_record_is_rebuilt_from_what_is_on_disk(home, capsys):
+    """Bounding adoption to recorded roots closed a real widening and took the
+    only way back from a deleted links.toml with it: four live symlinks that
+    doctor called not installed and uninstall would not remove. An empty record
+    is the one state where there is no install to widen."""
+    install("claude-code")
+    skills = home / ".claude" / "skills"
+    assert len(list(skills.iterdir())) == 4
+    flw.LINKS.unlink()
+    capsys.readouterr()
+
+    assert sync() == 0
+    assert "flw-spec — adopted" in capsys.readouterr().out
+    assert len(flw.read_links()) == 4
+
+    assert doctor() == 0
+    assert "✓ claude-code: via" in capsys.readouterr().out
+
+    uninstall("claude-code")
+    capsys.readouterr()
+    assert list(skills.iterdir()) == []
+
+
+def test_sync_says_one_thing_about_a_skill_it_adopts(home, capsys):
+    """The fill-in loop refused the path because it is not recorded, then the
+    adoption loop claimed it for exactly that reason, and a reader could not
+    tell from the output which had happened."""
+    install("claude-code")
+    flw.write_links([lk for lk in flw.read_links() if lk["skill"] != "flw-spec"])
+    capsys.readouterr()
+
+    assert sync() == 0
+    out = capsys.readouterr()
+
+    assert "flw-spec — adopted" in out.out
+    # Exactly one line, whatever the other loop would have said about it. The
+    # fill-in loop reaches the same path and either refuses it or relinks it,
+    # and both read as a different outcome from the adoption that follows.
+    named = [
+        line for line in (out.out + out.err).splitlines() if "flw-spec" in line
+    ]
+    assert len(named) == 1, named
 
 
 # --- the writing style ---------------------------------------------------- #

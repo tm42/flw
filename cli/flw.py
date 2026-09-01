@@ -106,17 +106,49 @@ HOSTS: tuple[Host, ...] = (
 )
 
 
+def flw_wrote(path: Path) -> bool:
+    """Did flw create this instructions file, rather than find it?
+
+    Both records already answer it — `created` is written into ambient.toml and
+    style.toml so uninstall knows which files it may delete — and a host with no
+    styles slot has its style written as a block into this same file, which is
+    why both are consulted rather than only the first.
+    """
+    return any(
+        Path(entry.get("path", "")) == path and entry.get("created")
+        for entry in (*read_ambient(), *read_style())
+    )
+
+
 def present(host: Host) -> bool:
     """Is this host actually on the machine?
 
-    Evidence the HOST creates, never a skills directory — flw creates those, so
-    treating one as proof would make every install self-justifying. Without this
-    check `flw install` fabricated ~/.agents/skills on a machine with no Codex.
+    Evidence the HOST left, never something flw made, and no directory at all.
+    The ambient path's PARENT was proof that flw had run rather than that the
+    host was here: `flw install claude-code` makes ~/.claude on the way to
+    ~/.claude/skills, and `install_block` makes ~/.codex on the way to
+    ~/.codex/AGENTS.md. Ruling out the parents flw links under still left that
+    second mkdir, so `flw install codex --ambient` then `flw uninstall codex`
+    left ~/.codex behind and the next bare `flw install` fabricated
+    ~/.agents/skills on a machine with no Codex — the failure this check was
+    written for, reached by a different route.
+
+    The file is evidence only where flw did not write it, which its own records
+    say. A host that arrives afterwards is found by its binary; where it has
+    none on PATH this reads absent, which is the safe direction — install says
+    so and skips, and naming the host still overrides it.
 
     Naming a host explicitly overrides this: installing ahead of a host, or into
     an image that will have one, is legitimate.
     """
-    return bool(shutil.which(host.binary)) or expand(host.ambient).parent.is_dir()
+    if shutil.which(host.binary):
+        return True
+    # The ambient file, and only where flw did not write it. No directory is
+    # evidence: flw runs mkdir -p on every root it links into, and install_block
+    # runs it on the ambient file's own parent, so between them flw can create
+    # every directory a host would have created for itself.
+    ambient = expand(host.ambient)
+    return ambient.is_file() and not flw_wrote(ambient)
 
 
 BY_NAME = {h.name: h for h in HOSTS}
@@ -441,6 +473,18 @@ def uninstall(args: argparse.Namespace) -> int:
     # `flw uninstall opencode` unlinked both of them and took the root pointer
     # with it, leaving every host unable to resolve flw.
     link_into, covered = plan_roots(hosts)
+    # plan_roots assigns greedily in HOSTS order, so claude-code always takes
+    # ~/.claude/skills first and satisfied_by then calls opencode covered by it,
+    # whatever links.toml actually records. A bare `flw uninstall` therefore
+    # printed "nothing to remove" over an opencode-only install and left all
+    # four links live. The record decides first; plan_roots still decides the
+    # rest, which is what keeps `flw uninstall opencode` off Claude Code's
+    # directory when the install there is Claude Code's own.
+    for host in hosts:
+        own = expand(host.roots[0])
+        if links_under({own}):
+            link_into[host.name] = own
+            covered.pop(host.name, None)
     roots = set(link_into.values())
     for host in hosts:
         # The ambient block belongs to the host, not to a link root, so it is
@@ -1383,16 +1427,29 @@ def doctor(args: argparse.Namespace) -> int:
     print("\nhosts:")
     for host in HOSTS:
         seen = satisfied_by(host, live)
-        if seen is None:
-            print(f"  · {host.name}: not installed")
-        elif present(host):
+        here = present(host)
+        recorded_here = any(
+            Path(link["path"]).parent == expand(root)
+            for root in host.roots
+            for link in read_links()
+        )
+        if seen is not None and here:
             print(f"  ✓ {host.name}: via {tilde(seen)}")
-        else:
+        elif seen is not None:
             # The host is absent but reads a directory another host's links are
             # in, so its skills would resolve if it arrived. `install` says
             # "not on this machine" about the same host in the same session, and
             # a bare tick here reads as a contradiction of it.
             print(f"  ✓ {host.name}: reachable via {tilde(seen)}")
+        elif here and recorded_here:
+            # Here, installed into, and nothing under its roots resolves. The
+            # links section above says which; saying "not installed" about the
+            # same machine in the same report is the contradiction.
+            print(f"  ! {host.name}: on this machine, and nothing here resolves")
+        elif here:
+            print(f"  · {host.name}: on this machine, not installed into")
+        else:
+            print(f"  · {host.name}: not installed")
         if args.verbose:
             print(f"      {host.note}")
 
@@ -1479,10 +1536,33 @@ def sync(args: argparse.Namespace) -> int:
     skills, _ = discover()
     known = {skill.name: skill.path for skill in skills}
     recorded = read_links()
+    recorded_roots = {Path(link["path"]).parent for link in recorded}
     # Computed before anything below moves a symlink, so a link this run is
     # about to create for a missing known skill is never mistaken for one
     # that was already sitting there unrecorded.
+    #
+    # Only in a root the record already names. untracked_links scans every root
+    # every host reads, so adopting from anywhere let two sync runs build a
+    # whole install in a directory nobody chose: the first adopted a hand-made
+    # symlink, the second found its root in by_root and filled in the rest —
+    # in the same run that prints "sync will not widen the install". Adoption
+    # exists for an install interrupted between writing the record and making
+    # the link, and that install's root is recorded by definition.
     pending_adoption = untracked_links(recorded)
+    if recorded:
+        # Only in a root the record already names. untracked_links scans every
+        # root every host reads, so adopting from anywhere let two sync runs
+        # build a whole install in a directory nobody chose.
+        #
+        # The exception is an empty record, which is the one state where there
+        # is no install to widen: a lost or deleted links.toml over links that
+        # are still live. Bounding that case too left four working symlinks
+        # doctor called "not installed" and uninstall could not remove, with
+        # nothing able to reach them — so the guard is on widening an install,
+        # not on rebuilding a record from what is already on disk.
+        pending_adoption = [
+            entry for entry in pending_adoption if entry.parent in recorded_roots
+        ]
 
     surviving: list[dict] = []
     wrote = False
@@ -1539,8 +1619,13 @@ def sync(args: argparse.Namespace) -> int:
                         path.unlink(missing_ok=True)
                     continue
 
+                # readlink, not the record: when the user retargeted the link
+                # the record still holds flw's own path, so the line said flw
+                # had replaced its own link with itself and never named the
+                # thing that was actually there.
+                was = path.readlink() if path.is_symlink() else target
                 actions.append(
-                    f"    ~ {name} — relinked ({fault}, was {tilde(target)}"
+                    f"    ~ {name} — relinked ({fault}, was {tilde(was)}"
                     f" → {tilde(known[name])})"
                 )
                 if not dry:
@@ -1550,6 +1635,12 @@ def sync(args: argparse.Namespace) -> int:
 
             for name in sorted(set(known) - linked_names):
                 link_path = directory / name
+                if link_path in pending_adoption:
+                    # The adoption loop below claims this one. Without this the
+                    # same run printed both "a symlink flw did not create is
+                    # already there" and "adopted", and a reader could not tell
+                    # which had happened.
+                    continue
                 refusal = blocked_by(link_path, recorded_paths)
                 if refusal:
                     actions.append(f"    ! {name} — {refusal}; not replacing it")
@@ -1571,7 +1662,6 @@ def sync(args: argparse.Namespace) -> int:
 
         wrote = True
 
-        recorded_roots = {Path(link["path"]).parent for link in recorded}
         for host in HOSTS:
             if present(host) and satisfied_by(host, recorded_roots) is None:
                 print(
