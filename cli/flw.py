@@ -2489,10 +2489,17 @@ def kb_write(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    path, size = engine.write(
-        target, where if not args.here else "", title, args.description,
-        body, type_=args.type or "", tags=tags,
-    )
+    try:
+        path, size = engine.write(
+            target, where if not args.here else "", title, args.description,
+            body, type_=args.type or "", tags=tags,
+        )
+    except ValueError as exc:
+        # The store's own last refusal: something is at the note's path that the
+        # slug check above could not see. It reads like every other kb refusal
+        # rather than like a crash.
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     print(f"{path}  ·  {size}")
     return 0
 

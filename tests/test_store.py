@@ -25,7 +25,9 @@ def _tags(args) -> list[str]:
 
 
 def home(tmp_path: Path) -> Path:
-    (tmp_path / "flw-home" / "kb").mkdir(parents=True)
+    # exist_ok: a test that plants something in the store before the write has
+    # to build the directory itself, and _write calls this again on the way in.
+    (tmp_path / "flw-home" / "kb").mkdir(parents=True, exist_ok=True)
     return tmp_path / "flw-home"
 
 
@@ -527,6 +529,64 @@ def test_a_missing_description_refuses_the_write(tmp_path, monkeypatch, capsys):
     assert code == 1
     assert "-d/--description is required" in capsys.readouterr().err
     assert not list((hm / "kb").rglob("*.md"))
+
+
+def test_a_dangling_symlink_at_the_notes_path_is_refused(tmp_path, monkeypatch, capsys):
+    """walk() skips a path that is not is_file(), so the caller's slug refusal
+    cannot see this one. Writing through it created the file it pointed at,
+    outside the store entirely."""
+    hm = home(tmp_path)
+    (hm / "kb" / "python").mkdir(parents=True)
+    outside = tmp_path / "elsewhere" / "does-not-exist.yml"
+    outside.parent.mkdir()
+    (hm / "kb" / "python" / "a-title.md").symlink_to(outside)
+
+    code, _, _ = _write(
+        tmp_path, monkeypatch, ["kb", "write", "python", "a title", "-d", "a description"]
+    )
+
+    assert code == 1
+    assert "already holds something flw did not write" in capsys.readouterr().err
+    assert not outside.exists()
+
+
+def test_a_symlink_to_an_unreadable_file_is_refused_and_that_file_survives(
+    tmp_path, monkeypatch, capsys
+):
+    """The other shape walk() skips: is_file() passes and read_text raises, so
+    the note is invisible to the store and the write lands on the user's file."""
+    hm = home(tmp_path)
+    (hm / "kb" / "python").mkdir(parents=True)
+    outside = tmp_path / "elsewhere" / "app.conf"
+    outside.parent.mkdir()
+    outside.write_bytes(b"BINARY\xff\xfe CONFIG\n")
+    before = outside.read_bytes()
+    (hm / "kb" / "python" / "a-title.md").symlink_to(outside)
+
+    code, _, _ = _write(
+        tmp_path, monkeypatch, ["kb", "write", "python", "a title", "-d", "a description"]
+    )
+
+    assert code == 1
+    assert "already holds something flw did not write" in capsys.readouterr().err
+    assert outside.read_bytes() == before
+
+
+def test_a_readable_note_at_the_path_is_still_the_slug_refusal(tmp_path, monkeypatch, capsys):
+    """The two refusals are separate and must stay separate: this one names the
+    slug and tells the user to edit the note, and it is the one that fires for
+    every path the store can actually read."""
+    hm = home(tmp_path)
+    note(hm / "kb", "python/a-title.md", "+++\ntitle = \"a title\"\n+++\n\nbody\n")
+
+    code, _, _ = _write(
+        tmp_path, monkeypatch, ["kb", "write", "python", "a title", "-d", "a description"]
+    )
+
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "already holds that slug" in err
+    assert "flw did not write" not in err
 
 
 def test_an_empty_body_is_refused_and_names_stdin(tmp_path, monkeypatch, capsys):

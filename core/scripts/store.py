@@ -549,7 +549,15 @@ def write(
     tags: list[str] | None = None,
     today: date | None = None,
 ) -> tuple[Path, str]:
-    """Emit one note. Refusals are the caller's to make before this is reached."""
+    """Emit one note, and never over anything already at its path.
+
+    Every other refusal is the caller's and is made before this is reached. This
+    one cannot be: the caller reads the store through `walk`, and `walk` skips a
+    path that fails `is_file()` or `read_text` — which is exactly a dangling
+    symlink and a symlink to a file that is not UTF-8. Those are the two shapes
+    that arrive here with something already at the path, and writing through
+    either one replaced a file outside the store.
+    """
     when = today or datetime.now().astimezone().date()
     # json.dumps, not an f-string: a JSON string literal is a valid TOML basic
     # string for every input, and the free-text fields are free text. An
@@ -569,6 +577,11 @@ def write(
     meta.append(f"updated     = {when.isoformat()}")
 
     path = root.joinpath(*category_parts(category)) / f"{slug(title)}.md"
+    # is_symlink() as well as exists(), because a dangling symlink is not
+    # exists() and writing through one creates the file it points at, which is
+    # anywhere at all rather than anywhere in the store.
+    if path.exists() or path.is_symlink():
+        raise ValueError(f"{path} already holds something flw did not write")
     path.parent.mkdir(parents=True, exist_ok=True)
     text = "+++\n" + "\n".join(meta) + "\n+++\n\n" + body.strip() + "\n"
     path.write_text(text, encoding="utf-8")
