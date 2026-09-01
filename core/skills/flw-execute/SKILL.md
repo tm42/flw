@@ -23,13 +23,14 @@ begin. The user asked for the work, not for a description of you preparing to do
 filesystem resolves `../../shared/` through it correctly, the file-reading tool collapses
 `..` lexically first and lands somewhere that does not exist. Measured, not assumed.
 
-**If that pointer is missing:** `$FLW_ROOT` if it is set; failing that, you may be inside
-flw's own checkout, so walk up from the project root for a directory holding both
-`core/skills/` and `cli/flw.py`. Nothing → stop and say to run `flw install`.
+**If that pointer is missing:** you may be inside flw's own checkout, so walk up from
+the project root for a directory holding both `core/skills/` and `cli/flw.py`.
+Nothing → stop and say to run `flw install`.
 
 ## Lane, and the one hard rule
 
-This skill builds. It does not amend the contract and it does not judge code quality.
+This skill builds. It does not author contract changes — it applies the one the version
+file already carries, in step 5 — and it does not judge code quality.
 
 **No silent spec drift.** If you need anything the contract does not cover — a component
 that has to exist, a capability nobody agreed to, a check that should have been declared —
@@ -133,8 +134,8 @@ within them. One line per task: `  ✓ <id> — <files touched>` or `  ✗ <id> 
 A failure aborts the phase. There are no half-phase commits.
 
 At the phase boundary, **propose a commit** — the files touched and a message — and let
-the user or their agent make it, in whatever VCS the repo uses. flw does not stage,
-commit or tag.
+the user or their agent make it, in whatever VCS the repo uses. flw does not commit or
+tag. It does stage, by name, and step 6 says why.
 
 **One line naming what changed and how.** Test the subject two ways: someone who has not
 seen the diff can say what it did, and someone scanning ten subjects that all touch this

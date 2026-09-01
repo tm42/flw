@@ -18,8 +18,8 @@ The critic looks for exactly the gaps validation structurally cannot see.
 >
 > - The plan: `<plan path>`
 > - The contract: `<contract path>`
-> - What a good contract looks like: `<this directory>/good-contract.md`
-> - The shape it must satisfy: `<schemas>/spec-v4.schema.json`
+> - What a good contract looks like: `$FLW/core/skills/flw-spec/references/good-contract.md`
+> - The shape it must satisfy: `$FLW/core/schemas/spec-v4.schema.json`
 >
 > The contract already passes validation. Do not report anything a schema check would
 > catch.

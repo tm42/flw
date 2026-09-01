@@ -23,9 +23,9 @@ begin. The user asked for the work, not for a description of you preparing to do
 filesystem resolves `../../shared/` through it correctly, the file-reading tool collapses
 `..` lexically first and lands somewhere that does not exist. Measured, not assumed.
 
-**If that pointer is missing:** `$FLW_ROOT` if it is set; failing that, you may be inside
-flw's own checkout, so walk up from the project root for a directory holding both
-`core/skills/` and `cli/flw.py`. Nothing → stop and say to run `flw install`.
+**If that pointer is missing:** you may be inside flw's own checkout, so walk up from
+the project root for a directory holding both `core/skills/` and `cli/flw.py`.
+Nothing → stop and say to run `flw install`.
 
 ## Lane
 
@@ -71,8 +71,9 @@ validation.
    for the names and symbols it would introduce, and surface every hit. A component that
    already exists under another name is the failure being prevented.
 3. **Interview**, section by section, confirming each before the next. Read
-   `spec-v4.schema.json` for what each field means, and
-   `references/good-contract.md` for what a good one looks like. Drive out what the user
+   `$FLW/core/schemas/spec-v4.schema.json` for what each field means, and
+   `$FLW/core/skills/flw-spec/references/good-contract.md` for what a good one looks
+   like. Drive out what the user
    has not said: scale, encoding, concurrency, failure model, deployment, runtime floor,
    edge cases, security, re-runability. "Doesn't matter here" is a valid answer — record it
    as an assumption so it surfaces if it later does.
@@ -82,8 +83,10 @@ validation.
    question `Amending` step 2 asks below, which states the rule for `properties` and
    `surfaces` in full. A first contract declares `schema_version = 4`.
 4. **Show the whole contract** as one block, get an explicit lock, then write two files:
-   `specs/current.toml` and `specs/versions/v1.0.toml`. The first version file has no
-   `base` — there is no predecessor.
+   `specs/current.toml` and `specs/versions/<name>-minor.toml`, named by the same rule
+   step 5 states below — never `v1.0.toml`, which is a legacy number carrying no
+   classification, so nothing downstream can move `spec_version` by it. The first version
+   file has no `base` — there is no predecessor.
 5. **`flw validate`.** Fix and re-run.
 
 ---
@@ -133,7 +136,7 @@ validation.
    version file's `contract_edit`, applied by `flw-execute` when the run it describes
    finishes, not now.
 5. **Write `specs/versions/<name>-minor.toml` or `specs/versions/<name>-major.toml`.**
-   Read `version.schema.json` for the shape.
+   Read `$FLW/core/schemas/version.schema.json` for the shape.
    - `name` is the record's identity and matches the filename without the suffix. `base`
      is the record the contract had last applied when you started, and `contract_edit`
      carries the text drafted in step 4. The suffix is `-major` when a behaviour someone
@@ -217,7 +220,8 @@ A marker is what you write instead of guessing.
 ## Optional: a second read
 
 For a large or intricate contract, offer to run the critic in
-`references/spec-critic.md`. It finds the semantic gaps validation structurally cannot —
+`$FLW/core/skills/flw-spec/references/spec-critic.md`. It finds the semantic gaps
+validation structurally cannot —
 a requirement with no component, an assumption relied on but never stated, drift from the
 plan. Skip it for small ones; do not manufacture ceremony.
 

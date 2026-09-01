@@ -18,6 +18,11 @@ makes no assumption about which version control a project uses, or that it uses 
 There is no index file. The directory listing is the index, and each file's `base` names
 the one before it.
 
+**`specs/` is `[paths] specs`**, from `.flw/config.toml`, defaulting to `specs`. Both rows
+above are written at the default because almost every project leaves it there; a project
+that has moved it has moved both, and writing the contract to a hardcoded `specs/` puts it
+where `flw validate` will not look.
+
 The contract is the destination; a version file is the route. Read together, never
 instead of each other — a version file never restates what the contract says.
 
@@ -69,6 +74,10 @@ setup  = "source .venv/bin/activate" # prepended to every check; each runs in it
 checks = ["make fmt", "make style"]  # this branch's targeted set
 yours  = ["make verify"]             # declared here, because nothing infers it: a check
                                      # this session cannot run is never read off an exit code
+
+[kb]
+category = "flw"                     # which note-store category this project's notes take;
+                                     # every skill's opening step reads it
 ```
 
 If either file exists but does not parse, **stop and say so**. A defective config that

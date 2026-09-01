@@ -23,9 +23,9 @@ begin. The user asked for the work, not for a description of you preparing to do
 filesystem resolves `../../shared/` through it correctly, the file-reading tool collapses
 `..` lexically first and lands somewhere that does not exist. Measured, not assumed.
 
-**If that pointer is missing:** `$FLW_ROOT` if it is set; failing that, you may be inside
-flw's own checkout, so walk up from the project root for a directory holding both
-`core/skills/` and `cli/flw.py`. Nothing → stop and say to run `flw install`.
+**If that pointer is missing:** you may be inside flw's own checkout, so walk up from
+the project root for a directory holding both `core/skills/` and `cli/flw.py`.
+Nothing → stop and say to run `flw install`.
 
 ## Lane
 
@@ -187,6 +187,13 @@ with an unknown one is not.
 
 **Config first.** `.flw/config.toml`, `[tests]`: `setup`, `checks` for the working set,
 `yours` for what this session cannot run. Only commands, only what you verified.
+
+**Read that file before writing it, and edit `[tests]` in place.** It holds three other
+sections — `[paths] specs, reports`, `[interview] mode`, `[kb] category` — and none of
+them is yours to touch. This skill is meant to be re-run when a repo has changed enough
+that what was recorded is stale, and a re-run that writes the file fresh drops the report
+path, the interview mode and the note-store category the user chose. Leave every key you
+did not measure exactly as you found it.
 
 **Then the extensions**, one file per skill that needs one, each holding only what that
 skill needs. Do not restate across them.

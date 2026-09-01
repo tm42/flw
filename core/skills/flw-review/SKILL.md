@@ -20,9 +20,9 @@ begin. The user asked for the work, not for a description of you preparing to do
 filesystem resolves `../../shared/` through it correctly, the file-reading tool collapses
 `..` lexically first and lands somewhere that does not exist. Measured, not assumed.
 
-**If that pointer is missing:** `$FLW_ROOT` if it is set; failing that, you may be inside
-flw's own checkout, so walk up from the project root for a directory holding both
-`core/skills/` and `cli/flw.py`. Nothing → stop and say to run `flw install`.
+**If that pointer is missing:** you may be inside flw's own checkout, so walk up from
+the project root for a directory holding both `core/skills/` and `cli/flw.py`.
+Nothing → stop and say to run `flw install`.
 
 ## Lane
 
@@ -178,6 +178,9 @@ makes the work survive a dropped reply.
 > - Finish with a short **`## Holds up`** section: what you attacked or scrutinised and
 >   could not fault. Naming that prevents someone churning it later, and it is as useful
 >   as a finding.
+> - Finish also with **`## What I did not check`** — the boundary of what you read and
+>   ran. It is the half a later round needs, and the half `flw-spec` carries into the
+>   version record that outlives this report.
 >
 > Write the report by the style at the path you were given. It is a file, not a reply.
 >
@@ -260,6 +263,10 @@ tracked is already the user's answer.
 
 ## Holds up
 <merged, deduplicated>
+
+## What was not checked
+<merged from every reviewer, deduplicated — the round's coverage boundary, and what a
+next round starts from>
 
 ## Disagreements
 <where two reviewers reached opposite conclusions on the same thing — do not resolve
