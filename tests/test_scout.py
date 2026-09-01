@@ -416,12 +416,21 @@ def test_the_command_scouts_a_python_tree(tmp_path, capsys):
     assert "Engine" in capsys.readouterr().out
 
 
+def test_a_missing_directory_refuses_with_one(tmp_path, capsys):
+    """The scout's other refusal, and the one no test reached: it exited 2,
+    which the contract's exit-code surface scopes to flw test and flw validate."""
+    assert run(tmp_path / "not-here") == 1
+    assert "no such directory" in capsys.readouterr().err
+
+
 def test_neither_language_present_names_the_fallback(tmp_path, capsys):
     """Refusing is fine; refusing without saying what to do instead is not. The
     scout covers two languages because their parsers are already in a repo of
     that language, and the user needs to be told where to go for a third."""
     write(tmp_path, {"main.go": "package main\n"})
-    assert run(tmp_path) == 2
+    # 1, not 2: the contract scopes 2 to flw test and flw validate, where it
+    # means the run proved nothing. A refusal is what 1 already means.
+    assert run(tmp_path) == 1
     err = capsys.readouterr().err
     assert "no Python or TypeScript" in err
     assert "aider --show-repo-map" in err

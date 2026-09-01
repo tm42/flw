@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -1051,6 +1052,59 @@ def test_a_style_install_over_the_users_own_still_promises_it(home, capsys):
     out = capsys.readouterr().out
 
     assert "replacing myown, put back on uninstall" in out
+def test_a_prompt_declines_when_fd_zero_is_closed(tmp_path):
+    """`< /dev/null` raises EOFError; closing fd 0 outright raises
+    RuntimeError("lost sys.stdin"), because CPython then sets sys.stdin to None.
+    Both mean stdin cannot answer. Every other prompt test monkeypatches
+    builtins.input to raise EOFError, which is a stub and cannot reach the
+    second — so this has to be a real process with fd 0 actually closed."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    env = {
+        "HOME": str(fake_home),
+        "FLW_HOME": str(fake_home / ".flw"),
+        "PATH": os.environ.get("PATH", ""),
+    }
+    result = subprocess.run(
+        f"exec {sys.executable} {REPO / 'cli' / 'flw.py'} install claude-code --ambient 0<&-",
+        shell=True, cwd=tmp_path, env=env, capture_output=True, text=True, check=False,
+    )
+
+    assert "Traceback" not in result.stderr, result.stderr
+    assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+    assert "no terminal on stdin — declined" in result.stdout
+
+
+def test_a_record_that_is_not_utf8_names_its_file(home, capsys, monkeypatch):
+    """UnicodeDecodeError is a ValueError, so main()'s deliberately narrow
+    handler never saw it and one stray byte in a record printed a traceback for
+    a file the user could fix in a second."""
+    install("claude-code")
+    capsys.readouterr()
+    flw.LINKS.write_bytes(b"[[link]]\nskill = \"\xff\xfe\"\n")
+
+    with pytest.raises(SystemExit) as raised:
+        flw.read_links()
+
+    assert str(flw.LINKS) in str(raised.value)
+    assert "not UTF-8" in str(raised.value)
+
+
+
+
+def test_a_settings_file_that_is_not_utf8_names_itself(home, capsys):
+    """read_flw_text landed on the five ~/.flw readers and not on the host files
+    the same task named. settings.json decides what every response in a session
+    looks like, and a UTF-16 one printed a traceback out of json.loads."""
+    settings = home / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_bytes('{"outputStyle": "mine"}\n'.encode("utf-16"))
+
+    with pytest.raises(SystemExit) as raised:
+        style_install(None, "claude-code")
+
+    assert str(settings) in str(raised.value)
+    assert "not UTF-8" in str(raised.value)
 
 
 def test_a_style_refresh_keeps_the_line_endings_the_file_had(home, capsys, monkeypatch):

@@ -181,7 +181,7 @@ def read_bundles() -> list[dict]:
     if not BUNDLES.exists():
         return []
     try:
-        return tomllib.loads(BUNDLES.read_text()).get("bundle", [])
+        return tomllib.loads(read_flw_text(BUNDLES)).get("bundle", [])
     except tomllib.TOMLDecodeError as exc:
         raise SystemExit(f"error: {BUNDLES} does not parse: {exc}") from None
 
@@ -249,7 +249,7 @@ def read_links() -> list[dict]:
     if not LINKS.exists():
         return []
     try:
-        links = tomllib.loads(LINKS.read_text()).get("link", [])
+        links = tomllib.loads(read_flw_text(LINKS)).get("link", [])
     except tomllib.TOMLDecodeError as exc:
         raise SystemExit(f"error: {LINKS} does not parse: {exc}") from None
     for link in links:
@@ -550,6 +550,20 @@ def first_line(text: str) -> str:
     return (text.strip().splitlines() or ["unknown error"])[0]
 
 
+def read_flw_text(path: Path) -> str:
+    """One of flw's own records, read so that one stray byte names its file.
+
+    The same reason as read_host_text, for the other half of what flw reads:
+    UnicodeDecodeError is a ValueError, so main()'s deliberately narrow handler
+    never saw it, and a single non-UTF-8 byte in ~/.flw/links.toml printed a
+    traceback for a file the user could fix in a second.
+    """
+    try:
+        return path.read_text()
+    except UnicodeDecodeError as exc:
+        raise SystemExit(f"error: {path} is not UTF-8 ({exc})") from None
+
+
 def read_host_text(path: Path) -> str:
     """A host's own file, read so that one stray byte names the file it came from.
 
@@ -628,11 +642,20 @@ def confirm(prompt: str) -> bool:
     ending an install over an optional extra. It says why: an offer that
     answers itself in silence is indistinguishable from one a user declined.
     """
+    if sys.stdin is None:
+        # fd 0 was closed at exec, so CPython set sys.stdin to None and input()
+        # would raise RuntimeError("lost sys.stdin"). Tested rather than caught:
+        # input() raises RuntimeError for lost sys.stdout and lost sys.stderr
+        # too, and for anything a replaced readline raises, and answering "no"
+        # to those would be a wrong message and a swallowed bug.
+        print(prompt + "no terminal on stdin — declined")
+        return False
     try:
         return input(prompt).strip().lower() in ("y", "yes")
     except EOFError:
-        # input() has already written the prompt with no newline, so this
-        # lands on the same line and reads as the answer to it.
+        # stdin is /dev/null or an exhausted pipe. input() has already written
+        # the prompt with no newline, so this lands on the same line and reads
+        # as the answer to it.
         print("no terminal on stdin — declined")
         return False
 
@@ -687,7 +710,7 @@ def read_ambient() -> list[dict]:
     if not AMBIENT.exists():
         return []
     try:
-        return tomllib.loads(AMBIENT.read_text()).get("host", [])
+        return tomllib.loads(read_flw_text(AMBIENT)).get("host", [])
     except tomllib.TOMLDecodeError as exc:
         raise SystemExit(f"error: {AMBIENT} does not parse: {exc}") from None
 
@@ -860,7 +883,7 @@ def read_style() -> list[dict]:
     if not STYLE.exists():
         return []
     try:
-        return tomllib.loads(STYLE.read_text()).get("host", [])
+        return tomllib.loads(read_flw_text(STYLE)).get("host", [])
     except tomllib.TOMLDecodeError as exc:
         raise SystemExit(f"error: {STYLE} does not parse: {exc}") from None
 
@@ -916,7 +939,7 @@ def shadowing_style() -> str | None:
         local = directory / ".claude" / "settings.local.json"
         if local.is_file():
             try:
-                return json.loads(local.read_text()).get("outputStyle")
+                return json.loads(read_flw_text(local)).get("outputStyle")
             except json.JSONDecodeError:
                 return None
         if directory == home:
@@ -937,7 +960,7 @@ def select_style(
     settings: dict = {}
     if target.is_file():
         try:
-            settings = json.loads(target.read_text())
+            settings = json.loads(read_host_text(target))
         except json.JSONDecodeError as exc:
             print(
                 f"         {tilde(target)} does not parse ({exc}) — left alone",
@@ -977,7 +1000,7 @@ def select_style(
 
     settings["outputStyle"] = name
     target.parent.mkdir(parents=True, exist_ok=True)
-    indent = json_indent(target.read_text()) if target.is_file() else 2
+    indent = json_indent(read_host_text(target)) if target.is_file() else 2
     target.write_text(json.dumps(settings, indent=indent, ensure_ascii=False) + "\n")
     print("         written")
     return True, previous
@@ -990,7 +1013,7 @@ def deselect_style(
     if not target.is_file():
         return
     try:
-        settings = json.loads(target.read_text())
+        settings = json.loads(read_host_text(target))
     except json.JSONDecodeError:
         return
     if not isinstance(settings, dict):
@@ -1012,7 +1035,7 @@ def deselect_style(
         target.write_text(
             json.dumps(
                 settings,
-                indent=json_indent(target.read_text()),
+                indent=json_indent(read_host_text(target)),
                 ensure_ascii=False,
             )
             + "\n"
@@ -1028,7 +1051,7 @@ def style_install(args: argparse.Namespace) -> int:
     if hosts is None:
         return 1
     source = style_source(args.name)
-    body = style_body(source.read_text())
+    body = style_body(read_flw_text(source))
     name = args.name or SHIPPED_STYLE
     dry = args.dry_run
 
@@ -1074,7 +1097,7 @@ def style_install(args: argparse.Namespace) -> int:
             continue
         created = not target.exists()
         if not created and prior.get("installed_sha"):
-            held = style_body(target.read_text())
+            held = style_body(read_host_text(target))
             if style_digest(held) != prior["installed_sha"]:
                 # `doctor` reports this as something to decide. Writing over it
                 # here would let one command discard what another asks about.
@@ -1216,7 +1239,7 @@ def style_state(entry: dict) -> tuple[str, str | None, str | None]:
         if BY_NAME[host].styles
         else extract_block(text, STYLE_BEGIN, STYLE_END)
     )
-    source_body = style_body(source.read_text())
+    source_body = style_body(read_flw_text(source))
     if held is None:
         return "block-gone", None, source_body
     if held != source_body:
@@ -1368,7 +1391,7 @@ def doctor(args: argparse.Namespace) -> int:
         )
         problems += 1
     else:
-        pointed = Path(ROOT_POINTER.read_text().strip())
+        pointed = Path(read_flw_text(ROOT_POINTER).strip())
         mark = "✓" if pointed == root else "✗"
         print(f"  {mark} {tilde(ROOT_POINTER)} -> {pointed}")
         if pointed != root:
@@ -2230,7 +2253,9 @@ def scout(args: argparse.Namespace) -> int:
     scripts = checkout() / "core" / "scripts"
     if not root.is_dir():
         print(f"error: no such directory: {root}", file=sys.stderr)
-        return 2
+        # 1, not 2: the contract scopes 2 to flw test and flw validate, where it
+        # means the run proved nothing. This is a refusal, which 1 already says.
+        return 1
 
     sys.path.insert(0, str(scripts))
     import scout as engine
@@ -2312,7 +2337,7 @@ def scout(args: argparse.Namespace) -> int:
             "documented fallback.",
             file=sys.stderr,
         )
-        return 2
+        return 1
     # Sources were found and nothing was ranked: the reason was printed above.
     return 0 if ran else 1
 
