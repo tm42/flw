@@ -2523,10 +2523,20 @@ def _context_extensions(chain: list[Path], skill: str | None) -> None:
             path = root / ".flw" / "extensions" / f"{stem}.md"
             if not path.is_file():
                 continue
+            try:
+                body = path.read_text()
+                size = path.stat().st_size
+            except (OSError, UnicodeDecodeError) as exc:
+                # read_flw_text turns this into SystemExit, which would take the
+                # notes and contract sections down with it. One unreadable file on
+                # a chain is a line, not the end of the opening.
+                print(f"\n--- {tilde(path)} — could not be read: {exc} ---")
+                printed = True
+                continue
             real = path.resolve()
             where = tilde(path) if real == path else f"{tilde(path)} -> {tilde(real)}"
-            print(f"\n--- {where} ({path.stat().st_size:,} B) ---")
-            print(read_flw_text(path).rstrip("\n"))
+            print(f"\n--- {where} ({size:,} B) ---")
+            print(body.rstrip("\n"))
             printed = True
     if not printed:
         print("\n(no extensions on this chain)")
@@ -2551,8 +2561,18 @@ def _context_contract(root: Path | None) -> None:
     except tomllib.TOMLDecodeError as exc:
         print(f"\ncontract: {tilde(contract)} does not parse ({exc})")
         return
+    components = document.get("final_state", {}).get("components", [])
+    if not components:
+        # A pre-v4 contract has no components at all, and printing the version line
+        # followed by nothing reads as a contract with none of them written yet.
+        schema = document.get("schema_version", "?")
+        print(
+            f"\ncontract: {tilde(contract)}  ·  schema_version {schema}"
+            "  ·  no final_state.components"
+        )
+        return
     print(f"\ncontract: {tilde(contract)}  ·  {document.get('spec_version', '?')}")
-    for component in document.get("final_state", {}).get("components", []):
+    for component in components:
         paths = ", ".join(component.get("paths", [])) or "—"
         print(f"  {component.get('name', '?')}: {paths}")
 
@@ -2560,18 +2580,28 @@ def _context_contract(root: Path | None) -> None:
 def _context_notes(root: Path | None, skill: str | None) -> None:
     """The note store listing a skill's opening would read.
 
-    Omitted for flw-review, matching that skill's own opening: it orchestrates and
-    reviews nothing, so a read here is paid by the one context that produces no
-    findings and reaches none of the ones that do.
+    The listing is omitted for flw-review, matching that skill's own opening: it
+    orchestrates and reviews nothing, so a read here is paid by the one context
+    that produces no findings and reaches none of the ones that do. The category
+    header still prints, because which store a reviewer would be pointed at is
+    part of what the opening reports.
     """
-    if skill == "flw-review":
+    if root is None:
+        # Without a root there is no category, and the unfiltered walk printed the
+        # whole machine's store under `category none` — every project's notes to a
+        # session that is in none of them.
+        print("\nnotes: no project root — the store is not searched")
         return
+    category = _kb_category(root)
+    print(f"\nnotes: category {category}")
+    if skill == "flw-review":
+        print("  listing omitted: flw-review's own opening does not read the store")
+        return
+
     scripts = checkout() / "core" / "scripts"
     sys.path.insert(0, str(scripts))
     import store as engine
 
-    category = _kb_category(root) if root else ""
-    print(f"\nnotes: category {category or 'none'}")
     skipped: list = []
     everything = engine.walk(FLW_HOME, root, project_category=category, skipped=skipped)
     _kb_skipped(skipped)

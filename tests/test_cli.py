@@ -2296,9 +2296,16 @@ def test_context_prints_extensions_outermost_first_and_shared_before_the_skills_
     assert order == sorted(order), out
 
 
-def test_context_for_flw_review_omits_the_note_store(tmp_path, capsys, monkeypatch):
+def test_context_for_flw_review_keeps_the_header_and_drops_the_listing(
+    tmp_path, capsys, monkeypatch
+):
     """flw-review's own opening skips the store: it orchestrates and reviews
-    nothing, so that read is paid by the one context producing no findings."""
+    nothing, so that read is paid by the one context producing no findings. The
+    category header stays — which store its reviewers would be pointed at is part
+    of what the opening reports, and printing nothing at all hid it."""
+    home = tmp_path / "flw-home"
+    (home / "kb" / "work").mkdir(parents=True)
+    (home / "kb" / "work" / "one.md").write_text("# LISTED-NOTE\n\nbody\n")
     root = tmp_path / "work"
     (root / ".flw").mkdir(parents=True)
 
@@ -2306,10 +2313,62 @@ def test_context_for_flw_review_omits_the_note_store(tmp_path, capsys, monkeypat
     # this test does not control, and one plausible sentence added there turned
     # both assertions red with no behaviour changed.
     assert _context(tmp_path, monkeypatch, skill="flw-review", root=str(root)) == 0
-    assert "notes:" not in _body(capsys.readouterr().out)
+    body = _body(capsys.readouterr().out)
+    assert "notes: category work" in body
+    assert "listing omitted" in body
+    assert "LISTED-NOTE" not in body
 
     assert _context(tmp_path, monkeypatch, skill="flw-execute", root=str(root)) == 0
-    assert "notes:" in _body(capsys.readouterr().out)
+    body = _body(capsys.readouterr().out)
+    assert "notes: category work" in body
+    assert "LISTED-NOTE" in body
+
+
+def test_context_with_no_project_root_does_not_search_the_store(
+    tmp_path, capsys, monkeypatch
+):
+    """Without a root there is no category, and the unfiltered walk printed the
+    whole machine's store under `category none` — every project's notes handed to
+    a session standing in none of them."""
+    home = tmp_path / "flw-home"
+    (home / "kb" / "elsewhere").mkdir(parents=True)
+    (home / "kb" / "elsewhere" / "one.md").write_text("# OTHER-PROJECTS-NOTE\n\nx\n")
+    plain = tmp_path / "somewhere"
+    plain.mkdir()
+
+    assert _context(tmp_path, monkeypatch, root=str(plain)) == 0
+    body = _body(capsys.readouterr().out)
+    assert "notes: no project root — the store is not searched" in body
+    assert "OTHER-PROJECTS-NOTE" not in body
+    assert "category none" not in body
+
+
+def test_context_reports_an_extension_it_cannot_read_and_reads_the_rest(
+    tmp_path, capsys, monkeypatch
+):
+    """read_flw_text raises SystemExit on a stray byte, which took the notes and
+    the contract down with it — one unreadable file on a chain is a line, not the
+    end of the opening."""
+    parent = tmp_path / "work"
+    (parent / ".flw" / "extensions").mkdir(parents=True)
+    (parent / ".flw" / "extensions" / "shared.md").write_text("OUTER-SHARED\n")
+    inner = parent / "ds"
+    (inner / ".flw" / "extensions").mkdir(parents=True)
+    (inner / ".flw" / "extensions" / "shared.md").write_bytes(b"\xff\xfe not utf-8\n")
+    (inner / ".flw" / "extensions" / "flw-spec.md").write_text("INNER-SPEC\n")
+    (inner / "specs").mkdir()
+    (inner / "specs" / "current.toml").write_text(
+        'schema_version = 4\nspec_version = "1.0.0"\n'
+        '[[final_state.components]]\nname = "the engine"\npaths = ["src/"]\n'
+    )
+
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(inner)) == 0
+    body = _body(capsys.readouterr().out)
+    assert "OUTER-SHARED" in body
+    assert "INNER-SPEC" in body
+    assert "could not be read" in body
+    assert "notes: category ds" in body
+    assert "the engine: src/" in body
 
 
 def test_context_outside_any_project_prints_what_it_can_and_exits_zero(
@@ -2381,6 +2440,26 @@ def test_context_reads_the_contract_where_paths_specs_says_it_is(
     body = _body(capsys.readouterr().out)
     assert "moved: elsewhere/" in body
     assert "9.9.9" in body
+
+
+def test_context_names_a_contract_with_no_components_for_what_it_is(
+    tmp_path, capsys, monkeypatch
+):
+    """A pre-v4 contract parses and has no components, and the version line
+    followed by nothing reads as a v4 contract nobody has written components into
+    yet — two different states printed identically."""
+    root = tmp_path / "work"
+    (root / "specs").mkdir(parents=True)
+    (root / "specs" / "current.toml").write_text(
+        'schema_version = 2\nspec_version = "1.4.0"\n'
+        '[final_state]\ndescription = "an older shape"\n'
+    )
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    body = _body(capsys.readouterr().out)
+    assert "schema_version 2" in body
+    assert "no final_state.components" in body
+    assert "1.4.0" not in body
 
 
 def test_context_refuses_a_root_that_is_not_there(tmp_path, capsys, monkeypatch):
