@@ -69,9 +69,10 @@ boundary picks its own and a later round cannot tell what this one covered.
 consolidation from here; nothing below applies to that run. Naming a team is the only
 thing that triggers it.
 
-Without one, you are the sole reviewer, through exactly one lens. Users ask for it by
-what they want looked at, not by role name. Map it, and **say which lens you chose** so a
-wrong guess is visible:
+Without one, you are the sole reviewer, through the lens or lenses named — a
+comma-separated list, the way a team's `:role,role` selects more than one. Users ask for
+it by what they want looked at, not by role name. Map it, and **say which lens or lenses
+you chose** so a wrong guess is visible:
 
 | they say | lens |
 |---|---|
