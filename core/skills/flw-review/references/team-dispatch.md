@@ -126,38 +126,9 @@ before dispatch, so a dropped line is recovered by reading it when the agent goe
 
 ### The discipline, given to every reviewer
 
-> Read and probe only. Change nothing in the repo.
->
-> Report findings in this shape, most severe first:
->
-> ```
-> SEVERITY | path/to/file:LINE | one-line claim
->   Evidence: what you checked and what it showed.
->   Fix: the smallest change that resolves it.
-> ```
->
-> `CRITICAL` — something is wrong or will break. `MAJOR` — a real risk, or real weight
-> that earns nothing. `MINOR` — worth knowing, changes little.
->
-> - **Demonstrate, do not speculate.** For anything CRITICAL or MAJOR, run something that
->   shows it. A finding you reproduced is worth ten you reasoned about.
-> - **Four findings you can defend beat fifteen observations.** Do not pad. An empty
->   report is a legitimate outcome and better than a padded one.
-> - **Stay in your lane.** If something belongs to another lens, one line and move on.
-> - **Do not propose additions** unless your lens is about what is missing. More tests,
->   more docs, more abstraction, more config are not findings by default.
-> - **Do not report anything already deliberately decided.** Check the contract, the
->   version files under `specs/versions/` before calling something a
->   mistake — a thing recorded as a decision with a rationale is not a finding.
-> - Finish with a short **`## Holds up`** section: what you attacked or scrutinised and
->   could not fault. Naming that prevents someone churning it later, and it is as useful
->   as a finding.
-> - Finish also with **`## What I did not check`** — the boundary of what you read and
->   ran. It is the half a later round needs, and the half `flw-spec` carries into the
->   version record that outlives this report.
->
-> Write the report by the style at the path you were given. It is a file, not a reply.
->
+`SKILL.md`'s "The discipline, followed even reviewing alone" — the same block, verbatim,
+to every dispatched reviewer.
+
 > **Write your full report to the target file you were given, then reply with one
 > line: the path and the finding counts.** Not the report — it is read from the file.
 > The reply can be dropped in transit; the file is what survives.
