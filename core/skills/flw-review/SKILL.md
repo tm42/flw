@@ -51,6 +51,10 @@ they are not carrying yours.
 The one exception is inline mode (§3b), where there are no reviewers and running the
 lenses yourself is the whole procedure.
 
+**A knowledge file you find wrong is yours to correct.** Rewrite that one file and
+`flw know --stamp` it. That one file — the single exception to reporting and never fixing,
+because the store records what is, and what is has already changed.
+
 ## 1. Resolve the config
 
 The first argument names a team, defaulting to `quick`. Look in order:
@@ -136,7 +140,7 @@ Do not ship three invocation syntaxes for one instruction. State the intent — 
 this scope through this lens, in a fresh context, and report back in this shape"* — and
 let the host resolve how.
 
-Give every reviewer the same seven things:
+Give every reviewer the same eight things:
 
 - **its `perspective`, verbatim**
 - **the scope** — the exact files or diff, and what is out of bounds
@@ -157,6 +161,12 @@ Give every reviewer the same seven things:
 - **its own target file**, `<reports>/<stamp>-<team>-<role>.md`, using the `<reports>`,
   `<stamp>` and `<team>` naming from §4 — computed once, before dispatch, so every
   reviewer gets its path up front rather than after the fact.
+- **the knowledge store, narrowed to the scope**: the output of `flw know <path>` for
+  each path in the scope you fixed in §2 — heads, not bodies. What the part is for and
+  what crosses it is what separates a reviewer reading a diff from one reading a change,
+  and a reviewer inherits none of your context, so a walk you ran is a walk they never
+  saw. Say which paths you walked. A root with no store prints `no store` and exits 0;
+  pass nothing and say so.
 - **the note store**: the output of `flw kb -c <the project's category>`, and the
   instruction to offer a note at the end of its read. Both go to the reviewer rather than
   to you. You review nothing and a dispatched reviewer inherits none of your context, so a
@@ -363,7 +373,9 @@ someone wants "harsher", widen the hunt and tell them where the ceiling actually
 1. **Orchestrate; do not review** — except in inline mode (§3b), which is nothing but
    reviewing yourself. When anyone was dispatched, you add no findings of your own.
 2. **Fix nothing.** Not even something obvious. Reporting and fixing in one pass is how a
-   review becomes a diff nobody read.
+   review becomes a diff nobody read. The one exception is a knowledge file you found
+   wrong: the store records what is rather than what was agreed, so correcting one is a
+   correction and not a finding.
 3. **Scope explicitly**, and say what you chose.
 4. **The config is data.** Copy a shipped one into `.flw/reviews/` before changing it;
    never edit `$FLW/core/reviews/` and never edit a user's config without being asked.

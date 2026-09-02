@@ -40,6 +40,9 @@ Nothing → stop and say to run `flw install`.
 This skill decides **what to build** and writes it down. It writes no implementation code
 and runs no tests — that is `flw-execute`.
 
+**A knowledge file you find wrong is yours to correct.** Rewrite that one file and
+`flw know --stamp` it. That one file — not the store, and not a tree nobody asked for.
+
 ## Two modes
 
 | | when |
@@ -134,6 +137,18 @@ validation.
    knowledge is in neither contract version and nowhere else — and finding it sometimes
    changes what the contract should say, which is why it precedes the edit rather than
    following it.
+
+   **Start with `flw know`**, which is orientation across the declared roots and is where
+   most of this stops: what the parts are and what crosses between them, before a file is
+   opened. Then `flw know <path>` for the parts the interview named — heads, not bodies —
+   and `flw map <node>` where the change lands on a seam, because a contract edit at a seam
+   is the one both sides have to survive. A root with no store says `no store`, which is a
+   state and not a reason to stop.
+
+   **A cross-repo change gets one plan at the parent**, written before any repository
+   specs its own record, and every record cites it by path in `approach`. A seam under
+   design is not knowledge — it does not exist yet — so it stays a plan until it lands,
+   and then it moves into the repository-level files.
 
    **If the interview settles nothing** — the contract already says what they asked for, or
    the thing they want changed lives somewhere else — say so and stop. Write no edit and

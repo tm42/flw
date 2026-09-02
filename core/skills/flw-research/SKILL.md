@@ -43,19 +43,29 @@ It does not decide what to build. It never touches `specs/` — not the contract
 version file. If what you learn suggests the contract is wrong, say so and hand it to
 `flw-spec`.
 
-**Two files, and the rule that decides between them:**
+**Three destinations, and the rules that decide between them:**
 
 > **Code reads it → config. An agent reads it → prose.**
+> **Does a commit make it wrong? → the knowledge store. Only a decision does? → an extension.**
 
 | | |
 |---|---|
 | `.flw/config.toml` | `[tests]` — the check commands, the setup line, what cannot run here. `run_tests.py` reads these as data and runs them verbatim |
 | `.flw/extensions/<skill name>.md` | how the place works, in prose, for the skill that needs it |
 | `.flw/extensions/shared.md` | the same, for what every skill needs — one file, not four |
+| `<flw dir>/knowledge/` | what the parts are, what each is for, what crosses between them — mirroring the code, stamped with the revision it was true at |
 
 A command written as prose gets reconstructed on every run, and it drifts — `make style`
 becomes `ruff check .` because that is what the agent already knows. A command in config
 is run, not remembered.
+
+The second rule is the same line read one level down. Most of what research used to write
+into `shared.md` is architecture, and architecture goes stale on a commit rather than on a
+decision — so it belongs in the store, where a diff can say how much moved. What is left in
+an extension is conventions, which is what a file read at every opening should hold.
+
+**A knowledge file you find wrong is yours to correct.** Rewrite that one file and
+`flw know --stamp` it. That one file — a survey rewrites the tree, a correction does not.
 
 ## 1. Orient
 
@@ -82,6 +92,12 @@ command; the orientation is not an artifact.
 deployment topology first and scout each root after: what talks to what has to be settled
 before what is central *here* is even a well-posed question, and a per-repo ranking read
 first lets every seam between them stay vague.
+
+**With `[project.roots]` declared, the survey is every member and the parent pass comes
+first.** One pass over the topology, the shared literals and one transaction traced end to
+end, then one pass per member. The parent gets `system.md` — and a `shared.md` too, when a
+convention holds across all of them: one is architecture and rots on a commit, the other is
+a rule and rots on a decision, and the parent is the only level that can carry either.
 
 ## 2. Probe
 
@@ -220,6 +236,39 @@ above the one being worked in, so a convention belongs at the level it is true o
 own quirks go in that repo; something every checkout under a parent directory obeys goes in
 the parent, which needs only a `.flw/` to become a level. Writing it once above beats
 writing it into six repos that then drift.
+
+**Then the knowledge tree**, at `<flw dir>/knowledge/`, mirroring the code: the repository
+file first — what it owns and its outward edges, the most valuable file in the store — then
+an area file per folder that is a real unit. Five to thirty per repository, and a module
+file for a single source file is rare. With `[project.roots]` declared, `system.md` at the
+parent comes out of the parent pass, before any member.
+
+`core/skills/flw-research/references/knowledge-example/` is the shape to imitate: a parent
+and two members, five files, the seam declared from both sides. Read it before writing the
+first file rather than inventing a layout.
+
+**Propose `[knowledge] dir` from what the repo already ignores.** The default is the flw
+directory's `knowledge/`, which is already inside whatever ignores the flw directory. A
+repository that keeps its architecture somewhere else says so with one key, and the user
+confirms it — it is a fact about that repository, so it is read from the project's config
+file and never from the machine's.
+
+**Write and review per level, not in one block.** The repository file, shown and agreed;
+then the areas, shown and agreed. A tree delivered whole is a tree nobody reads.
+
+**The bar, and it is the sparseness rule too.** A file earns its tokens only by removing
+more code reading than it costs. A folder gets a file when reading it removes reading, not
+when the folder exists — a repository of 1,800 files gets perhaps forty. Missing is normal;
+nothing checks this and nothing will.
+
+**`flw know --stamp <file>` for every file you write**, so it carries the revision it was
+true at, and `flw know --reindex` once at the end. A file with no revision is read normally
+and reports as `unstamped`, which is a claim nobody can date.
+
+**A `flw kb` note in this repo's own root that describes how the system is built moves into
+the tree**, once, as part of this survey. kb is addressed by topic and gated on
+portability; architecture is addressed by path and goes stale on a commit, and a note that
+is really a repository file is in the store that cannot tell it has rotted.
 
 **Show the user everything before writing.** These files become instructions to every later
 run, so a wrong line is a wrong instruction repeated silently. One block, their edits,

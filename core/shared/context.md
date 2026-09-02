@@ -63,6 +63,41 @@ own checkout included. Run the command directly instead: `<interpreter> "$FLW/cl
 <command>`, from the project root, since a project's checks and paths are written
 relative to it.
 
+## Three stores, and one sorting question
+
+| store | holds | wrong when | read |
+|---|---|---|---|
+| `<flw dir>/extensions/` | conventions, rules | a human changes their mind | always, at an opening |
+| the knowledge store | architecture, edges | the structure changes | by location, on demand |
+| `flw kb` | portable measured craft | rarely | by search terms |
+
+**Does a commit make it wrong?** Yes → knowledge, and the file carries the revision it was
+true at. Only a decision makes it wrong → an extension, and it carries none. It is the line
+`flw-research` already draws — what IS is recorded, what MUST BE is the user's — read one
+level down.
+
+**The knowledge store mirrors the code.** A directory `D` at path `P` is described by
+`<store>/P/D.md`, a repository by `<store>/<basename>.md`, and the parent of a multi-repo
+system by `system.md`, at `<root>/<[knowledge] dir>/`, defaulting to the flw directory's
+`knowledge/`. So reading it is a walk up from the path you are standing at, outermost
+first, and never a lookup. It is sparse on purpose: a file earns its tokens only by
+removing more code reading than it costs, so missing is the normal case.
+
+```
+flw know                orientation — the system file, or this repository's own
+flw know <path>         every file describing that path, heads only; --full for bodies
+flw know --check        changed, orphaned, malformed, unstamped; writes nothing
+flw map [node]          every declared edge, folded; nobody authors it
+```
+
+A file records the revision it was written at, and `flw know` reports what has moved under
+its path since — `3 files · +41 −12`, not a verdict. **Changed warns and never stops:** the
+agent in front of the number decides whether the claim survived.
+
+**`flw context` prints none of this, deliberately.** Orientation is a command a skill runs
+when it needs one, not a cost every opening pays. A root with no store prints `no store`
+and exits 0, so the call never needs a guard.
+
 ## Configuration
 
 Optional, and absent is the normal case. Two files, merged in order — global underlay,

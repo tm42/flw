@@ -40,6 +40,11 @@ Nothing → stop and say to run `flw install`.
 This skill builds. It does not author contract changes — it applies the one the version
 file already carries, in step 5 — and it does not judge code quality.
 
+**A knowledge file you find wrong is yours to correct.** Rewrite that one file and
+`flw know --stamp` it. That one file — not the store, and not a rewrite nobody asked for.
+This is not a spec change: the store records what is, and the contract records what was
+agreed.
+
 **No silent spec drift.** If you need anything the contract does not cover — a component
 that has to exist, a capability nobody agreed to, a check that should have been declared —
 **stop and surface a proposal**: what is missing, why you need it, and the specific change
@@ -110,9 +115,15 @@ be there.
 Read the contract, the version file, and enough of the tree to
 know what already exists.
 
-**Now search the store**, with the terms the version file just gave you — the components
-it touches, the libraries, the failure it is about. Titles scanned at the opening were
-scanned against nothing; this is the first moment you know your subject. State back in three to five lines: the version, what it
+**Run `flw know <path>` for each path the record names**, and read the plan the record's
+`approach` cites. The walk prints every knowledge file describing that path, outermost
+first, with how much has moved under it since each was written — `--full` where the work
+actually lands. A root with no store says `no store` and exits 0, so the call needs no
+guard, and a file reported as changed is a warning and never a stop.
+
+**Now search the note store**, with the terms the version file just gave you — the
+components it touches, the libraries, the failure it is about. Titles scanned at the
+opening were scanned against nothing; this is the first moment you know your subject. State back in three to five lines: the version, what it
 changes, the phases and their task counts, and what is already in place. This is the only
 non-terse moment.
 
@@ -144,6 +155,12 @@ A failure aborts the phase. There are no half-phase commits.
 At the phase boundary, **propose a commit** — the files touched and a message — and let
 the user or their agent make it, in whatever VCS the repo uses. flw does not commit or
 tag. It does stage, by name, and step 6 says why.
+
+**Also at the boundary, re-stamp what this phase falsified.** A run that builds something
+has falsified the knowledge file describing that part, and this is the commoner trigger of
+the two. For each path this phase changed, re-read the files `flw know <path>` returns
+against the code as it now is, correct what is wrong, then `flw know --stamp <file>…` and
+`flw know --reindex` once. Step 6's report lists the files re-stamped.
 
 **What a commit is, and what its message says, are in `$FLW/core/shared/commits.md`.**
 Read it before proposing the first one. It is the only place those rules are written, so
@@ -287,6 +304,7 @@ report block.
 flw-execute — <version>
   Phases: <n> of <m>
   Checks: <p> passed · <q> failed · <r> for you
+  Knowledge: <files re-stamped, or none>
   Left to do: <what stopped, or nothing>
 ```
 
