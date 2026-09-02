@@ -2095,7 +2095,7 @@ def _resolve_flw_dir() -> tuple[str, str]:
     if not isinstance(value, str):
         raise SystemExit(
             f"error: {source} names {value!r}, which is not a string. The "
-            "per-project directory's name must be one relative path segment."
+            "per-project directory's name must be a relative path."
         )
     if not value.strip():
         raise SystemExit(
@@ -3145,6 +3145,23 @@ def knowledge_dir(root: Path) -> Path:
                 "path. It names a directory inside this repository, so it must "
                 "be relative to the repository's root."
             )
+        if declared is not None and not Path(declared).parts:
+            raise SystemExit(
+                f"error: {config}: [knowledge] dir is {declared!r}, which names "
+                "no directory. It names a directory inside this repository, so "
+                "it must be relative to the repository's root."
+            )
+        if declared is not None:
+            resolved = (root / declared).resolve()
+            try:
+                resolved.relative_to(root.resolve())
+            except ValueError:
+                raise SystemExit(
+                    f"error: {config}: [knowledge] dir is {declared!r}, which "
+                    "leaves the repository's root. It names a directory inside "
+                    "this repository, so it must be relative to the "
+                    "repository's root."
+                ) from None
     return (root / declared) if declared else (flw_dir(root) / "knowledge")
 
 

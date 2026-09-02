@@ -227,6 +227,58 @@ def test_no_output_is_current_and_any_output_is_changed_with_the_right_sums(monk
     assert diff.summary() == "3 files · +41 −12"
 
 
+def test_an_untracked_path_alone_turns_current_into_changed_and_names_it(monkeypatch):
+    shop = ACME / "shop"
+    store = store_of(shop)
+    canned(monkeypatch, {"diff": (0, ""), "ls-files": (0, "api/new.py\n")})
+    concept = knowledge.load(store / "api" / "api.md", store, shop)
+    diff = knowledge.changed(concept)
+    assert (diff.state, diff.files, diff.insertions, diff.deletions) == (
+        "changed", 1, 0, 0,
+    )
+    assert diff.first == "api/new.py"
+    assert diff.summary() == "1 file · +0 −0"
+
+
+def test_untracked_paths_beside_a_numstat_add_to_the_file_count_only(monkeypatch):
+    shop = ACME / "shop"
+    store = store_of(shop)
+    canned(monkeypatch, {"diff": (0, NUMSTAT), "ls-files": (0, "api/new.py\n")})
+    concept = knowledge.load(store / "api" / "api.md", store, shop)
+    diff = knowledge.changed(concept)
+    assert (diff.state, diff.files, diff.insertions, diff.deletions) == (
+        "changed", 4, 41, 12,
+    )
+    # The numstat already found a first file; the untracked one only pads the count.
+    assert diff.first == "api/orders.py"
+
+
+def test_an_ignored_untracked_path_never_reaches_the_count(monkeypatch):
+    """--exclude-standard is what keeps a gitignored store from counting itself —
+    git filters it out before this module ever sees a line for it."""
+    shop = ACME / "shop"
+    store = store_of(shop)
+    calls = canned(monkeypatch, {"diff": (0, ""), "ls-files": (0, "")})
+    concept = knowledge.load(store / "api" / "api.md", store, shop)
+    assert knowledge.changed(concept) == knowledge.Diff("current")
+    ls_files_args = next(args for args, _ in calls if "ls-files" in args)
+    assert "--exclude-standard" in ls_files_args
+
+
+def test_a_failed_ls_files_call_leaves_the_numstat_s_answer_standing(monkeypatch):
+    shop = ACME / "shop"
+    store = store_of(shop)
+    canned(
+        monkeypatch,
+        {"diff": (0, NUMSTAT), "ls-files": (128, "fatal: not a git repository")},
+    )
+    concept = knowledge.load(store / "api" / "api.md", store, shop)
+    diff = knowledge.changed(concept)
+    assert (diff.state, diff.files, diff.insertions, diff.deletions) == (
+        "changed", 3, 41, 12,
+    )
+
+
 def test_the_diff_runs_against_the_mirrored_path_in_the_file_s_own_repo(monkeypatch):
     shop = ACME / "shop"
     store = store_of(shop)
@@ -240,7 +292,8 @@ def test_the_diff_runs_against_the_mirrored_path_in_the_file_s_own_repo(monkeypa
     assert cwd == shop
 
     knowledge.changed(knowledge.load(store / "shop.md", store, shop))
-    assert calls[1][0][-1] == "."
+    diffs = [args for args, _ in calls if "diff" in args]
+    assert diffs[1][-1] == "."
 
 
 def test_a_diff_that_cannot_run_is_unverifiable_and_never_a_failure(monkeypatch):
@@ -270,9 +323,10 @@ def test_system_md_is_checked_once_per_member_in_that_member_s_own_directory(mon
     assert {name: d.state for name, d in per_member.items()} == {
         "shop": "current", "worker": "current",
     }
-    assert [cwd for _, cwd in calls] == [ACME / "shop", ACME / "worker"]
-    assert calls[0][0][2] == "1f4ac02"
-    assert calls[1][0][2] == "3c81d90"
+    diffs = [(args, cwd) for args, cwd in calls if "diff" in args]
+    assert [cwd for _, cwd in diffs] == [ACME / "shop", ACME / "worker"]
+    assert diffs[0][0][2] == "1f4ac02"
+    assert diffs[1][0][2] == "3c81d90"
     assert knowledge.system_state(per_member) == "current"
 
 
@@ -551,7 +605,7 @@ def test_orientation_from_the_parent_is_the_plan_s_sample(capsys, monkeypatch):
 
 
 def test_the_walk_from_a_member_is_the_plan_s_sample(capsys, monkeypatch):
-    canned(monkeypatch, {"-- api": (0, NUMSTAT), "diff": (0, "")})
+    canned(monkeypatch, {"ls-files": (0, ""), "-- api": (0, NUMSTAT), "diff": (0, "")})
     assert run(["know", "api/orders.py", "--root", str(ACME / "shop")]) == 0
     assert capsys.readouterr().out == (
         "shop · api/orders.py · 2 of 3 levels have knowledge\n"
@@ -572,7 +626,7 @@ def test_the_walk_from_a_member_is_the_plan_s_sample(capsys, monkeypatch):
 
 
 def test_check_from_the_parent_is_the_plan_s_sample(capsys, monkeypatch):
-    canned(monkeypatch, {"-- api": (0, NUMSTAT), "diff": (0, "")})
+    canned(monkeypatch, {"ls-files": (0, ""), "-- api": (0, NUMSTAT), "diff": (0, "")})
     assert run(["know", "--check", "--root", str(ACME)]) == 0
     assert capsys.readouterr().out == (
         "knowledge: 3 roots, one store each · 4 files\n"
@@ -932,7 +986,6 @@ def test_a_refusal_quotes_what_git_said_rather_than_replacing_it(acme, monkeypat
     ("spelling", "block"),
     [
         ("a [revision] section", '[revision]\nshop = "old0000"\n'),
-        ("an indented key", '  revision = "old0000"\n'),
         ("a revision inside [[connects]]",
          '[[connects]]\nto = "worker"\nrevision = "old0000"\n'),
     ],
@@ -953,6 +1006,28 @@ def test_a_spelling_the_rewrite_cannot_reach_is_refused_and_nothing_written(
     with pytest.raises(knowledge.Refused):
         knowledge.stamp([path], store, root, {})
     assert path.read_text() == text, spelling
+
+
+def test_an_indented_revision_key_is_stamped_in_place_and_keeps_its_indentation(
+    tmp_path, monkeypatch
+):
+    """An indented `revision = "…"` used to parse, then read back as a duplicate
+    key after the rewrite inserted an unindented one — refused with a message
+    that sent the reader looking for a break the block never had. It is
+    admitted outright now, at the indentation the author gave it."""
+    root = tmp_path / "repo"
+    store = store_of(root)
+    store.mkdir(parents=True)
+    path = store / "repo.md"
+    text = (
+        '+++\ntype = "Repository"\ndescription = "x"\n'
+        '  revision = "old0000"\n+++\nbody\n'
+    )
+    path.write_text(text)
+    canned(monkeypatch, {"rev-parse": (0, "abc1234\n"), "status": (0, "")})
+
+    knowledge.stamp([path], store, root, {})
+    assert '  revision = "abc1234"\n' in path.read_text()
 
 
 def test_a_stamp_keeps_a_trailing_comment_and_crlf_line_endings(
@@ -1003,6 +1078,44 @@ def test_a_knowledge_dir_that_is_absolute_is_refused_naming_file_and_key(
         flw.knowledge_dir(root)
     assert str(config) in str(raised.value)
     assert "[knowledge] dir" in str(raised.value)
+
+
+def test_a_knowledge_dir_of_dot_is_refused_naming_file_and_key(tmp_path):
+    """`.` would put a generated index.md into every directory of the source
+    tree on --reindex, spared only by the dot-directory skip that also spares
+    `.git/` — the refusal is what should have stopped it."""
+    root = tmp_path / "repo"
+    (root / ".flw").mkdir(parents=True)
+    config = root / ".flw" / "config.toml"
+    config.write_text('[knowledge]\ndir = "."\n')
+
+    with pytest.raises(SystemExit) as raised:
+        flw.knowledge_dir(root)
+    assert str(config) in str(raised.value)
+    assert "[knowledge] dir" in str(raised.value)
+
+
+def test_a_knowledge_dir_that_leaves_the_root_is_refused_naming_file_and_key(
+    tmp_path,
+):
+    root = tmp_path / "repo"
+    (root / ".flw").mkdir(parents=True)
+    config = root / ".flw" / "config.toml"
+    config.write_text('[knowledge]\ndir = "../outside"\n')
+
+    with pytest.raises(SystemExit) as raised:
+        flw.knowledge_dir(root)
+    assert str(config) in str(raised.value)
+    assert "[knowledge] dir" in str(raised.value)
+
+
+def test_a_knowledge_dir_nested_under_the_root_is_still_accepted(tmp_path):
+    root = tmp_path / "repo"
+    (root / ".flw").mkdir(parents=True)
+    config = root / ".flw" / "config.toml"
+    config.write_text('[knowledge]\ndir = "docs/arch"\n')
+
+    assert flw.knowledge_dir(root) == root / "docs" / "arch"
 
 
 # --- what the walk answers from a parent -------------------------------------- #

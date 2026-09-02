@@ -2311,6 +2311,7 @@ def test_flw_dir_name_refuses_a_value_that_is_not_a_string(tmp_path, monkeypatch
     with pytest.raises(SystemExit) as caught:
         flw.flw_dir_name()
     assert "not a string" in str(caught.value)
+    assert "must be a relative path." in str(caught.value)
 
 
 def test_doctor_never_prints_a_blank_directory_name(tmp_path, monkeypatch, capsys):

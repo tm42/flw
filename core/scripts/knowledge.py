@@ -47,9 +47,11 @@ WIDTH = 70
 # The frontmatter value this module is allowed to touch. Everything else in the
 # block is the author's, byte for byte — which is why the match stops at the
 # closing quote or brace and not at the end of the line: a trailing comment on
-# the revision line is the author's too.
+# the revision line is the author's too. Leading whitespace is captured and
+# kept rather than matched away, so an indented key is rewritten in place
+# instead of being duplicated at the block's own margin.
 REVISION = re.compile(
-    r"^revision[ \t]*=[ \t]*(?:\"[^\"\n]*\"|'[^'\n]*'|\{[^}\n]*\})",
+    r"^([ \t]*)revision[ \t]*=[ \t]*(?:\"[^\"\n]*\"|'[^'\n]*'|\{[^}\n]*\})",
     re.MULTILINE,
 )
 TABLE = re.compile(r"^[ \t]*\[")
@@ -328,25 +330,30 @@ class Diff:
 
 
 def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
-    """`git diff --numstat <revision> -- <rel>`, summed.
+    """`git diff --numstat <revision> -- <rel>`, summed, plus untracked paths.
 
     The revision against the working tree and not against HEAD, so an
     uncommitted edit under the path counts and the answer is right while the
     tree is dirty — which is the state a checkout is in for the whole of a
-    working session. An untracked file is not yet a change, which is what `git
-    diff` sees.
+    working session. A file the tree has gained since the revision and the
+    VCS does not ignore is a change too, even though `git diff` alone does not
+    see it: `git ls-files --others --exclude-standard -- <rel>` finds it, and
+    each line is one more changed file with no insertions or deletions, the
+    way a binary file's `-\t-` row already counts as one change with no
+    lines. `--exclude-standard` is what keeps an ignored store from counting
+    itself — the project's own ignore rules decide, not a second policy here.
 
-    No output is current; any output is changed. There is no classification: a
-    function-body edit and a new directory both count, and the numbers say
-    which it was. A diff that cannot run — not a repository, a hash gone after
-    a rebase — is unverifiable, and the file is read normally.
+    No output from either call is current; any output is changed. There is no
+    classification: a function-body edit and a new directory both count, and
+    the numbers say which it was. A diff that cannot run — not a repository, a
+    hash gone after a rebase — is unverifiable, and the file is read
+    normally. A failed ls-files call adds nothing: the diff already ran and
+    stands on its own.
     """
     code, out = git(["diff", "--numstat", revision, "--", rel.as_posix()], cwd)
     if code != 0:
         return Diff("unverifiable")
     lines = [line for line in out.splitlines() if line.strip()]
-    if not lines:
-        return Diff("current")
     insertions = deletions = 0
     first = ""
     for line in lines:
@@ -358,7 +365,20 @@ def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
         insertions += int(added) if added.isdigit() else 0
         deletions += int(removed) if removed.isdigit() else 0
         first = first or path
-    return Diff("changed", len(lines), insertions, deletions, first)
+    files = len(lines)
+
+    untracked_code, untracked_out = git(
+        ["ls-files", "--others", "--exclude-standard", "--", rel.as_posix()], cwd
+    )
+    if untracked_code == 0:
+        untracked = [line for line in untracked_out.splitlines() if line.strip()]
+        files += len(untracked)
+        if untracked and not first:
+            first = untracked[0]
+
+    if files == 0:
+        return Diff("current")
+    return Diff("changed", files, insertions, deletions, first)
 
 
 def changed(concept: Concept) -> Diff:
@@ -450,7 +470,7 @@ def _rewrite(block: str, line: str) -> str:
     its revision keyed inside that table, which parses as a different document.
     """
     if REVISION.search(block):
-        return REVISION.sub(lambda _: line, block, count=1)
+        return REVISION.sub(lambda m: m.group(1) + line, block, count=1)
     lines = block.splitlines()
     cut = next((i for i, text in enumerate(lines) if TABLE.match(text)), len(lines))
     while cut > 0 and not lines[cut - 1].strip():
@@ -542,9 +562,9 @@ def _stamped(path: Path, store: Path, root: Path, members: dict[str, Path], reso
     value = _revision_value(concept, members, resolve)
     rewritten = _rewrite(block, _revision_line(value))
     # The one check that catches a spelling the line-level rewrite could not
-    # see — a [revision] section, an indented key, a revision inside a
-    # [[connects]] table — each of which parsed before and says something else
-    # after. The file is refused and left exactly as it was.
+    # see — a [revision] section, or a revision inside a [[connects]] table —
+    # each of which parsed before and says something else after. The file is
+    # refused and left exactly as it was.
     try:
         after = tomllib.loads(rewritten)
     except ValueError as exc:
