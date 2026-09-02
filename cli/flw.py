@@ -2752,6 +2752,66 @@ def _context_contract(root: Path | None) -> None:
         print(f"  {component.get('name', '?')}: {paths}")
 
 
+def _context_scope(root: Path | None, scopes: list[str] | None) -> int:
+    """The full text of every component whose declared paths meet a scope path.
+
+    `flw-review` had a skill intersect `paths` against a scope by hand before
+    handing a reviewer the result, and nothing on disk could say whether it
+    actually had. This makes the narrowing a command's output rather than an
+    instruction an orchestrator can skip silently.
+
+    A component path matches a scope path when either is at or under the
+    other, both resolved against the root — so a directory scope matches a
+    component whose path is one file inside it, and a component covering the
+    whole repository matches every scope inside it.
+    """
+    if not scopes or root is None:
+        # No --scope is the bare call, unchanged. No root is the state
+        # `_context_contract` already printed `contract: none` for — nothing
+        # here to narrow.
+        return 0
+    contract = root / _specs_dir(root) / "current.toml"
+    if not contract.is_file():
+        return 0
+    try:
+        document = tomllib.loads(read_flw_text(contract))
+    except tomllib.TOMLDecodeError:
+        return 0
+    components = document.get("final_state", {}).get("components", [])
+
+    resolved_root = root.resolve()
+    scope_paths = []
+    for raw in scopes:
+        candidate = Path(raw)
+        candidate = candidate if candidate.is_absolute() else root / candidate
+        candidate = candidate.resolve()
+        try:
+            candidate.relative_to(resolved_root)
+        except ValueError:
+            print(
+                f"error: --scope {raw!r} resolves to {tilde(candidate)}, outside "
+                f"the resolved root {tilde(root)}.",
+                file=sys.stderr,
+            )
+            return 1
+        scope_paths.append(candidate)
+
+    sys.path.insert(0, str(checkout() / "core" / "scripts"))
+    import ledger as engine
+
+    for component in components:
+        comp_paths = [(root / p).resolve() for p in component.get("paths", [])]
+        matched = any(
+            cp == scope or scope in cp.parents or cp in scope.parents
+            for scope in scope_paths
+            for cp in comp_paths
+        )
+        if matched:
+            print()
+            print(engine.render_component(component), end="")
+    return 0
+
+
 def _context_notes(root: Path | None) -> None:
     """The note store listing a skill's opening would read.
 
@@ -2840,7 +2900,7 @@ def context(args: argparse.Namespace) -> int:
     _context_extensions(project_chain(start), skill)
     _context_notes(root)
     _context_contract(root)
-    return 0
+    return _context_scope(root, args.scope)
 
 
 def kb(args: argparse.Namespace) -> int:
@@ -3577,6 +3637,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--root",
         metavar="PATH",
         help="the project to resolve from (default: found from cwd)",
+    )
+    p.add_argument(
+        "--scope",
+        nargs="+",
+        metavar="PATH",
+        help="print every contract component whose paths meet one of these",
     )
     p.set_defaults(handler=context)
 

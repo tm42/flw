@@ -115,9 +115,10 @@ five steps below address both:
 
 You already have two of the eight things `references/team-dispatch.md` §2 has to hand a
 dispatched reviewer explicitly: the writing style, from your own opening, and the note
-store, printed there too. Line up the rest yourself: the scope from §1, the contract
-narrowed to it, and the knowledge store narrowed to it — `flw know <path>` for each path
-in scope, heads not bodies. Compute your target file before you start:
+store, printed there too. Line up the rest yourself: the scope from §1; the contract
+narrowed to it, by running `flw context flw-review --scope <the paths in scope>` rather
+than reading the whole file; and the knowledge store narrowed to it — `flw know <path>`
+for each path in scope, heads not bodies. Compute your target file before you start:
 `<reports>/<stamp>-<config>-<role>.md`, the same naming a dispatched reviewer's own file
 uses, with `<reports>` and `<stamp>` named the way `references/team-dispatch.md` §3
 states and `<config>` the file §2 resolved the perspective from.

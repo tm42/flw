@@ -76,13 +76,15 @@ Give every reviewer the same eight things:
 
 - **its `perspective`, verbatim**
 - **the scope** — the exact files or diff, and what is out of bounds
-- **the contract, narrowed to the scope** — not `specs/current.toml` whole. Every
-  component carries `paths`; intersect those with the scope already fixed, before this
-  file was opened, and pass only the components that meet it, plus `assumptions` and
-  `open_questions`, which belong to no component. Name the components you passed, so a
-  reviewer reasoning about one it was not given can ask for it instead of guessing. Pass
-  the whole file when the scope is the whole repository. The instruction is unchanged:
-  flag anything violating a stated principle.
+- **the contract, narrowed to the scope** — not `specs/current.toml` whole, and not
+  intersected against `paths` by hand: run `flw context flw-review --scope <each path in
+  the scope>` and pass its output, plus `assumptions` and `open_questions` read from the
+  contract directly, since they belong to no component and the command does not print
+  them. Name the components the command matched, so a reviewer reasoning about one it was
+  not given can ask for it instead of guessing. A scope covering the whole repository is
+  the case where the narrowed output is the whole contract, and that is correct — pass it
+  as the command printed it rather than reaching for the raw file instead. The
+  instruction is unchanged: flag anything violating a stated principle.
   **Why this is worth doing.** A reviewer inherits no prompt cache — not from you, not
   from another reviewer — so every one of them pays the contract cold. Measured
   2026-09-02, with `cl100k_base` as a proxy for the real tokenizer: flw's own contract is

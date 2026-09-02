@@ -2547,10 +2547,10 @@ def _body(out: str) -> str:
     return out.split("\nroot: ", 1)[1]
 
 
-def _context(tmp_path, monkeypatch, skill=None, root=None):
+def _context(tmp_path, monkeypatch, skill=None, root=None, scope=None):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
-    return flw.context(argparse.Namespace(skill=skill, root=root))
+    return flw.context(argparse.Namespace(skill=skill, root=root, scope=scope))
 
 
 def test_context_prints_extensions_outermost_first_and_shared_before_the_skills_own(
@@ -2694,6 +2694,99 @@ def test_context_names_each_component_and_its_paths_and_no_more(
     assert "the surface: web/" in body
     assert "render a page" not in body
     assert "click a button" not in body
+
+
+def _scoped_contract(root: Path) -> None:
+    (root / "specs").mkdir(parents=True)
+    (root / "specs" / "current.toml").write_text(
+        'schema_version = 4\n'
+        'spec_version = "2.1.0"\n'
+        '[[final_state.components]]\n'
+        'name = "the engine"\n'
+        'paths = ["app/src/"]\n'
+        'provides = ["A user can render a page."]\n'
+        '[[final_state.components]]\n'
+        'name = "the surface"\n'
+        'paths = ["app/web/"]\n'
+        'provides = ["A user can click a button."]\n'
+    )
+
+
+def test_context_scope_selects_the_one_component_it_meets(
+    tmp_path, capsys, monkeypatch
+):
+    root = tmp_path / "work"
+    _scoped_contract(root)
+
+    assert _context(tmp_path, monkeypatch, root=str(root), scope=["app/web"]) == 0
+    body = _body(capsys.readouterr().out)
+    assert "click a button" in body
+    assert "render a page" not in body
+
+
+def test_context_scope_selects_every_component_it_meets(
+    tmp_path, capsys, monkeypatch
+):
+    root = tmp_path / "work"
+    _scoped_contract(root)
+
+    assert _context(tmp_path, monkeypatch, root=str(root), scope=["app"]) == 0
+    body = _body(capsys.readouterr().out)
+    assert "render a page" in body
+    assert "click a button" in body
+
+
+def test_context_scope_matches_a_component_whose_path_is_a_file_inside_it(
+    tmp_path, capsys, monkeypatch
+):
+    root = tmp_path / "work"
+    (root / "specs").mkdir(parents=True)
+    (root / "specs" / "current.toml").write_text(
+        'schema_version = 4\n'
+        'spec_version = "1.0.0"\n'
+        '[[final_state.components]]\n'
+        'name = "the engine notes"\n'
+        'paths = ["app/src/notes.md"]\n'
+        'provides = ["A reader can find why the engine works this way."]\n'
+    )
+
+    assert _context(tmp_path, monkeypatch, root=str(root), scope=["app/src"]) == 0
+    body = _body(capsys.readouterr().out)
+    assert "find why the engine works" in body
+
+
+def test_context_scope_matching_nothing_prints_only_the_names_block(
+    tmp_path, capsys, monkeypatch
+):
+    root = tmp_path / "work"
+    _scoped_contract(root)
+
+    assert _context(tmp_path, monkeypatch, root=str(root), scope=["docs"]) == 0
+    body = _body(capsys.readouterr().out)
+    assert "the engine: app/src/" in body
+    assert "render a page" not in body
+    assert "click a button" not in body
+
+
+def test_context_scope_outside_the_root_is_refused(tmp_path, capsys, monkeypatch):
+    root = tmp_path / "work"
+    _scoped_contract(root)
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+
+    assert _context(tmp_path, monkeypatch, root=str(root), scope=[str(outside)]) == 1
+    assert "outside the resolved root" in capsys.readouterr().err
+
+
+def test_context_scope_with_no_project_root_behaves_like_the_bare_call(
+    tmp_path, capsys, monkeypatch
+):
+    plain = tmp_path / "somewhere"
+    plain.mkdir()
+
+    assert _context(tmp_path, monkeypatch, root=str(plain), scope=["anything"]) == 0
+    out = capsys.readouterr().out
+    assert "root: none" in out
 
 
 def test_context_reads_the_contract_where_paths_specs_says_it_is(
@@ -3344,7 +3437,7 @@ def test_every_read_of_the_flw_directory_goes_through_the_resolved_name(
     )
 
     # _section_config, _context_extensions and knowledge_dir's default.
-    assert flw.context(argparse.Namespace(skill="flw-spec", root=str(root))) == 0
+    assert flw.context(argparse.Namespace(skill="flw-spec", root=str(root), scope=None)) == 0
     body = _body(capsys.readouterr().out)
     assert "RELOCATED-SHARED" in body
     assert "notes: category acme" in body
