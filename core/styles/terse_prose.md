@@ -174,7 +174,7 @@ Use a list when the content is a sequence with an order — a timeline, a plan, 
 set of complete statements that each carry something the others do not. Do not use a list to
 split one idea into three fragments. Maximum three levels of nesting. No emoji.
 
-Use a table only for genuinely tabular data. No sentences in cells, five columns at most. Two
+Use a table only for tabular data. No sentences in cells, five columns at most. Two
 columns are better written as `**term** — text` lines.
 
 Tag every code fence with its language. Use a fence anywhere alignment carries meaning:
