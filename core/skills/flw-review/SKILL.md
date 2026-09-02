@@ -170,8 +170,11 @@ Give every reviewer the same seven things:
 **The delivery contract, because a reply is not durable.** On 2026-08-23 three of four
 reviewers had their replies dropped by the session mailbox; the work was done and the
 reports were written, but they only surfaced after being chased. Every reviewer writes its
-full report to its target file *and* replies with the identical text — the file is what
-makes the work survive a dropped reply.
+full report to its target file and replies with **one line — the path and the finding
+counts**. Not the report again: on 2026-09-02 every dispatched agent was told to reply
+with the identical text, each report was emitted twice, and the replies arrived truncated,
+so the file was read anyway — three copies of every report for one. The path was fixed
+before dispatch, so a dropped line is recovered by reading it when the agent goes idle.
 
 ### The discipline, given to every reviewer
 
@@ -207,8 +210,9 @@ makes the work survive a dropped reply.
 >
 > Write the report by the style at the path you were given. It is a file, not a reply.
 >
-> **Write your full report to the target file you were given, then reply with the
-> identical text.** The reply can be dropped in transit; the file is what survives.
+> **Write your full report to the target file you were given, then reply with one
+> line: the path and the finding counts.** Not the report — it is read from the file.
+> The reply can be dropped in transit; the file is what survives.
 
 ## 3b. Inline, when there is no subagent — or when four contexts is absurd
 
