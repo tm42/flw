@@ -3087,6 +3087,326 @@ def ledger(args: argparse.Namespace) -> int:
     return 0
 
 
+def knowledge_dir(root: Path) -> Path:
+    """`[knowledge] dir` — where this root's store is, from the project's file only.
+
+    The second exception to the merge, for the same reason as `[project] roots`:
+    where one repository keeps its architecture is a fact about that repository,
+    and a machine-wide value would be right for at most one project on the
+    machine. Defaults to the per-project directory's `knowledge/`, which is
+    already inside whatever the repo ignores once the flw directory is.
+    """
+    config = flw_dir(root) / "config.toml"
+    declared = None
+    if config.is_file():
+        try:
+            document = tomllib.loads(config.read_text())
+        except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+            raise SystemExit(f"error: {config} does not parse: {exc}") from None
+        section = document.get("knowledge", {})
+        if not isinstance(section, dict):
+            raise SystemExit(f"error: {config}: [knowledge] is not a table")
+        declared = section.get("dir")
+        if declared is not None and not isinstance(declared, str):
+            raise SystemExit(
+                f"error: {config}: [knowledge] dir is not a path: {declared!r}"
+            )
+    return (root / declared) if declared else (flw_dir(root) / "knowledge")
+
+
+def _knowledge_stores(root: Path, members: dict[str, Path]) -> list[tuple[Path, Path]]:
+    """Every (root, store) a whole-store operation covers, this root first.
+
+    From a parent that is `system.md` and every member's own store; from a
+    repository it is that repository alone, because nothing walks upward from a
+    member looking for a parent that claims it.
+    """
+    found = [(root, knowledge_dir(root))]
+    found += [(path, knowledge_dir(path)) for path in members.values() if path.is_dir()]
+    return found
+
+
+def _knowledge_engine():
+    sys.path.insert(0, str(checkout() / "core" / "scripts"))
+    import knowledge as engine
+
+    return engine
+
+
+def _knowledge_root(args: argparse.Namespace) -> Path | None:
+    start = Path(args.root).resolve() if args.root else None
+    root = nearest_project(start)
+    if root is None:
+        print(
+            f"error: no specs/ or {flw_dir_name()}/ at or above "
+            f"{tilde(start or Path.cwd())}, so there is no store to read.",
+            file=sys.stderr,
+        )
+    return root
+
+
+def know(args: argparse.Namespace) -> int:
+    """The knowledge store: what this system is built of, found from a path.
+
+    Nothing is printed at any skill's opening — this is the command a skill
+    runs when it needs orientation, and a root with no store is a state rather
+    than a fault, so every skill can run it without guarding the call.
+    """
+    refused = _refuse_a_bad_root(args.root)
+    if refused is not None:
+        return refused
+    engine = _knowledge_engine()
+
+    root = _knowledge_root(args)
+    if root is None:
+        return 1
+    members = project_roots(root)
+    store = knowledge_dir(root)
+    if not store.is_dir():
+        # A missing [knowledge] key and a missing directory read the same, and
+        # neither is a fault: every repository has no store until research
+        # writes one.
+        print("no store")
+        return 0
+
+    try:
+        return _know(args, engine, root, store, members)
+    except engine.Refused as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+
+def _know(args, engine, root: Path, store: Path, members: dict[str, Path]) -> int:
+    if args.stamp is not None:
+        return _know_stamp(args, engine, root, members)
+    if args.reindex:
+        return _know_reindex(engine, root, members)
+    if args.check:
+        return _know_check(engine, root, members)
+    if args.path:
+        return _know_walk(args, engine, root, store, members)
+    if args.full:
+        raise engine.Refused("--full describes a walk; give it a path to walk from")
+    return _know_orientation(engine, root, store, members)
+
+
+def _member_head(engine, path: Path):
+    """(concept, diff) for one member's repository file, or (None, None)."""
+    store = knowledge_dir(path)
+    own = store / f"{path.name}.md"
+    if not (store.is_dir() and own.is_file()):
+        return None, None
+    concept = engine.load(own, store, path)
+    if not concept.listable:
+        return None, None
+    return concept, engine.changed(concept)
+
+
+def _know_orientation(engine, root: Path, store: Path, members: dict[str, Path]) -> int:
+    if not members:
+        own = store / f"{root.name}.md"
+        concept = engine.load(own, store, root) if own.is_file() else None
+        diff = engine.changed(concept) if concept is not None else engine.Diff("current")
+        where = tilde(own) if concept is not None else f"({own.name} not written)"
+        print(engine.render_repo_orientation(root.name, concept, diff, where), end="")
+        return 0
+
+    system_path = store / engine.SYSTEM
+    system = engine.load(system_path, store, root) if system_path.is_file() else None
+    heads: list[tuple[str, object]] = []
+    changes: dict[str, object] = {}
+    for path in members.values():
+        concept, diff = _member_head(engine, path)
+        heads.append((path.name, concept))
+        if diff is not None:
+            changes[path.name] = diff
+    where = tilde(system_path) if system is not None else f"({engine.SYSTEM} not written)"
+    print(engine.render_orientation(root.name, system, heads, changes, where), end="")
+    return 0
+
+
+def _know_walk(args, engine, root: Path, store: Path, members: dict[str, Path]) -> int:
+    given = Path(args.path)
+    if members:
+        target = next((p for p in members.values() if engine.under(p, given)), None)
+        if target is None:
+            raise engine.Refused(
+                f"{args.path} is under no repository {root.name} declares"
+            )
+        rel = engine.relative_to_root(target, given)
+    else:
+        target, rel = root, engine.relative_to_root(root, given)
+
+    target_store = knowledge_dir(target)
+    rows = []
+    total = 0
+    if target_store.is_dir():
+        total = len(engine.candidates(target, target_store, rel))
+        for path in reversed(engine.walk(target, target_store, rel)):
+            concept = engine.load(path, target_store, target)
+            rows.append((concept, engine.changed(concept)))
+
+    system_path = store / engine.SYSTEM
+    if members and system_path.is_file():
+        # From a parent the walk ends at system.md, so it is the outermost
+        # candidate and the first thing printed.
+        system = engine.load(system_path, store, root)
+        state = engine.system_state(engine.changed_system(system, members))
+        rows.insert(0, (system, engine.Diff(state)))
+        total += 1
+
+    print(engine.render_walk(target.name, rel, rows, total, args.full), end="")
+    return 0
+
+
+def _system_detail(engine, concept, per_member: dict) -> str:
+    table = concept.revision if isinstance(concept.revision, dict) else {}
+    parts = []
+    for name, diff in per_member.items():
+        if diff.state == "current":
+            parts.append(f"{name} {table.get(name, '')}".strip())
+        elif diff.state == "changed":
+            parts.append(f"{name} {diff.summary()}")
+        else:
+            parts.append(f"{name} {diff.state}")
+    return f" {engine.DASH} ".join(parts)
+
+
+def _know_check(engine, root: Path, members: dict[str, Path]) -> int:
+    """The whole store, writing nothing, exit 0 whatever it finds."""
+    rows: list = []
+    notes: list[str] = []
+    for owner, store in _knowledge_stores(root, members):
+        if not store.is_dir():
+            continue
+        expected = dict(engine.orphans(store, owner))
+        for path in engine.concepts(store):
+            concept = engine.load(path, store, owner)
+            detail = ""
+            if path in expected:
+                state = "orphan"
+                detail = f"expected {expected[path].relative_to(owner)}"
+            elif not concept.listable:
+                state = concept.problems[0]
+            elif concept.level == "System":
+                per_member = engine.changed_system(concept, members)
+                state = engine.system_state(per_member)
+                detail = _system_detail(engine, concept, per_member)
+                notes += [
+                    f"{owner.name}: {engine.SYSTEM} carries {key!r}, "
+                    "which [project.roots] does not declare"
+                    for key in engine.undeclared_members(concept, members)
+                ]
+            else:
+                diff = engine.changed(concept)
+                state = diff.state
+                if diff.state == "changed":
+                    detail = (
+                        f"{diff.summary()} {engine.DASH} since {concept.revision}"
+                    )
+            rows.append(engine.Row(owner.name, concept.rel, state, detail))
+
+    if members:
+        noun = "root" if len(members) == 1 else "roots"
+        header = (
+            f"knowledge: {len(members)} {noun}, one store each "
+            f"{engine.DASH} {len(rows)} files"
+        )
+    else:
+        header = f"knowledge: {root.name} {engine.DASH} {len(rows)} files"
+    print(engine.render_check(header, rows, notes), end="")
+    return 0
+
+
+def _know_reindex(engine, root: Path, members: dict[str, Path]) -> int:
+    written: list[Path] = []
+    for owner, store in _knowledge_stores(root, members):
+        written += engine.reindex(store, owner)
+    for path in written:
+        print(f"  {tilde(path)}")
+    noun = "listing" if len(written) == 1 else "listings"
+    print(f"{len(written)} {noun} rewritten")
+    return 0
+
+
+def _know_stamp(args, engine, root: Path, members: dict[str, Path]) -> int:
+    if not args.stamp:
+        raise engine.Refused("--stamp names the files to re-stamp; it was given none")
+
+    stores = _knowledge_stores(root, members)
+    written: list[Path] = []
+    for given in args.stamp:
+        path = Path(given)
+        path = path if path.is_absolute() else (Path.cwd() / path)
+        path = path.resolve()
+        owned = next(
+            ((owner, store) for owner, store in stores
+             if store.is_dir() and path.is_relative_to(store)),
+            None,
+        )
+        if owned is None:
+            raise engine.Refused(f"{given} is in no store under {root.name}")
+        owner, store = owned
+        # `members` only reaches system.md, which lives in this root's own store.
+        written += engine.stamp([path], store, owner, members if owner == root else {})
+    for path in written:
+        print(f"  {tilde(path)}")
+    noun = "file" if len(written) == 1 else "files"
+    print(f"{len(written)} {noun} stamped")
+    return 0
+
+
+def know_map(args: argparse.Namespace) -> int:
+    """Every declared edge, folded into a picture nobody authored.
+
+    A graph is a different kind of output from a listing, which is why this is
+    its own command and not a mode flag on `flw know`.
+    """
+    refused = _refuse_a_bad_root(args.root)
+    if refused is not None:
+        return refused
+    engine = _knowledge_engine()
+
+    root = _knowledge_root(args)
+    if root is None:
+        return 1
+    members = project_roots(root)
+    if not knowledge_dir(root).is_dir():
+        print("no store")
+        return 0
+
+    # From a parent the fold reads every member's store; the parent's own holds
+    # system.md, which declares no edges.
+    stores = (
+        [(path, knowledge_dir(path)) for path in members.values()]
+        if members
+        else [(root, knowledge_dir(root))]
+    )
+    edges, described, carriers = engine.fold(stores)
+
+    try:
+        if args.node:
+            engine.require_node(edges, described, args.node)
+            inbound, outbound = engine.touching(edges, args.node)
+            selected = inbound + outbound
+        else:
+            inbound = outbound = []
+            selected = edges
+    except engine.Refused as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if args.format == "mermaid":
+        print(engine.render_mermaid(selected), end="")
+    elif args.format == "dot":
+        print(engine.render_dot(selected), end="")
+    elif args.node:
+        print(engine.render_node(args.node, inbound, outbound), end="")
+    else:
+        print(engine.render_map(root.name, edges, described, carriers), end="")
+    return 0
+
+
 def tilde(path: Path) -> str:
     try:
         return f"~/{path.relative_to(Path.home())}"
@@ -3393,6 +3713,74 @@ is old, and a non-zero exit invites someone to wire this into a check whose chea
 green is deleting notes.""",
     )
     q.set_defaults(handler=kb_lint)
+
+    p = sub.add_parser(
+        "know",
+        help="the knowledge store: what this system is built of, by location",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""What a system is built of and how its parts connect, written once by
+a survey and stored in the shape of the code it describes: a directory D at path P is
+<store>/P/D.md, a repository is <store>/<basename>.md, and the parent of a multi-repo
+system holds system.md. Nothing is indexed and nothing is printed at any skill's opening.
+
+With no PATH this orients: the system file and one head per member, or this repository's
+own file. With a PATH it walks the mirror upward from there, outermost first, and checks
+each file it prints against the revision that file records.
+
+Missing is normal. A root with no store says so and exits 0.""",
+        epilog="""examples
+
+  flw know                           orientation, and where most work stops
+  flw know src/engine.py             every file describing that path, heads only
+  flw know src/engine.py --full      the same, with the prose
+  flw know --check                   changed, orphaned, malformed, unstamped
+  flw know --reindex                 rewrite every generated index.md
+  flw know --stamp <file>            record the current HEAD in that file""",
+    )
+    p.add_argument("path", nargs="?", metavar="PATH", help="a path in the code")
+    p.add_argument(
+        "--root", metavar="PATH", help="the project to read, instead of $PWD's"
+    )
+    p.add_argument("--full", action="store_true", help="bodies, not only heads")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--check", action="store_true", help="the whole store; writes nothing"
+    )
+    mode.add_argument("--reindex", action="store_true", help="rewrite every index.md")
+    mode.add_argument(
+        "--stamp",
+        nargs="*",
+        metavar="PATH",
+        help="write the current HEAD into revision for these files",
+    )
+    p.set_defaults(handler=know)
+
+    p = sub.add_parser(
+        "map",
+        help="fold every declared edge into one picture nobody authored",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""Every [[connects]] table in every knowledge file under the root,
+folded. Nobody authors this and nothing can drift from it. A NODE restricts the fold to
+edges touching it in either direction; a target no file describes is counted, not hidden.""",
+        epilog="""examples
+
+  flw map                            every edge, every node
+  flw map worker                     what a change to worker's contract touches
+  flw map --format mermaid           the same graph, for a document""",
+    )
+    p.add_argument(
+        "node", nargs="?", metavar="NODE", help="a repo basename, or basename/area-path"
+    )
+    p.add_argument(
+        "--root", metavar="PATH", help="the project to read, instead of $PWD's"
+    )
+    p.add_argument(
+        "--format",
+        choices=("text", "mermaid", "dot"),
+        default="text",
+        help="default: text",
+    )
+    p.set_defaults(handler=know_map)
 
     p = sub.add_parser("version", help="git describe")
     p.set_defaults(handler=version)

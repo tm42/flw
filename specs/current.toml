@@ -137,6 +137,8 @@ surfaces = [
   "flw kb show <slug>",
   "flw kb write <category> <title> [-d|--description DESC] [--type TYPE] [--tags a,b] [--here]",
   "flw kb lint",
+  "flw know [PATH] [--root PATH] [--full] [--check|--reindex] [--stamp PATH...]",
+  "flw map [NODE] [--root PATH] [--format text|mermaid|dot]",
   "flw version",
   "Exit codes: 0 success, 1 something failed or was refused. `flw test` also uses 2 for a run that proved nothing — nothing declared to run, nothing left runnable here, a full run with a check the project handed back, or a full run with no contract to read. `flw validate` uses 2 for a file it was given and could not check, and 0 for a project that has no contract yet, which is a state and not a fault.",
   "~/.flw/kb/ — the machine-wide note store. A directory tree of markdown files where a category is a directory; flw creates it on first write, holds no index of it, and reads no VCS in it.",

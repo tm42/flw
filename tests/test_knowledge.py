@@ -20,6 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core" / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli"))
+import flw
 import knowledge
 
 REPO = Path(__file__).resolve().parent.parent
@@ -538,3 +539,300 @@ def test_mermaid_and_dot_carry_the_same_edges_as_the_text():
     dot = knowledge.render_dot(edges)
     assert dot.startswith("digraph knowledge {")
     assert '"shop/api" -> "worker" [label="queue"];' in dot
+
+
+# --- the two commands --------------------------------------------------------- #
+
+
+def run(argv: list[str]) -> int:
+    """Through the parser, so the tests exercise the surface the contract declares."""
+    args = flw.build_parser().parse_args(argv)
+    return args.handler(args)
+
+
+def test_orientation_from_the_parent_is_the_plan_s_sample(capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["know", "--root", str(ACME)]) == 0
+    where = flw.tilde(store_of(ACME) / "system.md")
+    assert capsys.readouterr().out == (
+        f"system: acme · 2 roots · {where}\n"
+        "  One shop, one worker. The shop takes orders over HTTP; the worker\n"
+        "  fulfils them from a queue the shop writes.\n"
+        "\n"
+        "  shop      Serves the storefront and the order API. Writes each order\n"
+        "            to the fulfilment queue.\n"
+        "            → worker (queue, Order)\n"
+        "  worker    Drains the fulfilment queue and marks orders shipped\n"
+        "            through the shop's API.\n"
+        "            → shop (http, OrderStatus)\n"
+        "\n"
+        "2 repo files, each in its own repo's store · 0 changed\n"
+    )
+
+
+def test_the_walk_from_a_member_is_the_plan_s_sample(capsys, monkeypatch):
+    canned(monkeypatch, {"-- api": (0, NUMSTAT), "diff": (0, "")})
+    assert run(["know", "api/orders.py", "--root", str(ACME / "shop")]) == 0
+    assert capsys.readouterr().out == (
+        "shop · api/orders.py · 2 of 3 levels have knowledge\n"
+        "\n"
+        "  shop.md                    repo   1f4ac02   current\n"
+        "    Serves the storefront and the order API. Writes each order to the\n"
+        "    fulfilment queue.\n"
+        "    → worker (queue, Order)\n"
+        "\n"
+        "  api/api.md                 area   8be0117   changed since 8be0117: "
+        "3 files · +41 −12 · e.g. api/orders.py\n"
+        "    The order API. OrderStatus is a string enum that crosses to the\n"
+        "    worker unchanged.\n"
+        "    → worker (queue, Order)\n"
+        "\n"
+        "2 files · 1 changed · --full for bodies\n"
+    )
+
+
+def test_check_from_the_parent_is_the_plan_s_sample(capsys, monkeypatch):
+    canned(monkeypatch, {"-- api": (0, NUMSTAT), "diff": (0, "")})
+    assert run(["know", "--check", "--root", str(ACME)]) == 0
+    assert capsys.readouterr().out == (
+        "knowledge: 2 roots, one store each · 4 files\n"
+        "\n"
+        "  acme      system.md                  current     "
+        "shop 1f4ac02 · worker 3c81d90\n"
+        "  shop      shop.md                    current\n"
+        "  shop      api/api.md                 changed     "
+        "3 files · +41 −12 · since 8be0117\n"
+        "  worker    worker.md                  unstamped\n"
+        "\n"
+        "4 files · 1 changed · 1 unstamped · 2 current · 0 orphans\n"
+    )
+
+
+def test_map_and_a_node_are_the_plan_s_samples(capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["map", "--root", str(ACME)]) == 0
+    assert capsys.readouterr().out == (
+        "acme · folded from 3 concept files\n"
+        "\n"
+        "  shop        ──queue──▶   worker\n"
+        "  shop/api    ──queue──▶   worker\n"
+        "  worker      ──http──▶    shop\n"
+        "\n"
+        "3 edges · 3 nodes\n"
+    )
+
+    assert run(["map", "worker", "--root", str(ACME)]) == 0
+    assert capsys.readouterr().out == (
+        "\n"
+        "  in    shop      ──queue──▶  worker\n"
+        "        shop/api  ──queue──▶  worker\n"
+        "  out   worker    ──http──▶   shop\n"
+        "\n"
+        "changing worker's inbound contract touches: shop, shop/api\n"
+    )
+
+
+# --- each resolution row ------------------------------------------------------ #
+
+
+def test_a_member_standing_inside_itself_sees_its_own_file_alone(capsys, monkeypatch):
+    """No reverse lookup: the system is seen by naming its root, never by
+    walking upward from a member looking for a parent that claims it."""
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["know", "--root", str(ACME / "shop")]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("repo: shop · ")
+    assert "worker" not in out.splitlines()[0]
+    assert out.endswith("1 repo file · 0 changed\n")
+
+
+def test_from_a_parent_a_path_under_a_member_ends_at_system_md(capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["know", "api/orders.py", "--root", str(ACME)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("shop · api/orders.py · 3 of 4 levels have knowledge")
+    listed = [line.split()[0] for line in out.splitlines() if line.startswith("  ")]
+    assert [name for name in listed if name.endswith(".md")] == [
+        "system.md", "shop.md", "api/api.md",
+    ]
+
+
+def test_from_a_parent_a_path_under_no_member_is_refused(capsys, tmp_path, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    (tmp_path / "elsewhere.py").write_text("x = 1\n")
+    assert run(["know", str(tmp_path / "elsewhere.py"), "--root", str(ACME)]) == 1
+    assert "under no repository acme declares" in capsys.readouterr().err
+
+
+def test_check_and_reindex_from_a_parent_cover_every_member_s_store(
+    acme, capsys, monkeypatch
+):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["know", "--check", "--root", str(acme)]) == 0
+    assert [line.split()[0] for line in capsys.readouterr().out.splitlines()
+            if line.startswith("  ")] == ["acme", "shop", "shop", "worker"]
+
+    assert run(["know", "--reindex", "--root", str(acme)]) == 0
+    out = capsys.readouterr().out
+    # The shop's own listing ships correct, so only the three it does not have move.
+    assert "3 listings rewritten" in out
+    for expected in (
+        "acme/.flw/knowledge/index.md",
+        "shop/.flw/knowledge/api/index.md",
+        "worker/.flw/knowledge/index.md",
+    ):
+        assert expected in out
+
+
+# --- what it refuses, and what it does not ------------------------------------ #
+
+
+def test_a_root_with_no_store_says_so_and_exits_0(tmp_path, capsys, monkeypatch):
+    """A missing [knowledge] key and a missing directory read the same. Three
+    skills run this on every run, and every repository has no store until
+    research writes one."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+
+    assert run(["know", "--root", str(root)]) == 0
+    assert capsys.readouterr().out == "no store\n"
+
+    (root / ".flw" / "config.toml").write_text('[knowledge]\ndir = ".flw/gone"\n')
+    assert run(["know", "--root", str(root)]) == 0
+    assert capsys.readouterr().out == "no store\n"
+
+    assert run(["map", "--root", str(root)]) == 0
+    assert capsys.readouterr().out == "no store\n"
+
+
+def test_the_knowledge_dir_is_read_from_the_project_file_and_never_the_machine_s(
+    tmp_path, capsys, monkeypatch
+):
+    """The same exception [project.roots] takes: where one repository keeps its
+    architecture is a fact about that repository, not about the machine."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    home = tmp_path / "flw-home"
+    home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("FLW_HOME", str(home))
+    (home / "config.toml").write_text('[knowledge]\ndir = "docs/arch"\n')
+
+    root = tmp_path / "work"
+    (root / ".flw" / "knowledge").mkdir(parents=True)
+    (root / "docs" / "arch").mkdir(parents=True)
+
+    assert flw.knowledge_dir(root) == root / ".flw" / "knowledge"
+    assert run(["know", "--root", str(root)]) == 0
+    assert capsys.readouterr().out.startswith("repo: work · (work.md not written)")
+
+
+def test_no_root_is_the_one_thing_orientation_refuses(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    assert run(["know", "--root", str(empty)]) == 1
+    assert "no specs/" in capsys.readouterr().err
+    assert run(["map", "--root", str(empty)]) == 1
+    assert "no specs/" in capsys.readouterr().err
+
+
+def test_full_and_stamp_with_no_path_are_refused(capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["know", "--full", "--root", str(ACME)]) == 1
+    assert "give it a path to walk from" in capsys.readouterr().err
+
+    assert run(["know", "--stamp", "--root", str(ACME)]) == 1
+    assert "was given none" in capsys.readouterr().err
+
+
+def test_a_path_not_in_the_code_is_refused(capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["know", "api/nothing.py", "--root", str(ACME / "shop")]) == 1
+    assert "not in the code" in capsys.readouterr().err
+
+
+def test_a_stamp_whose_repo_has_no_head_changes_nothing_and_exits_1(
+    acme, capsys, monkeypatch
+):
+    path = store_of(acme / "shop") / "shop.md"
+    before = path.read_text()
+    canned(monkeypatch, {"rev-parse": (128, "")})
+
+    assert run(["know", "--stamp", str(path), "--root", str(acme)]) == 1
+    assert "rev-parse" in capsys.readouterr().err
+    assert path.read_text() == before
+
+
+def test_stamp_from_a_parent_reaches_a_file_in_any_member_s_store(
+    acme, capsys, monkeypatch
+):
+    canned(monkeypatch, {"rev-parse": (0, "ff00aa1\n")})
+    path = store_of(acme / "worker") / "worker.md"
+    assert run(["know", "--stamp", str(path), "--root", str(acme)]) == 0
+    assert "1 file stamped" in capsys.readouterr().out
+    assert knowledge.load(path, store_of(acme / "worker"), acme / "worker").revision == (
+        "ff00aa1"
+    )
+
+
+def test_a_file_in_no_store_cannot_be_stamped(acme, capsys, monkeypatch):
+    canned(monkeypatch, {"rev-parse": (0, "ff00aa1\n")})
+    assert run(["know", "--stamp", str(acme / "worker" / "drain.py"),
+                "--root", str(acme)]) == 1
+    assert "is in no store" in capsys.readouterr().err
+
+
+def test_a_node_no_file_names_exits_1(capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["map", "billing", "--root", str(ACME)]) == 1
+    assert "no knowledge file names" in capsys.readouterr().err
+
+
+def test_check_exits_0_even_when_everything_is_changed(acme, capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, NUMSTAT)})
+    assert run(["know", "--check", "--root", str(acme)]) == 0
+    assert "3 changed" in capsys.readouterr().out
+
+
+def test_check_names_a_revision_key_that_no_declared_member_matches(
+    acme, capsys, monkeypatch
+):
+    canned(monkeypatch, {"diff": (0, "")})
+    path = store_of(acme) / "system.md"
+    path.write_text(path.read_text().replace(' }', ', billing = "old0000" }'))
+
+    assert run(["know", "--check", "--root", str(acme)]) == 0
+    assert "carries 'billing', which [project.roots] does not declare" in (
+        capsys.readouterr().out
+    )
+
+
+def test_full_prints_the_body_the_head_alone_does_not(capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["know", "api/orders.py", "--full", "--root", str(ACME / "shop")]) == 0
+    out = capsys.readouterr().out
+    assert "`OrderStatus` is a string enum" in out
+    assert "--full for bodies" not in out
+
+
+def test_an_orphan_is_reported_with_the_path_it_expected(acme, capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    (acme / "shop" / "api").rename(acme / "shop" / "http")
+
+    assert run(["know", "--check", "--root", str(acme)]) == 0
+    out = capsys.readouterr().out
+    assert "api/api.md                 orphan      expected api" in out
+    assert "1 orphans" in out
+
+
+def test_the_other_formats_are_reachable_from_the_command(capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    assert run(["map", "--format", "mermaid", "--root", str(ACME)]) == 0
+    assert "graph LR" in capsys.readouterr().out
+
+    assert run(["map", "worker", "--format", "dot", "--root", str(ACME)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("digraph knowledge {")
+    # The NODE filter reaches every format, not only the text one.
+    assert '"shop/api" -> "worker"' in out
+    assert '"shop" -> "worker"' in out

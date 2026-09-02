@@ -202,30 +202,47 @@ def walk(root: Path, store: Path, rel: Path) -> list[Path]:
     return [c for c in candidates(root, store, rel) if c.is_file()]
 
 
-def relative_to_root(root: Path, given: Path) -> Path:
-    """`given` as a path under `root`, or a refusal.
+def _reachable(root: Path, given: Path) -> list[Path]:
+    """Where a relative argument could mean, in the order it is tried.
 
-    Read against the working directory first and against the root second, so
-    that both `flw know src/engine.py` from inside a repository and `flw know
-    api/orders.py --root shop` from its parent name the file the caller meant.
+    The working directory first and the root second, so that both `flw know
+    src/engine.py` from inside a repository and `flw know api/orders.py --root
+    shop` from its parent name the file the caller meant.
+    """
+    return [given] if given.is_absolute() else [Path.cwd() / given, root / given]
 
-    A path outside the root is a typo or the wrong `--root`; a path that is not
-    in the code is a typo or a rename that already orphaned its knowledge.
+
+def under(root: Path, given: Path) -> Path | None:
+    """`given` relative to `root` and in the code, or None. Never raises.
+
+    Existence is part of the question, not a check after it: from a parent,
+    every member joins with every relative path, so a candidate that is not on
+    disk would put the caller's path under whichever member came first.
     """
     root = root.resolve()
-    reachable = [given] if given.is_absolute() else [Path.cwd() / given, root / given]
-    outside = False
-    for candidate in reachable:
+    for candidate in _reachable(root, given):
         resolved = candidate.resolve()
         if not resolved.exists():
             continue
         try:
             rel = resolved.relative_to(root)
         except ValueError:
-            outside = True
             continue
         return rel if rel != Path() else Path(".")
-    if outside:
+    return None
+
+
+def relative_to_root(root: Path, given: Path) -> Path:
+    """`under`, with the two refusals told apart.
+
+    A path outside the root is a typo or the wrong `--root`; a path that is not
+    in the code is a typo or a rename that already orphaned its knowledge.
+    """
+    found = under(root, given)
+    if found is not None:
+        return found
+    root = root.resolve()
+    if any(candidate.resolve().exists() for candidate in _reachable(root, given)):
         raise Refused(f"{given} is not under {root}")
     raise Refused(f"{given} is not in the code under {root}")
 
@@ -583,6 +600,16 @@ def require_node(edges: list[Edge], described: set[str], node: str) -> None:
 # --- rendering --------------------------------------------------------------- #
 
 
+def _col(text: str, width: int) -> str:
+    """Left-aligned in `width`, always followed by at least one space.
+
+    `ljust` alone lets a value exactly as wide as its column run into the next
+    one, which is how `unverifiable` — twelve characters in a twelve-wide
+    status column — printed with the detail glued to it.
+    """
+    return f"{text:<{width - 1}} "
+
+
 def _wrap(text: str, first: str, rest: str) -> list[str]:
     if not text:
         return []
@@ -606,23 +633,25 @@ def _edge_lines(concept: Concept, indent: str) -> list[str]:
 
 def render_orientation(
     name: str,
-    system: Concept,
+    system: Concept | None,
     members: list[tuple[str, Concept | None]],
     changes: dict[str, Diff],
+    where: str,
 ) -> str:
     """A parent's orientation: the system file, then one head per member.
 
     The one place a reader meets a whole system, and where most work stops —
     which is why it prints descriptions and edges and never a body.
     """
-    lines = [f"system: {name} {DASH} {len(members)} roots {DASH} {system.path}"]
-    lines += _wrap(system.description, "  ", "  ")
+    lines = [f"system: {name} {DASH} {len(members)} roots {DASH} {where}"]
+    if system is not None:
+        lines += _wrap(system.description, "  ", "  ")
     lines.append("")
     for member, concept in members:
         if concept is None:
-            lines.append(f"  {member.ljust(10)}(no store)")
+            lines.append(f"  {_col(member, 10)}(no store)")
             continue
-        lines += _wrap(concept.description, f"  {member.ljust(10)}", " " * 12)
+        lines += _wrap(concept.description, f"  {_col(member, 10)}", " " * 12)
         lines += _edge_lines(concept, " " * 12)
     lines.append("")
     count = len([c for _, c in members if c is not None])
@@ -634,13 +663,17 @@ def render_orientation(
     return "\n".join(lines) + "\n"
 
 
-def render_repo_orientation(name: str, concept: Concept, diff: Diff) -> str:
+def render_repo_orientation(
+    name: str, concept: Concept | None, diff: Diff, where: str
+) -> str:
     """A repository standing alone: its own file, and nothing walked upward.
 
     Nothing looks for a parent that claims this repository. Standing inside a
     member, flw sees that member alone; the system is seen by naming its root.
     """
-    lines = [f"repo: {name} {DASH} {concept.path}"]
+    if concept is None:
+        return f"repo: {name} {DASH} {where}\n\n0 repo files {DASH} 0 changed\n"
+    lines = [f"repo: {name} {DASH} {where}"]
     lines += _wrap(concept.description, "  ", "  ")
     lines += _edge_lines(concept, "  ")
     lines.append("")
@@ -675,8 +708,8 @@ def render_walk(
     for concept, diff in found:
         revision = concept.revision if isinstance(concept.revision, str) else ""
         lines.append(
-            f"  {concept.rel.ljust(27)}{SHORT[concept.level].ljust(7)}"
-            f"{(revision or '—').ljust(10)}{_walk_status(diff, revision)}"
+            f"  {_col(concept.rel, 27)}{_col(SHORT[concept.level], 7)}"
+            f"{_col(revision or '—', 10)}{_walk_status(diff, revision)}"
         )
         lines += _wrap(concept.description, "    ", "    ")
         lines += _edge_lines(concept, "    ")
@@ -714,8 +747,8 @@ def render_check(header: str, rows: list[Row], notes: list[str]) -> str:
     lines = [header, ""]
     for row in rows:
         lines.append(
-            f"  {row.root.ljust(10)}{row.file.ljust(27)}"
-            f"{row.state.ljust(12)}{row.detail}".rstrip()
+            f"  {_col(row.root, 10)}{_col(row.file, 27)}"
+            f"{_col(row.state, 12)}{row.detail}".rstrip()
         )
     lines.append("")
     counted = dict.fromkeys(("changed", "unstamped", "current", "orphan"), 0)
@@ -748,7 +781,7 @@ def render_map(name: str, edges: list[Edge], described: set[str], carriers: int)
     noun = "file" if carriers == 1 else "files"
     lines = [f"{name} {DASH} folded from {carriers} concept {noun}", ""]
     for edge in edges:
-        lines.append(f"  {edge.source.ljust(12)}{_arrow(edge.how).ljust(13)}{edge.to}")
+        lines.append(f"  {_col(edge.source, 12)}{_col(_arrow(edge.how), 13)}{edge.to}")
     lines.append("")
     everything = nodes_of(edges)
     undescribed = len(everything - described)
@@ -766,14 +799,14 @@ def render_node(node: str, inbound: list[Edge], outbound: list[Edge]) -> str:
     for i, edge in enumerate(inbound):
         label = "in" if i == 0 else ""
         lines.append(
-            f"  {label.ljust(6)}{edge.source.ljust(10)}"
-            f"{_arrow(edge.how).ljust(12)}{edge.to}"
+            f"  {_col(label, 6)}{_col(edge.source, 10)}"
+            f"{_col(_arrow(edge.how), 12)}{edge.to}"
         )
     for i, edge in enumerate(outbound):
         label = "out" if i == 0 else ""
         lines.append(
-            f"  {label.ljust(6)}{edge.source.ljust(10)}"
-            f"{_arrow(edge.how).ljust(12)}{edge.to}"
+            f"  {_col(label, 6)}{_col(edge.source, 10)}"
+            f"{_col(_arrow(edge.how), 12)}{edge.to}"
         )
     if inbound:
         sources = sorted({e.source for e in inbound})
