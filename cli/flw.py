@@ -1524,6 +1524,7 @@ def doctor(args: argparse.Namespace) -> int:
 
     problems += report_style()
     problems += report_extensions(sorted(known), Path(args.root) if args.root else None)
+    report_members(Path(args.root) if args.root else None)
 
     print(f"\n{'OK' if not problems else f'{problems} problem(s)'}")
     return 1 if problems else 0
@@ -1598,6 +1599,36 @@ def report_extensions(known: list[str], start: Path | None = None) -> int:
     if problems:
         print(f"      skills here: {', '.join(known)}, and {SHARED_EXTENSION}.md")
     return problems
+
+
+def report_members(start: Path | None = None) -> None:
+    """The repositories the project declares, and what is actually at each path.
+
+    `not a project` rather than a bare `exists`, because a directory holding
+    neither specs/ nor .flw/ has no extensions and can have no store: a doctor
+    calling that healthy would be calling healthy a member from which no skill
+    can read anything.
+
+    Lists rather than counts. A member that is missing is a fact about the
+    machine this checkout is on, not a fault in the install this command grades,
+    so it says so and leaves the exit code alone.
+    """
+    root = nearest_project(start)
+    if root is None:
+        return
+    members = project_roots(root)
+    if not members:
+        return
+
+    print("\nmembers:")
+    for name, path in members.items():
+        if not path.is_dir():
+            state = "missing"
+        elif not ((path / "specs").is_dir() or (path / ".flw").is_dir()):
+            state = "not a project"
+        else:
+            state = "exists"
+        print(f"  {name}: {tilde(path)} — {state}")
 
 
 # --------------------------------------------------------------------------- #
@@ -2177,6 +2208,45 @@ def _specs_dir(root: Path) -> str:
     return _section_config(root, "paths").get("specs", "specs")
 
 
+def project_roots(root: Path) -> dict[str, Path]:
+    """`[project] roots` — member name to path, from the project's own file only.
+
+    The one section that does not go through `_section_config`. Every other takes
+    `~/.flw/config.toml` as an underlay, and a machine-wide roots map would apply
+    to every project on the machine and be right for at most one. The contract's
+    surface line names the exception, so the merge claim stays true as stated
+    rather than being true of four sections and silently false of a fifth.
+
+    A value resolves against the project directory that declares it, never `$PWD`:
+    the same parent is checked out at a different path on every machine, and a
+    path resolved against the caller's directory would answer differently
+    depending on where the caller happened to stand.
+    """
+    config = root / ".flw" / "config.toml"
+    if not config.is_file():
+        return {}
+    try:
+        document = tomllib.loads(config.read_text())
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"error: {config} does not parse: {exc}") from None
+
+    section = document.get("project", {})
+    if not isinstance(section, dict):
+        raise SystemExit(f"error: {config}: [project] is not a table")
+    declared = section.get("roots", {})
+    if not isinstance(declared, dict):
+        raise SystemExit(f"error: {config}: [project] roots is not a table")
+
+    members: dict[str, Path] = {}
+    for name, value in declared.items():
+        if not isinstance(value, str):
+            raise SystemExit(
+                f"error: {config}: [project.roots] {name} is not a path: {value!r}"
+            )
+        members[name] = (root / value).resolve()
+    return members
+
+
 # Verbatim in `flw kb write --help`, and nowhere else at runtime. The gate that
 # decides *whether* a note happens is one sentence in each skill, because it is
 # paid on every run; these shape a write that is already happening.
@@ -2553,6 +2623,20 @@ def _context_extensions(chain: list[Path], skill: str | None) -> None:
         print("\n(no extensions on this chain)")
 
 
+def _context_members(root: Path | None) -> None:
+    """The repositories this project spans, in the order its config declares them.
+
+    Name, resolved path and whether the directory is there — not whether it has a
+    store or a contract of its own. A member's own `flw context` answers those,
+    and asking them here would open another project's files at every skill open.
+    """
+    if root is None:
+        return
+    for name, path in project_roots(root).items():
+        missing = "" if path.is_dir() else " (missing)"
+        print(f"  member {name}: {tilde(path)}{missing}")
+
+
 def _context_contract(root: Path | None) -> None:
     """The contract's component names and the paths each one covers, and no more.
 
@@ -2677,6 +2761,7 @@ def context(args: argparse.Namespace) -> int:
     else:
         print(f"\nroot: {tilde(root)} (from {came_from})")
 
+    _context_members(root)
     _context_extensions(project_chain(start), skill)
     _context_notes(root, skill)
     _context_contract(root)

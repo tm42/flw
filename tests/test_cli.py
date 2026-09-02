@@ -2201,6 +2201,129 @@ def test_project_chain_is_empty_where_there_is_no_project(tmp_path, monkeypatch)
     assert flw.project_chain(plain) == []
 
 
+# --- the repositories a project spans ------------------------------------- #
+
+
+def test_project_roots_resolve_against_the_project_that_declares_them(tmp_path):
+    """The same parent is checked out at a different path on every machine, so a
+    member path resolved against $PWD would answer differently depending on where
+    the caller stood. A child is as valid as a sibling; neither is required."""
+    project = tmp_path / "work" / "system"
+    (project / ".flw").mkdir(parents=True)
+    (project / ".flw" / "config.toml").write_text(
+        '[project.roots]\nds = "../datastore"\ntl = "./tooling"\n'
+    )
+
+    assert flw.project_roots(project) == {
+        "ds": (tmp_path / "work" / "datastore").resolve(),
+        "tl": (project / "tooling").resolve(),
+    }
+
+
+def test_project_roots_is_empty_where_nothing_declares_any(tmp_path):
+    """No config at all and a config about other things are the same answer, and
+    both are the normal case — a single-root project declares no members."""
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    assert flw.project_roots(project) == {}
+
+    (project / ".flw" / "config.toml").write_text('[tests]\nchecks = ["make test"]\n')
+    assert flw.project_roots(project) == {}
+
+
+def test_project_roots_names_the_file_and_the_key_it_refused(tmp_path):
+    """A member silently dropped is a repository the session does not know it is
+    standing above, which is the whole thing this key exists to say."""
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    config = project / ".flw" / "config.toml"
+
+    config.write_text("[project.roots]\nds = 3\n")
+    with pytest.raises(SystemExit) as caught:
+        flw.project_roots(project)
+    assert str(config) in str(caught.value)
+    assert "ds" in str(caught.value)
+
+    config.write_text('[project]\nroots = "../datastore"\n')
+    with pytest.raises(SystemExit) as caught:
+        flw.project_roots(project)
+    assert "roots is not a table" in str(caught.value)
+
+    config.write_text('project = "system"\n')
+    with pytest.raises(SystemExit) as caught:
+        flw.project_roots(project)
+    assert "[project] is not a table" in str(caught.value)
+
+
+def test_project_roots_ignores_the_machine_wide_config(tmp_path, monkeypatch):
+    """The one section that takes no underlay. A roots map in ~/.flw/config.toml
+    would apply to every project on the machine and be right for at most one."""
+    machine = tmp_path / "flw-home"
+    machine.mkdir()
+    (machine / "config.toml").write_text('[project.roots]\nds = "../datastore"\n')
+    monkeypatch.setattr(flw, "FLW_HOME", machine)
+
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    (project / ".flw" / "config.toml").write_text('[kb]\ncategory = "x"\n')
+
+    assert flw.project_roots(project) == {}
+    # The merge every other section takes does reach it, so the empty answer above
+    # is the exception being made and not the file going unread.
+    assert flw._section_config(project, "project") == {"roots": {"ds": "../datastore"}}
+
+
+def test_doctor_names_the_three_states_a_member_can_be_in(tmp_path, capsys, monkeypatch):
+    """`not a project` rather than a bare `exists`: a directory holding neither
+    specs/ nor .flw/ has no extensions and can have no store, so a doctor saying
+    only that it is there calls healthy a member no skill can read."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "work" / "system"
+    (project / ".flw").mkdir(parents=True)
+    (project / ".flw" / "config.toml").write_text(
+        '[project.roots]\nds = "../datastore"\nrt = "../runtime"\nui = "../ui"\n'
+    )
+    (tmp_path / "work" / "datastore" / ".flw").mkdir(parents=True)
+    (tmp_path / "work" / "ui").mkdir(parents=True)
+
+    flw.report_members(project)
+    out = capsys.readouterr().out
+    assert "\nmembers:\n" in out
+    lines = [line for line in out.splitlines() if line.startswith("  ")]
+    assert [line.split(":")[0].strip() for line in lines] == ["ds", "rt", "ui"]
+    assert lines[0].endswith(" — exists")
+    assert lines[1].endswith(" — missing")
+    assert lines[2].endswith(" — not a project")
+
+
+def test_doctor_says_nothing_about_members_where_none_are_declared(
+    tmp_path, capsys, monkeypatch
+):
+    """A single-root project is the normal case, and an empty section under a
+    heading reads as a project whose members all failed to resolve."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+
+    flw.report_members(project)
+    assert capsys.readouterr().out == ""
+
+
+def test_doctor_root_lists_the_members_of_the_project_it_is_given(home, capsys):
+    """The same claim the extensions section makes: for the repository they name
+    rather than only the one they are standing in."""
+    other = home.parent / "other"
+    (other / ".flw").mkdir(parents=True)
+    (other / ".flw" / "config.toml").write_text('[project.roots]\nds = "../datastore"\n')
+    (home.parent / "datastore" / ".flw").mkdir(parents=True)
+
+    flw.doctor(argparse.Namespace(verbose=False, root=str(other)))
+    out = capsys.readouterr().out
+    assert "\nmembers:\n" in out
+    assert "  ds: " in out
+    assert " — exists" in out
+
+
 # --- doctor reports the whole extension chain ----------------------------- #
 
 
@@ -2480,6 +2603,61 @@ def test_context_says_the_root_came_from_pwd_and_what_to_do_about_it(
         "(from $PWD — if the request named a different repository, re-run "
         "with --root)"
     ) in capsys.readouterr().out
+
+
+def test_context_lists_every_member_and_which_one_is_not_there(
+    tmp_path, capsys, monkeypatch
+):
+    """A session rooted at the parent of several checkouts is told what it is
+    standing above, in the order the config declared it — the map is ordered
+    because the names are what contract paths will be written against."""
+    root = tmp_path / "work" / "system"
+    (root / ".flw").mkdir(parents=True)
+    (root / ".flw" / "config.toml").write_text(
+        '[project.roots]\nds = "../datastore"\nrt = "../runtime"\n'
+    )
+    (tmp_path / "work" / "datastore").mkdir()
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    body = _body(capsys.readouterr().out)
+    there = flw.tilde((tmp_path / "work" / "datastore").resolve())
+    gone = flw.tilde((tmp_path / "work" / "runtime").resolve())
+    assert f"  member ds: {there}\n" in body
+    assert f"  member rt: {gone} (missing)\n" in body
+    assert body.index("member ds:") < body.index("member rt:")
+
+
+def test_context_prints_no_member_line_where_none_are_declared(
+    tmp_path, capsys, monkeypatch
+):
+    """Every single-root project is this case, and it pays for the key by not
+    printing a heading about it."""
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    assert "member" not in _body(capsys.readouterr().out)
+
+
+def test_context_adds_the_member_lines_and_changes_nothing_else(
+    tmp_path, capsys, monkeypatch
+):
+    """This runs at every skill open, so the rest of the output is what four
+    skills already read — declaring a member adds lines and moves nothing."""
+    root = tmp_path / "work" / "system"
+    (root / ".flw").mkdir(parents=True)
+
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(root)) == 0
+    before = capsys.readouterr().out.splitlines()
+
+    (root / ".flw" / "config.toml").write_text(
+        '[project.roots]\nds = "../datastore"\n'
+    )
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(root)) == 0
+    after = capsys.readouterr().out.splitlines()
+
+    assert [line for line in after if not line.startswith("  member ")] == before
+    assert len(after) == len(before) + 1
 
 
 def test_doctor_and_context_refuse_a_bad_root_the_same_way(tmp_path, capsys):
