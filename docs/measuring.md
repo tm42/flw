@@ -9,8 +9,13 @@ nothing else — no install, no `flw install`, no network.
 ## What is worth measuring, and what is not
 
 flw does almost no computation. It manages symlinks, merges config, reads TOML and shells out.
-Three commands do real work and they are the ones to time:
+Four commands do real work and they are the ones to time. **Measure `flw context` first**: it is
+the hottest path flw has, run at the opening of every skill and, through the ambient line, by
+sessions that invoke none. The other three are run when someone asks for them.
 
+- **`flw context`** reads the extension chain, walks both note stores through the same engine as
+  `flw kb`, and parses the contract — once per skill open. It scales with the store, and every
+  millisecond is paid on every run of everything.
 - **`flw scout`** parses every source file and runs PageRank over the import graph. It scales
   with the repository.
 - **`flw kb`** walks and parses both note stores on every query, with no index on disk. It scales

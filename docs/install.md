@@ -105,8 +105,10 @@ that is here and whose links are all broken gets `!` instead, because that one i
 acting on. `✗` is a failure — a link that is dangling, hijacked, stale, or recorded but
 no longer there. `flw doctor -v` adds each host's notes and quirks.
 
-Run inside a project, `doctor` also reports which of that repo's `.flw/extensions/` files
-an installed skill will actually read, and which sit there read by nobody.
+Run inside a project, `doctor` also reports which extensions an installed skill will
+actually read and which sit there read by nobody — one section per project root on the
+chain, from the outermost inward, because a parent holding several checkouts can carry
+`.flw/extensions/` files every one of them reads.
 
 ## The host has to reload
 

@@ -12,7 +12,10 @@ are relevant, so each has to earn that on the run where it earns nothing.
 core/skills/<skill>/SKILL.md        read when that skill runs
 core/shared/context.md              read first by every skill
 core/styles/terse_prose.md          read by every skill, and handed to every reviewer
-.flw/extensions/<skill>.md          read on every run of that skill, in this repo only
+.flw/extensions/<skill>.md          read on every run of that skill, from every project
+                                    root at or above this one, outermost first
+.flw/extensions/shared.md           the same walk, read by every skill, before the
+                                    skill's own file at that level
 ~/.flw/config.toml                  merged under the project's; test, validate, ledger, kb
 <project>/.flw/config.toml          merged over the global one; the same four
 ```

@@ -27,8 +27,13 @@ What `flw context` prints, and why each part is bounded. It prints `core/shared/
 as a preamble — without that the opening is still two calls and the one-call claim is
 false. Contract shape is component names and their `paths` and nothing else: measured on
 this contract, names plus paths is ~163 tokens, names plus paths plus `provides` is ~3,011,
-and the whole file is 7,829. The narrow reading is what makes an invocation outside a skill
-affordable; a skill needing a component's `provides` reads the contract itself.
+and the whole file is 7,829. Inside a skill that gap is not a saving — flw-execute §2,
+flw-spec's amend §1 and flw-review §3 all read the whole contract a turn later, so the shape
+is ~1.6% on top of a file the run was going to read anyway. What the one call buys there is
+turns: three reads become one, and the order of them stops being prose four files have to
+keep in step. The narrow reading is what the two cases with no later read pay for —
+flw-research, and the call that names no skill at all. A skill needing a component's
+`provides` reads the contract itself.
 `flw context flw-review` omits the note-store listing, because `flw-review`'s opening skips
 it on purpose — a read there is paid by the one context that produces no findings and
 reaches none of the ones that do.

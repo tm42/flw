@@ -47,9 +47,11 @@ Not a framework. There is no plugin API, and both ways of extending flw are thin
 can write by hand. A **bundle** adds a skill: a folder with a `SKILL.md` in it, shaped
 exactly like flw's own, which is why an agent can write one by copying the shape of an
 existing one. An **extension** amends a skill you already have — prose at
-`.flw/extensions/<skill name>.md`, read by that skill in that repo, with nothing to
-register and no shape to conform to. `flw doctor` says which extensions are live and
-which are read by nobody.
+`.flw/extensions/<skill name>.md`, read from every project root at or above the one it
+resolved to, outermost first, so a directory holding several checkouts can carry what all
+of them obey; within a level `shared.md` is read before the skill's own file. Nothing to
+register and no shape to conform to. `flw doctor` says which extensions are live at each
+level and which sit there read by nobody.
 
 Not a scaffolder. It writes no boilerplate and invents no files.
 
@@ -158,11 +160,14 @@ was copied from — and in that last case whether flw's source moved on or the c
 edited by hand, because install records what it wrote.
 
 The four skills are symlinks, so `flw update` — a pull, then a re-verify — makes them
-live on every host the moment it lands, with no sync step. The style is the exception:
-Claude Code needs a frontmatter header that the source file deliberately does not
-carry, so what a host holds is a generated copy. `flw update` offers to refresh every
-copy that no longer matches, one host at a time, saying which side moved before it
-asks, rather than leaving it silently stale.
+live on every host the moment it lands, with no sync step. Two installs are copies
+instead, and flw treats them differently. The style is a copy because Claude Code needs
+a frontmatter header the source file deliberately does not carry; install records its
+digest, and `flw update` offers to refresh every copy that no longer matches, one host
+at a time, saying which side moved before it asks. The ambient block is a copy nothing
+re-verifies, by decision: every skill opens with its own `flw context` call, so the
+block serves only a session that invokes none, and a stale one costs that session a
+line it would have run anyway. Reinstalling replaces it whole, between its markers.
 
 `flw update -n` writes nothing: it fetches, reports which commits a pull would bring, and
 says what the style check found without refreshing anything. HEAD and your working tree do

@@ -79,4 +79,5 @@ Nothing lives in two places. Nothing is homeless.
 - **Why you chose this over that.** Also the version file, in `decisions`.
 - **Durable project rules** — "all IO goes through the adapter layer". If it binds the
   product, it is an `assumption` or a component's `implementation` note here. If it is
-  how flw operates in this repo, it is `.flw/extensions/<skill name>.md`.
+  how flw operates in this repo, it is an extension: `.flw/extensions/shared.md` when it
+  binds every skill, `.flw/extensions/<skill name>.md` when it binds one.

@@ -11,7 +11,13 @@ write one by copying the shape of something that exists.
 
 `<project root>/.flw/extensions/<skill name>.md`. The name is the skill's own, exactly:
 `flw-spec` reads `.flw/extensions/flw-spec.md`. Nothing else reads it and no other file
-names it.
+names it. `shared.md` is the one other name, read by every skill.
+
+**It is a chain, not a directory.** Every project root at or above the resolved one and
+below `$HOME` is read, outermost first, so a parent holding several checkouts can carry
+conventions all of them obey; within a level `shared.md` comes before the skill's own
+file. A nearer level beats a farther one, and within one level a skill's own file beats
+`shared.md`.
 
 It is read after the shared context and before the skill starts work. Put in it what that
 skill needs to know about **this** repository — how tests are actually invoked, where new
@@ -32,10 +38,13 @@ says so.
 Because the name is derivable, `flw doctor` can check it:
 
 ```
-extensions: /path/to/project/.flw/extensions
-  ✓ flw-spec.md — read by flw-spec
+extensions: ~/work/.flw/extensions
+  ✓ shared.md — read by every skill (61 B)
+
+extensions: ~/work/ds/.flw/extensions
+  ✓ flw-spec.md — read by flw-spec (50 B)
   ✗ spec.md — read by nobody: no installed skill is named 'spec'
-      skills here: flw-execute, flw-research, flw-review, flw-spec
+      skills here: flw-execute, flw-research, flw-review, flw-spec, and shared.md
 ```
 
 That check and a configurable path are mutually exclusive features. The checkable one won.
@@ -79,10 +88,13 @@ write it for that, not as a title.
 
 The body is prose an agent follows. What holds up in practice:
 
-- **Open by resolving flw and reading the shared context**, by absolute path from
-  `${FLW_HOME:-$HOME/.flw}/root`. Relative paths that escape a skill folder do not work —
-  see the comment at the top of any skill's SKILL.md. Say to do it silently; otherwise the
-  agent narrates it every time.
+- **Open with one call: `flw context <skill name>`.** It prints the shared context, the
+  resolved root and where it came from, every extension on the chain, the note store
+  listing and the contract's components — the reads a skill used to make one at a time,
+  described in prose four files had to keep in step. Say to run it silently; otherwise the
+  agent narrates it every time. If `flw` is not on PATH, run it out of the checkout by
+  absolute path from `${FLW_HOME:-$HOME/.flw}/root`: a skill folder is installed as a
+  symlink, and a relative path that escapes it is collapsed before the filesystem sees it.
 - **State the lane, including what the skill must not do.** The negative half is what stops
   a skill quietly growing into another one.
 - **Give reasons, not just rules.** A rule with the failure behind it survives a reader who

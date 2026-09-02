@@ -17,6 +17,10 @@ A session started in a directory that holds several checkouts is the case this e
 `$PWD` is the parent, the task names one of the repositories, and resolving from `$PWD`
 answers with the parent every time.
 
+A working copy created outside that parent — a git worktree, a second clone — sits outside
+the chain and loses every level above it, so conventions the parent carried are silently
+not read. The check is whether the parent's `shared.md` appears in `flw context`'s output.
+
 ## The artifacts
 
 | File | Holds | Schema |
@@ -103,8 +107,8 @@ outermost first, so a directory holding several checkouts can carry what all of 
 Within a level `shared.md` comes first, so a nearer level beats a farther one and, within
 one level, a skill's own file beats `shared.md`.
 
-`flw context` has already printed all of them above — this section says what they are, not
-that you should now go and read them.
+`flw context` has already printed all of them below the root line — this section says what
+they are, not that you should now go and read them.
 
 It is prose, not a plugin API: nothing to register, nothing to implement, no shape to
 conform to. There is no config key pointing at it — the two names are fixed so that
