@@ -1,0 +1,171 @@
+base    = "an-added-file-is-a-change"
+name    = "review-opens-solo"
+summary = "flw-review opens on one reader and escalates to a team when asked, the dispatch machinery moves to a reference the solo path never reads, flw context can emit the contract narrowed to a scope, and the files every run loads have a size ceiling a check enforces"
+
+approach = """
+Two things prompted this and they turn out to be the same thing. The user asked what flw's
+token discipline is, and said that in nine runs out of ten they work with a
+powerful designer agent that specs and reviews and a simpler executor agent that builds.
+
+The measurement, taken 2026-09-02 with `cl100k_base` as a proxy for the real tokenizer
+(4.10-4.33 bytes per token across these files, so byte counts track token counts closely).
+`core/skills/flw-review/SKILL.md` is 4,654 tokens. Its dispatch machinery -- section 1
+"Resolve the config" (434), section 3 "Dispatch" (1,757), section 4 "Consolidate" with its
+four report subsections (494), and "Changing a team" (397) -- is 3,082 tokens, 66% of the
+file. Section 3b, the inline path, is 458. So the run the user makes nine times out of ten
+pays 4,654 tokens to use 458 of them.
+
+The token argument is the weaker half. The skill is also wrong about that workflow. Section
+3b says findings are "materially weaker... particularly where the reviewer wrote the code",
+and in a designer-plus-executor setup the reviewer did not write the code: the designer
+wrote the record and a different agent executed it. The weakness that remains is real and
+narrower -- the designer can verify the record landed and cannot audit whether the record was
+right -- and it is a different claim from the one the skill makes. As written the skill tells
+a sound workflow to distrust its own output, and labels the normal case as the degraded rung
+reached when a host offers no subagents. That is the defect; the token saving follows from
+fixing it.
+
+So the solo path becomes the skill's default procedure and the team becomes the escalation.
+The dispatch machinery moves to `core/skills/flw-review/references/team-dispatch.md`, read
+only when a team is named -- the arrangement `flw-spec` already uses for `spec-critic.md` and
+`good-contract.md`, so nothing new has to be taught to install or doctor. Two alternatives
+were considered and are recorded below.
+
+The weakness warning is rewritten to key on authorship rather than on mode, with the three
+cases stated separately: the reviewer wrote the code (weakest, and the mutation-and-probe
+discipline is what partly compensates), the reviewer specced it and another agent executed
+(can confirm the record landed, cannot audit whether the record was right, and the record's
+own gaps are the blind spot -- three of the four findings the spec critic filed against
+`finish-the-store` were in the record rather than in the run), and the reviewer had no hand
+in it (a fresh read that happens to share a context).
+
+`flw-review` line 154 carries a stale number: "flw's own is ~7,800 tokens, and a four-lens
+run spent ~31,000 of them". The contract is 9,787 tokens now, so the same run is ~39,100 for
+contracts alone, and ~57,000 once each reviewer's copy of `terse_prose.md` (2,140) and the
+orchestrator's own opening (6,880) are counted. A measured number that has drifted 25% is
+worse than no number, because it is quoted rather than re-measured.
+
+Behind that number is the thing worth building. Section 3 tells the orchestrator to pass
+"the contract, narrowed to the scope" by intersecting each component's `paths` with the
+scope -- an instruction the orchestrator performs in its own head and can skip silently.
+Reviewing this session's own four-lens run, there is no way to tell from anything on disk
+whether those reviewers got narrowed contracts or all 9,787 tokens. `flw context` cannot
+answer it either: `_context_contract` prints component names and paths only, ~650 bytes,
+and a skill that needs a component's `provides` reads `specs/current.toml` itself. So
+`--scope` is a new emission rather than a filter over an existing one: given paths, print
+the full text of the components those paths meet, and the orchestrator passes command output
+instead of doing the intersection by hand.
+
+The ceiling is the other half of making this durable. Nothing in flw measures what a run
+loads, and `flw-execute/SKILL.md` grew to 4,752 tokens without anything noticing until the
+user read a run and found it verbose. A check that fails when a file every run loads crosses
+a size is the instrument that was missing. It measures bytes, not tokens, because a token
+count means a tokenizer dependency in a project that has none and the ratio across these
+files is 4.10-4.33 bytes per token -- close enough that a byte ceiling is a token ceiling.
+
+What this is not. Not a change to what a reviewer does: the discipline block, the severity
+scale, the evidence rule, the `## Holds up` and `## What I did not check` sections and the
+report format are the same text, moved or kept, not rewritten. Not a change to the review
+teams in `core/reviews/`, which stay exactly as they are and stay the thing `--team` names.
+Not a claim that a solo review equals a dispatched one -- the escalation exists and the
+report still says which mode ran. Not a token budget on anything a skill reads conditionally:
+the ceiling covers what every run loads unconditionally and nothing else, because a budget on
+a file read once in ten runs would price the wrong thing.
+
+Coverage this is specced from. The section-level token measurement, the four skills' opening
+costs, the contract's per-component sizes and the bytes-per-token ratios were all measured
+in this session against the working tree at `f1a2f60`. The end-to-end smoke that every
+subcommand exits 0 was run at the same commit. Not measured: what a solo review costs in
+practice against a dispatched one on the same scope, which needs both run over one diff and
+is the number a later record should carry.
+"""
+
+contract_edit = """
+In `final_state.components`, component **the skills**:
+
+`provides` -- replace:
+  "A user can run a configurable review team over the work at any stage, including a
+  perspective that probes rather than reads."
+with:
+  "A user can review the work at any stage with one reader by default, told what its own
+  position makes it bad at -- whether it wrote the code, specced it and watched another
+  agent execute, or had no hand in it -- and can escalate to a configurable team of lenses
+  in fresh contexts, including a perspective that probes rather than reads, by naming one.
+  The team machinery is a reference the solo path does not read."
+
+In `final_state.components`, component **the flw CLI**:
+
+`surfaces` -- replace:
+  "flw context [skill] [--root PATH]"
+with:
+  "flw context [skill] [--root PATH] [--scope PATH...]"
+
+`properties` -- append:
+  "flw context --scope prints the full text of every contract component whose declared
+  paths meet one of the given paths, after the names-and-paths block, so a skill that has to
+  hand a contract to another agent passes command output rather than intersecting paths by
+  hand. A scope path matching no component prints no component and is not an error; a scope
+  path outside the resolved root is refused naming it."
+
+In `success_criteria.tests` -- append:
+  { command = ".venv/bin/python core/scripts/budget.py" }
+
+In `success_criteria.criteria` -- append one paragraph:
+  "The files every run loads unconditionally have a size ceiling, checked by
+  core/scripts/budget.py: 20,000 bytes for each core/skills/*/SKILL.md, and 10,000 for
+  core/shared/context.md and core/styles/terse_prose.md. Bytes rather than tokens, because
+  the ratio measured across these files is 4.10-4.33 bytes per token and a token count would
+  mean a tokenizer dependency this project does not otherwise have."
+"""
+
+[[decisions]]
+topic     = "where the team dispatch machinery lives"
+options   = ["one skill, dispatch in references/team-dispatch.md", "two skills, flw-review and flw-team-review", "one skill, invert the default and split nothing"]
+chosen    = "one skill, dispatch in references/team-dispatch.md"
+rationale = "One name to invoke and one decision point. Two skills would put a fifth entry in every host's discovery path and make the user pick the mode before knowing the scope, and install, doctor, list and the contract would each grow a skill. Splitting nothing fixes the wrong description but keeps the solo run paying 3,082 tokens it does not use. flw-spec already keeps spec-critic.md and good-contract.md as references, so the arrangement needs nothing new from install or doctor."
+
+[[decisions]]
+topic     = "what the weakness warning keys on"
+options   = ["the mode -- solo is weaker than dispatched", "authorship -- who wrote the code under review"]
+chosen    = "authorship -- who wrote the code under review"
+rationale = "Mode and authorship coincide only in a single-agent session. In the designer-plus-executor workflow this record is written for, the solo reviewer did not write the code, and telling it its findings are weak for that reason is false. The residual weakness is real and specific -- a reviewer who wrote the version record can confirm it landed and cannot audit whether it was right -- and naming it accurately is what makes the warning worth reading."
+
+[[decisions]]
+topic     = "how the size ceiling is measured"
+options   = ["bytes", "tokens through a tokenizer dependency"]
+chosen    = "bytes"
+rationale = "Measured across the six files a run loads unconditionally, the ratio is 4.10 to 4.33 bytes per token, so a byte ceiling is a token ceiling to within 5%. A token count means adding tiktoken or equivalent to a project whose only runtime dependency is the standard library, and it would tie the check to one vendor's tokenizer while the skills are read by several hosts."
+
+[[decisions]]
+topic     = "where the ceiling sits"
+options   = ["20,000 bytes per SKILL.md", "22,000, giving every file room", "the current maximum plus 10%"]
+chosen    = "20,000 bytes per SKILL.md"
+rationale = "flw-execute is at 19,461 bytes, so it has 539 bytes of headroom and the next paragraph added to it fails the check. That is deliberate: it is the file the user read a run from and called overly verbose, and a ceiling that does not bite is not a ceiling. A record that needs the file to grow argues for raising the number, which is the conversation the check exists to force."
+
+[[dag]]
+group = 1
+phase = "the review opens on one reader"
+tasks = [
+  { id = "split-dispatch", desc = "Create core/skills/flw-review/references/team-dispatch.md holding, moved verbatim except for renumbering and the cross-references that have to change: section 1 'Resolve the config', section 3 'Dispatch' including the discipline block given to every reviewer and the eight things every reviewer is given, section 4 'Consolidate' with its report-format subsections, and 'Changing a team'. The discipline block's text is not edited -- it is the contract with every reviewer and this record does not touch what a reviewer does." },
+  { id = "solo-is-the-default", desc = "Rewrite core/skills/flw-review/SKILL.md around the solo path. Keep: the opening (flw context flw-review), Lane, section 2 'Decide what is under review', the lens-mapping table, section 5 'Print the summary' and Rules. Promote section 3b's five-step procedure -- one lens at a time, re-read per lens, write the expected failure before looking, claim before severity, end each lens with what was not checked -- to the skill's main procedure, with the report format a solo run writes. A team named in the request or a --team argument sends the reader to references/team-dispatch.md by path, and that is the only place dispatch is described. The report still records which mode ran. Rule 1 currently reads 'Orchestrate; do not review' -- invert it to match: review by default, orchestrate when a team was named.", depends_on = ["split-dispatch"] },
+  { id = "warn-on-authorship", desc = "Replace the mode-keyed weakness warning with an authorship-keyed one, stating three cases and what each is bad at: the reviewer wrote the code under review (weakest; the re-read and probe discipline is the partial compensation); the reviewer wrote the version record and another agent executed it (can confirm the record landed, cannot audit whether the record was right -- three of the four findings the spec critic filed against finish-the-store were in the record, not the run); the reviewer had no hand in it (a fresh read sharing a context, and the coverage boundary is the thing to watch). The report's Mode line names the authorship case, not just the mode.", depends_on = ["solo-is-the-default"] },
+  { id = "fix-stale-numbers", desc = "Correct the measured figures where the dispatch text now lives in references/team-dispatch.md: the contract is 9,787 tokens, not ~7,800; a four-lens whole-repo run is ~39,100 tokens of contract, and ~57,000 once each reviewer's copy of terse_prose.md (2,140) and the orchestrator's opening (6,880) are counted. Date the measurement (2026-09-02) and name the tokenizer used as a proxy (cl100k_base), so the next reader knows whether to re-measure rather than quote.", depends_on = ["split-dispatch"] },
+  { id = "pin-the-reference", desc = "tests/test_cli.py: assert that installing flw-review links the skill directory such that references/team-dispatch.md is reachable through the installed path, and that doctor reports no orphan for it -- the same way flw-spec's references are already handled. If the existing tests already cover a references/ subdirectory generically, extend the fixture to the second skill rather than adding a parallel test, and say so.", depends_on = ["split-dispatch"] },
+]
+
+[[dag]]
+group = 2
+phase = "narrowing is a command, not an instruction"
+tasks = [
+  { id = "context-scope", desc = "cli/flw.py: flw context gains --scope PATH... (repeatable or nargs=+). After the existing names-and-paths block, print the full text of every component whose declared paths meet one of the scope paths -- a component path matches when the scope path is at or under it, or it is at or under the scope path, both resolved against the root. Print each matched component's name, paths, provides, properties, surfaces and implementation, in the contract's own order. A scope path matching no component prints nothing extra and exits 0. A scope path outside the resolved root is refused naming it, exit 1. With no --scope nothing changes. Tests: one scope path selecting one component; a path selecting two; a directory scope selecting a component whose path is a file inside it; no match printing the names block only and exiting 0; a path outside the root refused; --scope with no project root behaving as the bare call does; and the parser-surface test at tests/test_cli.py updated so build_parser() still matches the contract's declared surface." },
+  { id = "review-uses-scope", desc = "core/skills/flw-review/references/team-dispatch.md: the 'contract, narrowed to the scope' bullet tells the orchestrator to run `flw context flw-review --scope <each path in the scope>` and pass that output, rather than intersecting paths by hand. Keep the sentence saying why it is worth doing and update its numbers to the ones fix-stale-numbers established. Say that a scope covering the whole repository is the case where the narrowed output is the whole contract and that is correct.", depends_on = ["context-scope", "fix-stale-numbers"] },
+]
+
+[[dag]]
+group = 3
+phase = "a file every run loads has a ceiling"
+tasks = [
+  { id = "budget-script", desc = "core/scripts/budget.py: standard library only, runnable directly and importable the way the other scripts in that directory are (tests/test_direct_run.py covers the direct-run case for each). It measures byte length of every core/skills/*/SKILL.md against 20,000 and of core/shared/context.md and core/styles/terse_prose.md against 10,000. Prints one line per file -- size, ceiling, headroom -- and exits 1 naming every file over, 0 otherwise. Its docstring says why bytes rather than tokens and records the 4.10-4.33 bytes-per-token measurement this record carries. Tests: a file over its ceiling exits 1 and names it; all under exits 0; the file list is derived from the glob rather than hardcoded, so a fifth skill is measured without editing the script." },
+  { id = "declare-budget-check", desc = "Add { command = '.venv/bin/python core/scripts/budget.py' } to success_criteria.tests as part of the contract_edit, and confirm flw test reports 17 checks rather than 16 once it lands.", depends_on = ["budget-script"] },
+  { id = "budget-passes", desc = "Run core/scripts/budget.py against the tree as this record leaves it and report every file's headroom in the run report. flw-review/SKILL.md should be well under after the split; flw-execute/SKILL.md is expected at about 19,461 bytes with roughly 539 to spare. If any file is over, that is a finding for the report and a proposal, not a licence to trim prose this record did not otherwise touch.", depends_on = ["budget-script", "solo-is-the-default", "split-dispatch"] },
+]

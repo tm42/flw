@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.11.14"
+spec_version = "0.12.0"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -26,6 +26,7 @@ applied = [
   "knowledge-store",
   "finish-the-store",
   "an-added-file-is-a-change",
+  "review-opens-solo",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -110,6 +111,7 @@ properties = [
   "flw test <path> walks upward from the path it is given and flw scout <path> does not, deliberately: flw test src/ inside a project is a normal invocation, and a scout must not walk out of the tree it was aimed at.",
   "A [project.roots] path resolves relative to the project directory whose config declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
   "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside the directory it would name. One name is in force at a time: a directory under another name is not a project, and a walk probes exactly one name per level. A name that is not a string, is empty, is `.` or `..`, or is absolute is refused naming its source, because each of those makes every directory a project or none.",
+  "flw context --scope prints the full text of every contract component whose declared paths meet one of the given paths, after the names-and-paths block, so a skill that has to hand a contract to another agent passes command output rather than intersecting paths by hand. A scope path matching no component prints no component and is not an error; a scope path outside the resolved root is refused naming it.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -129,7 +131,7 @@ surfaces = [
   "flw sync [-n|--dry-run] [-y|--yes]",
   "flw update [-y|--yes] [-n|--dry-run]",
   "flw doctor [-v|--verbose] [--root PATH]",
-  "flw context [skill] [--root PATH]",
+  "flw context [skill] [--root PATH] [--scope PATH...]",
   "flw add <path> [--name]",
   "flw remove <name>",
   "flw list",
@@ -162,7 +164,7 @@ provides = [
   "A user can read and edit that plan before anything runs, because deciding what to reuse, recycle and tear out is engineering judgment no contract holds.",
   "A user can have the work walked phase by phase, with any gap surfacing as a proposal rather than silent drift.",
   "A user can have a second reader check a contract for the semantic gaps validation structurally cannot see.",
-  "A user can run a configurable review team over the work at any stage, including a perspective that probes rather than reads.",
+  "A user can review the work at any stage with one reader by default, told what its own position makes it bad at -- whether it wrote the code, specced it and watched another agent execute, or had no hand in it -- and can escalate to a configurable team of lenses in fresh contexts, including a perspective that probes rather than reads, by naming one. The team machinery is a reference the solo path does not read.",
   "A user can bring flw to a repo they did not set up and have its conventions, test invocation and structure written into that repo's flw configuration, so later work builds on what exists instead of duplicating it.",
   "A user can amend how a skill behaves in one repo with prose that skill reads, without forking the skill or maintaining a copy of it — per skill, or in one file every skill reads, at whichever directory above the work the convention belongs to.",
   "A skill resolves its project root from what the request named rather than from where the shell happens to be, and says which root it resolved to, so a session started in a directory holding several checkouts works in the repository that was asked for.",
@@ -281,6 +283,7 @@ surfaces = [
 tests = [
   { command = ".venv/bin/pytest -q" },
   { command = ".venv/bin/ruff check ." },
+  { command = ".venv/bin/python core/scripts/budget.py" },
 ]
 criteria = """
 The behaviour above is proven by flw's own test suite plus one end-to-end exercise that
@@ -288,5 +291,11 @@ the suite cannot reach: installing into a real Claude Code, Codex and OpenCode, 
 confirming each host loads the skills through the symlink. That exercise is manual by
 necessity — it depends on three third-party tools this project does not control — and is
 unrecorded: no document in this repository reports the result of running it.
+
+The files every run loads unconditionally have a size ceiling, checked by
+core/scripts/budget.py: 20,000 bytes for each core/skills/*/SKILL.md, and 10,000 for
+core/shared/context.md and core/styles/terse_prose.md. Bytes rather than tokens, because
+the ratio measured across these files is 4.10-4.33 bytes per token and a token count would
+mean a tokenizer dependency this project does not otherwise have.
 """
 
