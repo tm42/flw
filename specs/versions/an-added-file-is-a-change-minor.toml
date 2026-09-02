@@ -1,0 +1,191 @@
+base    = "finish-the-store"
+name    = "an-added-file-is-a-change"
+summary = "a directory that gained a module reads as changed rather than current, the knowledge store cannot be pointed outside the root it belongs to, and the contract says what hides a file and what orientation costs"
+
+approach = """
+Two reads over `finish-the-store`, which landed at 0.11.13: an inline four-lens pass
+(`.flw/reports/2026-09-02T1600-eng-inline.md`, 1 MAJOR and 5 MINOR) and the spec critic on
+the contract and the two components that record touched
+(`.flw/reports/2026-09-02T1620-spec-critic-finish-the-store.md`, 4 findings). Nothing here
+is new capability. Three of the critic's four are gaps in the record I wrote rather than in
+the run that executed it, which is the half a self-review structurally cannot reach.
+
+The MAJOR, and the one thing that changes behaviour. `finish-the-store` made the diff run
+revision-to-working-tree and gave the stamp a dirty-mirror warning, in the same record, and
+the two halves ended up meaning different things by "changed": `numstat` runs `git diff`,
+which does not see an untracked file, and `dirty()` runs `git status --porcelain`, which
+does. Measured on a clean stamped repository: adding one untracked `api/b.py` left
+`flw know api/a.py` printing `current` while `flw know --stamp` on the file describing that
+directory printed "api has uncommitted changes". A new module inside an area is the change
+most likely to falsify the area's description — the description says what the parts are —
+and it was the silent half. `numstat` now also runs `git ls-files --others
+--exclude-standard -- <rel>` and counts each untracked path as a changed file with no
+lines, the way a binary file's `-\t-` row already counts. `--exclude-standard` is what keeps
+an ignored store from counting itself, and it is why this is one extra git call per file
+rather than a second policy: git already knows which files the project chose to ignore.
+The cost the user accepts by taking this: a stray untracked file anywhere under a tree makes
+that tree's repository file read `changed`, with a file count of one and no lines.
+
+Where the store may live. The exit-1 enumeration refused an absolute `[knowledge] dir` and
+nothing else, so `.` and `../outside` were both accepted — and the fix `finish-the-store`
+shipped for `--reindex` skips dot-directories only, so `.git/` was spared and `src/` was
+not. The critic ran it: `dir = "."` over a scratch repository wrote four `index.md` files
+into the source tree, exit 0; `dir = "../outside"` put the store outside the root the
+surface says it is rooted at. The CLI component already carries the sentence this key
+needs, written one record ago for the flw directory's name — not a string, empty, `.`, `..`,
+absolute — and the knowledge store kept only its absolute half. The dot-directory skip in
+`reindex` stays: it is still right for a store legitimately placed somewhere with a `.git`
+beneath it.
+
+Three sentences the contract does not say and the code does. A `type` that disagrees with
+the file's position hides the file from every listing and from orientation, exactly as a
+missing description does — `Concept.listable` excludes every problem but `unstamped` — and
+the contract's enumeration of degraded states omits it, while `plans/knowledge-store.md`
+asks for it twice and makes it the whole reason a redundant `type` field is kept. Orientation
+runs one whole-tree `git diff` per declared root, which the plan's line 163 says it must not
+("diffing the whole tree per orientation is the one slow case"); the `knowledge-store` run
+made that call deliberately, because the Samples show a changed count and a count that is
+always zero is worse than a slow one, and it was reported in conversation and written into
+no record. It is the right call and this record is where it stops being undocumented; the
+measurement is 0.040 s for `git diff --numstat HEAD~20 -- .` over this repository, and
+unmeasured on a large tree. And `measured` survives in the frontmatter surface with no
+reader anywhere, since `finish-the-store` deleted `Concept.measured` and my `contract_edit`
+did not follow; `carries` stays, because `_edge_lines` reads it off the raw table and
+orientation prints it.
+
+The committed store, which is a question and not a fix. The repository file mirrors `.`, the
+default store sits inside the repository, and the diff now reaches the working tree — so
+once the store is tracked, stamping it counts as movement under the path the repository file
+describes. The critic reproduced it on a toy with both members committed whole: after
+stamping four files, `shop.md` read `changed 2 files · +2 −2` and named
+`.flw/knowledge/api/api.md` as its own example. With `.flw/` ignored the same sequence reads
+`current`, which is what the contract describes. `plans/knowledge-store.md:363` defers what
+a committed store does; the contract answers it inside a surface clause ("in a directory the
+repo already ignores") and carries neither an assumption nor a question. It becomes an
+`open_question`, because the answer is a design decision nobody has taken and this record is
+not the place to take it.
+
+Three pins for behaviour only a message asserts. `git()`'s choice between stdout and stderr
+on failure has two tests naming it and neither reaches it: both replace `knowledge.git` with
+a fake that returns the stderr text itself, so the property under test is the thing the fake
+hardcodes, and reverting the line leaves 604 green. The module's design is that no test runs
+git — 51 `canned` calls and 7 direct `setattr`, and nothing executes `git()`'s body — so the
+fix is one deliberate exception: run `git()` against a temp directory that is not a
+repository, where a present git exits non-zero with `fatal:` on stderr. The dirty warning
+names the repository's basename rather than `.` for a file mirroring a whole tree, a
+judgment the run took and no test holds, because the only dirty-stamp test uses an Area file
+where `rel` is never `Path(".")`. And a `type` that disagrees is asserted by no test at the
+command level.
+
+Two messages. An indented `revision = "…"` is valid TOML that `flw know --stamp` can now
+never write — the rewrite misses it, the insertion duplicates the key, and the post-rewrite
+parse refuses with "stamping it would break the +++ block", which sends the reader looking
+for a break in a block that has none. Admitting leading whitespace in the pattern makes the
+file stampable; the `[revision]` section stays a refusal and keeps its message. And the
+non-string `[paths] flw` refusal says the name "must be one relative path segment" while
+`.cache/flw` — two segments, and the feature's own use case — is accepted and works.
+
+What this is not. Not a re-spec of `finish-the-store`, which is applied and whose identity
+is fixed. Not a change to the stamp's warn-rather-than-refuse decision, to basename keying,
+to the toy's half-indexed fixture, or to whether a committed store is supported.
+
+Coverage of the two reads. The inline pass mutated fourteen production lines (nine caught,
+two survivors, three misfired) and ran the stamp loop, the batch, the three corrupting
+spellings, the four name refusals, the `system` collision, the orientation reasons, the
+walk denominator, the dangling symlink, `flw map` in all three formats and `--full`. It did
+not read the 36 added tests except where a mutation survived, did not measure the stamp's
+new cost, and did not drive the relocated-`$FLW_DIR` pin itself. The critic read the two
+components, the two records, the plan and the two modules, and ran everything it filed. Not
+read by either: the four `SKILL.md` files in a host, `--reindex` at scale, concurrency,
+interruption.
+"""
+
+contract_edit = """
+In `final_state.components`, component **the knowledge store**:
+
+`properties` — replace:
+  "Staleness is a git diff and never a judgment, taken from the recorded revision to the
+  working tree, so an uncommitted edit counts and an untracked file does not yet. No output
+  is current; any output is changed, with files, insertions and deletions; a diff that
+  cannot run is unverifiable and the file is read normally. system.md carries one revision
+  per member, keyed by the member's directory basename, and is checked in each member's
+  repo."
+with:
+  "Staleness is a git diff and never a judgment, taken from the recorded revision to the
+  working tree: an uncommitted edit counts, and so does a file the tree has gained and the
+  VCS does not ignore, as one changed file with no lines. Nothing moved is current; anything
+  is changed, with files, insertions and deletions; a diff that cannot run is unverifiable
+  and the file is read normally. Orientation checks each root's repository file, a walk
+  checks the files it prints, and --check checks all — so orientation costs one whole-tree
+  diff per declared root. system.md carries one revision per member, keyed by the member's
+  directory basename, and is checked in each member's repo."
+
+`properties` — replace:
+  "Frontmatter is +++ TOML read by the note store's reader. A block tomllib rejects reads as
+  a file with no frontmatter and is reported by --check, never raised. Missing type or
+  description is reported and the file left out of listings and orientation; missing revision
+  is unstamped and the file is read normally; a file that is not UTF-8 is unreadable and
+  skipped."
+with:
+  "Frontmatter is +++ TOML read by the note store's reader. A block tomllib rejects reads as
+  a file with no frontmatter and is reported by --check, never raised. Missing type or
+  description is reported and the file left out of listings and orientation, and so is a
+  type that disagrees with the file's position, which is the whole reason the field is
+  declared as well as derived; missing revision is unstamped and the file is read normally;
+  a file that is not UTF-8 is unreadable and skipped."
+
+`properties` — replace, in the exit-code sentence:
+  "a node no file names, a [knowledge] dir that is absolute."
+with:
+  "a node no file names, a [knowledge] dir that is absolute, is `.`, or leaves the root it
+  is declared in."
+
+`surfaces` — replace, in the frontmatter description:
+  "optionally [[connects]] tables of to, how and carries, and optionally measured."
+with:
+  "and optionally [[connects]] tables of to, how and carries."
+
+Top-level `open_questions` — append:
+  "What a committed knowledge store does to the staleness number. The repository file
+  mirrors `.`, the default store sits inside the repository and the diff reaches the working
+  tree, so a tracked store's own writes count as changes under the path that file describes.
+  Every store so far is in a directory the repo ignores, which is why nothing has had to
+  answer it."
+"""
+
+[[decisions]]
+topic     = "which half moves when a described directory gains an untracked file"
+options   = ["the diff counts it — git ls-files --others --exclude-standard beside the numstat", "the stamp stops warning about it — git status --untracked-files=no"]
+chosen    = "the diff counts it — git ls-files --others --exclude-standard beside the numstat"
+rationale = "A new module inside an area is the change most likely to make that area's description wrong, so the store being silent about it is the failure worth paying for. --exclude-standard means the project's own ignore rules decide, which is why an ignored store does not count itself. The cost is one git call per file and a stray untracked file marking a whole tree as changed by one file and no lines."
+
+[[decisions]]
+topic     = "orientation running one whole-tree diff per root, which the plan said it must not"
+options   = ["keep it and say so in the contract", "restore the plan's behaviour and drop the changed count from orientation"]
+chosen    = "keep it and say so in the contract"
+rationale = "A changed count that is always zero is worse than a slow one, and the plan's Samples print the count. The knowledge-store run made this call and recorded it nowhere, which is the actual defect. Measured at 0.040 s per root over this repository and unmeasured on a large tree; the contract now names the cost so a project that hits it knows what it is paying."
+
+[[decisions]]
+topic     = "a knowledge store that is committed"
+options   = ["record it as an open question", "declare a tracked store unsupported", "make the repository file's diff exclude the store"]
+chosen    = "record it as an open question"
+rationale = "Excluding the store from the diff is a rule with a real cost — a store that describes the store would then be invisible to itself — and nobody has run a committed store to say whether the number is wrong in practice or merely noisy. Declaring it unsupported forecloses the case the plan deliberately left open. The question is stated where a later record can answer it."
+
+[[dag]]
+group = 1
+phase = "an added file is a change"
+tasks = [
+  { id = "count-untracked", desc = "core/scripts/knowledge.py numstat(): after the numstat call and its sum, run `git ls-files --others --exclude-standard -- <rel>` in the same cwd; each line is one more changed file with no insertions or deletions, and it sets `first` when the numstat found nothing. A state of `current` with untracked paths present becomes `changed`. A failed ls-files call adds nothing and does not make the diff unverifiable — the diff already ran. Docstring says what counts. Tests: an untracked path alone turns current into `changed 1 file · +0 −0` naming it; untracked paths alongside a numstat add to the file count only; an ignored path is absent because --exclude-standard excludes it; a failed ls-files leaves the numstat's answer standing." },
+  { id = "dir-refusals", desc = "cli/flw.py knowledge_dir(): refuse a declared dir that is `.` (Path(declared).parts is empty), or that leaves the root (the resolved store is not relative to the root), with the message shape the absolute case uses and naming file and key. The dot-directory skip in knowledge.py reindex() stays. Tests: `.` refused, `../outside` refused, `docs/arch` still accepted, and the existing absolute refusal unchanged." },
+  { id = "indented-revision", desc = "core/scripts/knowledge.py REVISION: allow leading whitespace — `^[ \\t]*revision[ \\t]*=` — so an indented revision line is rewritten in place rather than duplicated and refused. The `[revision]` section stays a refusal with its current message. Tests: the indented spelling now stamps, keeping its indentation; the parametrised spelling test drops its indented case and keeps the other two." },
+  { id = "segment-message", desc = "cli/flw.py _resolve_flw_dir(): the non-string refusal says the name must be a relative path, not `one relative path segment` — a multi-segment name is the feature's own case. Test: the existing non-string test asserts the new wording." },
+]
+
+[[dag]]
+group = 2
+phase = "pin what only a message asserts"
+tasks = [
+  { id = "pin-git-seam", desc = "tests/test_knowledge.py: one test that runs knowledge.git() itself against a temp directory that is not a repository — `git()([\"rev-parse\", \"--short\", \"HEAD\"], tmp_path)` — asserting a non-zero code and `fatal:` in the second element, so the stdout-or-stderr choice is held by something. It is the one test in the file that runs git, and its docstring says why: every other test replaces the seam, so the seam's own body had no cover. Skip it if git is absent from PATH.", depends_on = [] },
+  { id = "pin-dirty-subject", desc = "tests/test_knowledge.py: the dirty-stamp test gains the repository-file case — stamping `shop.md`, whose mirror is `.`, names `shop` rather than `.` in the warning. The existing case uses an Area file, where the branch is unreachable." },
+  { id = "pin-type-disagrees", desc = "tests/test_knowledge.py: a file whose declared type disagrees with its position is a --check row with that state, is absent from orientation, and is absent from the listing --reindex writes. Nothing asserts this at the command level today." },
+]
