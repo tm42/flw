@@ -66,11 +66,11 @@ validation.
 1. **The plan goes on disk first.** No contract without one — but there are three ways in,
    and only the first is common:
    - **A file** — read it.
-   - **In conversation** — ask for a kebab-case name, write `<root>/plans/<name>.md`, read
-     it back, require an explicit yes.
+   - **In conversation** — ask for a kebab-case name, write `<root>/plans/<name>.md`, name
+     the path, require an explicit yes on the file.
    - **Nothing yet** — interview one into existence *before* touching the contract. What
      is being built, for whom, what would make it a failure. Keep it short; it is a plan,
-     not a design document. Then write it and read it back as above.
+     not a design document. Then write it and get the yes as above.
 
    **Say which the contract is about.** For a directory that already has code, "what is
    true when the work is done" can mean the code as it stands, or the code once the
@@ -90,8 +90,11 @@ validation.
    who never saw the code, and what would break someone else if it changed — the same
    question `Amending` step 2 asks below, which states the rule for `properties` and
    `surfaces` in full. A first contract declares `schema_version = 4`.
-4. **Show the whole contract** as one block, get an explicit lock, then write two files:
-   `specs/current.toml` and `specs/versions/<name>-minor.toml`, named by the same rule
+4. **Write two files and get an explicit lock on them** — never paste the contract into
+   the reply first and write it after. The write is shown once by the host; a second copy
+   in chat is the one the user reads instead of the file they will actually edit, and the
+   two drift the moment they touch either. The files are `specs/current.toml` and
+   `specs/versions/<name>-minor.toml`, named by the same rule
    step 5 states below — never `v1.0.toml`, which is a legacy number carrying no
    classification, so nothing downstream can move `spec_version` by it. The first version
    file has no `base` — there is no predecessor.
@@ -190,8 +193,10 @@ validation.
      contract claims its own surface is complete has a check that fails until the two
      agree — so a version that waits deadlocks against itself. flw hit this on 4.2 and
      again on `knowledge-base`.
-6. **Show the user the version file and let them edit it.** A plan accepted as drafted is
-   how a re-spec becomes a demolition nobody sanctioned.
+6. **Name the version file's path and let the user edit it.** Say in a few lines what it
+   decides that they should check — not what it contains, which they can read. A plan
+   accepted as drafted is how a re-spec becomes a demolition nobody sanctioned; a plan
+   pasted into chat is one they read there and never open.
 7. **`flw validate`.**
 
 ---
