@@ -16,9 +16,9 @@ with a cost and an age and cap at CAP, which is the listing this store never
 prints at any opening.
 
 Staleness is a git diff and never a judgment. A file records the revision it was
-true at; the check is `git diff --numstat <revision> HEAD -- <path>` in that
-file's own repository, and what it reports is how much moved, not whether the
-claim survived. `3 files · +41 −12` tells a reader what a classifier would have
+true at; the check is `git diff --numstat <revision> -- <path>` in that file's
+own repository — the revision against the working tree, so an uncommitted edit
+counts — and what it reports is how much moved, not whether the claim survived. `3 files · +41 −12` tells a reader what a classifier would have
 been guessing at. Every git call goes through `git()` so a test replaces one
 function and no test runs git.
 """
@@ -44,9 +44,14 @@ SHORT = {"System": "system", "Repository": "repo", "Area": "area", "Module": "mo
 
 WIDTH = 70
 
-# The frontmatter line this module is allowed to touch. Everything else in the
-# block is the author's, byte for byte.
-REVISION = re.compile(r"^revision[ \t]*=.*$", re.MULTILINE)
+# The frontmatter value this module is allowed to touch. Everything else in the
+# block is the author's, byte for byte — which is why the match stops at the
+# closing quote or brace and not at the end of the line: a trailing comment on
+# the revision line is the author's too.
+REVISION = re.compile(
+    r"^revision[ \t]*=[ \t]*(?:\"[^\"\n]*\"|'[^'\n]*'|\{[^}\n]*\})",
+    re.MULTILINE,
+)
 TABLE = re.compile(r"^[ \t]*\[")
 
 DASH = "·"
@@ -75,8 +80,7 @@ class Concept:
     level: str
     meta: dict = field(default_factory=dict)
     body: str = ""
-    # By name, in the order they are reported: unreadable, malformed, missing
-    # type, missing description, type disagrees with position, unstamped.
+    # By name.
     problems: list[str] = field(default_factory=list)
 
     @property
@@ -99,11 +103,6 @@ class Concept:
         if isinstance(value, str):
             return value.strip()
         return value if isinstance(value, dict) else ""
-
-    @property
-    def measured(self) -> str:
-        value = self.meta.get("measured")
-        return value.strip() if isinstance(value, str) else ""
 
     @property
     def connects(self) -> list[dict]:
@@ -232,6 +231,34 @@ def under(root: Path, given: Path) -> Path | None:
     return None
 
 
+def member_for(root: Path, members: dict[str, Path], given: Path) -> Path:
+    """Which declared member a path names, seen from the parent.
+
+    The working-directory form first and alone: when `<cwd>/given` exists the
+    caller meant that file, and reading the same string under each member would
+    answer with somewhere else entirely — which is how `flw know .` from a
+    parent answered with the first member declared. Only when the cwd form does
+    not exist is the string tried under the members, and then several members
+    holding it is an ambiguity to name rather than a race declaration order
+    settles.
+    """
+    roots = [path for path in members.values() if path.is_dir()]
+    here = given if given.is_absolute() else Path.cwd() / given
+    if here.exists():
+        owners = [path for path in roots if under(path, here) is not None]
+    else:
+        owners = [path for path in roots if (path / given).exists()]
+    if not owners:
+        raise Refused(f"{given} is under no repository {root.name} declares")
+    if len(owners) > 1:
+        names = ", ".join(sorted(path.name for path in owners))
+        raise Refused(
+            f"{given} is under more than one repository {root.name} declares: "
+            f"{names}. Name the one you mean with --root."
+        )
+    return owners[0]
+
+
 def relative_to_root(root: Path, given: Path) -> Path:
     """`under`, with the two refusals told apart.
 
@@ -264,11 +291,16 @@ def concepts(store: Path) -> list[Path]:
 
 
 def git(args: list[str], cwd: Path) -> tuple[int, str]:
-    """(exit code, stdout). Every git call in this module goes through here.
+    """(exit code, stdout — or, when it failed, what git said). Every git call
+    in this module goes through here.
 
     One function, so a test replaces one thing and no test in the suite runs
     git. Git is hardcoded for now because it is what the first system to use
     this store runs; a second VCS is two config keys later and not a redesign.
+
+    A failure carries stderr rather than the empty stdout it also has, because
+    a refusal that quotes git sends the reader where the problem is; discarding
+    it sent them to look for a HEAD the repository does not have.
     """
     try:
         done = subprocess.run(
@@ -276,7 +308,7 @@ def git(args: list[str], cwd: Path) -> tuple[int, str]:
         )
     except OSError as exc:  # git absent, cwd gone
         return 127, str(exc)
-    return done.returncode, done.stdout
+    return done.returncode, done.stdout if done.returncode == 0 else done.stderr
 
 
 @dataclass(frozen=True)
@@ -296,14 +328,20 @@ class Diff:
 
 
 def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
-    """`git diff --numstat <revision> HEAD -- <rel>`, summed.
+    """`git diff --numstat <revision> -- <rel>`, summed.
+
+    The revision against the working tree and not against HEAD, so an
+    uncommitted edit under the path counts and the answer is right while the
+    tree is dirty — which is the state a checkout is in for the whole of a
+    working session. An untracked file is not yet a change, which is what `git
+    diff` sees.
 
     No output is current; any output is changed. There is no classification: a
     function-body edit and a new directory both count, and the numbers say
     which it was. A diff that cannot run — not a repository, a hash gone after
     a rebase — is unverifiable, and the file is read normally.
     """
-    code, out = git(["diff", "--numstat", revision, "HEAD", "--", rel.as_posix()], cwd)
+    code, out = git(["diff", "--numstat", revision, "--", rel.as_posix()], cwd)
     if code != 0:
         return Diff("unverifiable")
     lines = [line for line in out.splitlines() if line.strip()]
@@ -326,7 +364,10 @@ def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
 def changed(concept: Concept) -> Diff:
     """One file's staleness. `system.md` goes through `changed_system` instead."""
     if concept.level == "System":
-        raise ValueError("system.md is checked per member; use changed_system")
+        raise Refused(
+            f"{concept.root}: a directory named system has no store — its "
+            "repository file and the system file share a name"
+        )
     if "unstamped" in concept.problems:
         return Diff("unstamped")
     return numstat(str(concept.revision), concept.root, mirror(concept.store, concept.root, concept.path))
@@ -381,12 +422,28 @@ def head(root: Path) -> str:
     """The revision to record. Short, because it is read by people."""
     code, out = git(["rev-parse", "--short", "HEAD"], root)
     if code != 0 or not out.strip():
-        raise Refused(f"{root}: git rev-parse HEAD failed; nothing was written")
+        said = out.strip().splitlines()
+        detail = f": {said[0]}" if said else ""
+        raise Refused(
+            f"{root}: git rev-parse HEAD failed{detail}; nothing was written"
+        )
     return out.strip().splitlines()[0]
 
 
+def dirty(root: Path, rel: Path) -> bool:
+    """Whether the mirrored path has uncommitted changes in its own repository.
+
+    A stamp records HEAD, so a dirty mirror means the file was read against a
+    tree that HEAD does not describe. It is a warning and not a refusal: a
+    checkout at work is dirty most of the time, and refusing would stop
+    research on it for a stamp that is wrong by exactly what the warning names.
+    """
+    code, out = git(["status", "--porcelain", "--", rel.as_posix()], root)
+    return code == 0 and bool(out.strip())
+
+
 def _rewrite(block: str, line: str) -> str:
-    """`block` with its `revision` line replaced, or the line inserted.
+    """`block` with its `revision` value replaced, or the line inserted.
 
     Inserted before the first table header rather than at the very end of the
     block: a file whose frontmatter ends in `[[connects]]` would otherwise get
@@ -401,55 +458,148 @@ def _rewrite(block: str, line: str) -> str:
     return "\n".join([*lines[:cut], line, *lines[cut:]])
 
 
-def _revision_line(concept: Concept, members: dict[str, Path]) -> str:
-    """The `revision = …` line this file should now carry.
+def _revision_value(concept: Concept, members: dict[str, Path], resolve) -> str | dict:
+    """What this file's `revision` should now be: a string, or a member table.
 
-    For `system.md` an inline table: every declared member re-stamped from its
-    own repository, every key naming no declared member left exactly as it is.
+    For `system.md` every declared member is re-stamped from its own
+    repository, and every key naming no declared member is left exactly as it
+    is — the store reports an undeclared key and never rewrites one.
     """
     if concept.level != "System":
-        return f'revision = "{head(concept.root)}"'
+        return resolve(concept.root)
 
     known = members_by_basename(members)
     table = concept.revision if isinstance(concept.revision, dict) else {}
     values: dict[str, str] = {}
     for key, value in table.items():
-        values[key] = head(known[key]) if key in known else str(value)
+        values[key] = resolve(known[key]) if key in known else str(value)
     for name, path in known.items():
-        values.setdefault(name, head(path))
-    body = ", ".join(f'{key} = "{value}"' for key, value in values.items())
-    return f"revision = {{ {body} }}"
+        values.setdefault(name, resolve(path))
+    return values
 
 
-def stamp(paths: list[Path], store: Path, root: Path, members: dict[str, Path]) -> list[Path]:
-    """Write the current HEAD into `revision` in each named file, and nothing else.
+def _revision_line(value: str | dict) -> str:
+    if isinstance(value, dict):
+        body = ", ".join(f'{key} = "{item}"' for key, item in value.items())
+        return f"revision = {{ {body} }}"
+    return f'revision = "{value}"'
 
-    A textual edit of one line, never a re-serialisation: the rest of the block
-    is the author's comments, key order and spacing, and a round trip through
-    tomllib would silently reflow all three.
+
+def _dirty_subject(concept: Concept, members: dict[str, Path]) -> str:
+    """What to name in the warning: the mirrored path, or the dirty members.
+
+    Empty when nothing is dirty. A repository file and `system.md` both mirror
+    a whole tree, so naming `.` would tell the reader nothing — the repository
+    or the member is what they would go and look at.
     """
-    written: list[Path] = []
-    for path in paths:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
-            raise Refused(f"{path}: cannot read: {exc}") from None
-        match = FRONTMATTER.match(text)
-        if not match:
-            raise Refused(f"{path}: no +++ frontmatter block to stamp")
-        block = match.group(1)
-        try:
-            tomllib.loads(block)
-        except ValueError as exc:
-            raise Refused(f"{path}: the +++ block does not parse: {exc}") from None
+    if concept.level == "System":
+        names = [
+            name
+            for name, path in members_by_basename(members).items()
+            if dirty(path, Path("."))
+        ]
+        return ", ".join(sorted(names))
+    rel = mirror(concept.store, concept.root, concept.path)
+    if not dirty(concept.root, rel):
+        return ""
+    return concept.root.name if rel == Path(".") else rel.as_posix()
 
-        concept = load(path, store, root)
-        # head() raises before anything is written, so a repository with no HEAD
-        # leaves every named file exactly as it was.
-        line = _revision_line(concept, members)
-        path.write_text(text[: match.start(1)] + _rewrite(block, line) + text[match.end(1) :])
-        written.append(path)
+
+def _read_for_stamp(path: Path) -> tuple[str, bool]:
+    """(text with LF endings, whether the file was CRLF).
+
+    Read without newline translation so the endings survive the round trip:
+    a stamp writes one value and may not reformat the rest of the file, and
+    line endings are part of the rest of the file.
+    """
+    try:
+        with open(path, encoding="utf-8", newline="") as handle:
+            raw = handle.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise Refused(f"{path}: cannot read: {exc}") from None
+    crlf = "\r\n" in raw
+    return (raw.replace("\r\n", "\n"), crlf) if crlf else (raw, False)
+
+
+def _stamped(path: Path, store: Path, root: Path, members: dict[str, Path], resolve):
+    """(text to write, whether it was CRLF, what is dirty) for one file.
+
+    Every refusal a stamp can raise happens here, before anything is written —
+    so a batch that fails has changed nothing, and neither has a file whose
+    rewritten block would no longer say what was written into it.
+    """
+    text, crlf = _read_for_stamp(path)
+    match = FRONTMATTER.match(text)
+    if not match:
+        raise Refused(f"{path}: no +++ frontmatter block to stamp")
+    block = match.group(1)
+    try:
+        tomllib.loads(block)
+    except ValueError as exc:
+        raise Refused(f"{path}: the +++ block does not parse: {exc}") from None
+
+    concept = load(path, store, root)
+    value = _revision_value(concept, members, resolve)
+    rewritten = _rewrite(block, _revision_line(value))
+    # The one check that catches a spelling the line-level rewrite could not
+    # see — a [revision] section, an indented key, a revision inside a
+    # [[connects]] table — each of which parsed before and says something else
+    # after. The file is refused and left exactly as it was.
+    try:
+        after = tomllib.loads(rewritten)
+    except ValueError as exc:
+        raise Refused(f"{path}: stamping it would break the +++ block: {exc}") from None
+    if after.get("revision") != value:
+        raise Refused(
+            f"{path}: stamping it would not set the top-level revision — the "
+            "block spells it somewhere this cannot reach; nothing was written"
+        )
+    return (
+        text[: match.start(1)] + rewritten + text[match.end(1) :],
+        crlf,
+        _dirty_subject(concept, members),
+    )
+
+
+def stamp_all(
+    items: list[tuple[Path, Path, Path, dict[str, Path]]],
+) -> list[tuple[Path, str]]:
+    """Stamp files spanning several stores. (path, store, root, members) each.
+
+    Returns (path, what is dirty) per file, the second empty when the mirror is
+    clean. A textual edit of one value, never a re-serialisation: the rest of
+    the block is the author's comments, key order and spacing, and a round trip
+    through tomllib would silently reflow all three.
+
+    Every HEAD the whole batch needs is resolved before the first write, one
+    per repository — otherwise a rev-parse that failed on the fourth file
+    reported "nothing was written" having already written three. Which is the
+    ordinary shape here: from a parent, `system.md` needs every member's HEAD.
+    """
+    heads: dict[Path, str] = {}
+
+    def resolve(repo: Path) -> str:
+        if repo not in heads:
+            heads[repo] = head(repo)
+        return heads[repo]
+
+    prepared = [
+        (path, *_stamped(path, store, root, members, resolve))
+        for path, store, root, members in items
+    ]
+    written: list[tuple[Path, str]] = []
+    for path, text, crlf, subject in prepared:
+        with open(path, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text.replace("\n", "\r\n") if crlf else text)
+        written.append((path, subject))
     return written
+
+
+def stamp(
+    paths: list[Path], store: Path, root: Path, members: dict[str, Path]
+) -> list[tuple[Path, str]]:
+    """`stamp_all` for the files of one store. See it for what a stamp does."""
+    return stamp_all([(path, store, root, members) for path in paths])
 
 
 # --- orphans and the generated listing --------------------------------------- #
@@ -507,7 +657,15 @@ def reindex(store: Path, root: Path) -> list[Path]:
     written: list[Path] = []
     if not store.is_dir():
         return written
-    for directory in sorted({store, *(p for p in store.rglob("*") if p.is_dir())}):
+    # A store declared as `.` is the repository, so the walk would otherwise
+    # write a listing into .git/ and every other dot-directory in the tree.
+    inside = (
+        p
+        for p in store.rglob("*")
+        if p.is_dir()
+        and not any(part.startswith(".") for part in p.relative_to(store).parts)
+    )
+    for directory in sorted({store, *inside}):
         target = directory / INDEX
         content = _listing(store, directory, root)
         if target.is_file() and target.read_text(encoding="utf-8") == content:
@@ -525,7 +683,6 @@ class Edge:
     source: str
     to: str
     how: str
-    carries: str
 
 
 def node_of(store: Path, root: Path, path: Path) -> str:
@@ -533,9 +690,7 @@ def node_of(store: Path, root: Path, path: Path) -> str:
     level = level_of(store, root, path)
     if level in ("System", "Repository"):
         return root.name
-    rel = path.relative_to(store)
-    tail = rel.parent if level == "Area" else rel.with_suffix("")
-    return f"{root.name}/{tail.as_posix()}"
+    return f"{root.name}/{mirror(store, root, path).as_posix()}"
 
 
 def fold(stores: list[tuple[Path, Path]]) -> tuple[list[Edge], set[str], int]:
@@ -562,12 +717,7 @@ def fold(stores: list[tuple[Path, Path]]) -> tuple[list[Edge], set[str], int]:
                 if not isinstance(to, str) or not to.strip():
                     continue
                 edges.append(
-                    Edge(
-                        node,
-                        to.strip(),
-                        str(table.get("how", "")).strip(),
-                        str(table.get("carries", "")).strip(),
-                    )
+                    Edge(node, to.strip(), str(table.get("how", "")).strip())
                 )
                 found = True
             carriers += 1 if found else 0
@@ -634,7 +784,7 @@ def _edge_lines(concept: Concept, indent: str) -> list[str]:
 def render_orientation(
     name: str,
     system: Concept | None,
-    members: list[tuple[str, Concept | None]],
+    members: list[tuple[str, Concept | None, str]],
     changes: dict[str, Diff],
     where: str,
 ) -> str:
@@ -647,14 +797,14 @@ def render_orientation(
     if system is not None:
         lines += _wrap(system.description, "  ", "  ")
     lines.append("")
-    for member, concept in members:
+    for member, concept, reason in members:
         if concept is None:
-            lines.append(f"  {_col(member, 10)}(no store)")
+            lines.append(f"  {_col(member, 10)}({reason})")
             continue
         lines += _wrap(concept.description, f"  {_col(member, 10)}", " " * 12)
         lines += _edge_lines(concept, " " * 12)
     lines.append("")
-    count = len([c for _, c in members if c is not None])
+    count = len([c for _, c, _ in members if c is not None])
     noun = "file" if count == 1 else "files"
     moved = len([d for d in changes.values() if d.state == "changed"])
     lines.append(
@@ -796,18 +946,13 @@ def render_map(name: str, edges: list[Edge], described: set[str], carriers: int)
 
 def render_node(node: str, inbound: list[Edge], outbound: list[Edge]) -> str:
     lines = [""]
-    for i, edge in enumerate(inbound):
-        label = "in" if i == 0 else ""
-        lines.append(
-            f"  {_col(label, 6)}{_col(edge.source, 10)}"
-            f"{_col(_arrow(edge.how), 12)}{edge.to}"
-        )
-    for i, edge in enumerate(outbound):
-        label = "out" if i == 0 else ""
-        lines.append(
-            f"  {_col(label, 6)}{_col(edge.source, 10)}"
-            f"{_col(_arrow(edge.how), 12)}{edge.to}"
-        )
+    for heading, group in (("in", inbound), ("out", outbound)):
+        for i, edge in enumerate(group):
+            label = heading if i == 0 else ""
+            lines.append(
+                f"  {_col(label, 6)}{_col(edge.source, 10)}"
+                f"{_col(_arrow(edge.how), 12)}{edge.to}"
+            )
     if inbound:
         sources = sorted({e.source for e in inbound})
         lines.append("")

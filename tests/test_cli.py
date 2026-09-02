@@ -2275,6 +2275,51 @@ def test_flw_dir_name_refuses_an_absolute_config_key(tmp_path, monkeypatch):
     assert "/tmp/somewhere" in str(caught.value)
 
 
+@pytest.mark.parametrize("value", ["", "   ", ".", "..", "../elsewhere"])
+def test_flw_dir_name_refuses_a_name_that_makes_every_directory_a_project(
+    tmp_path, monkeypatch, value
+):
+    """`export FLW_DIR=` is how a person unsets a variable, and an empty name made
+    every directory a project and printed a blank one in `flw doctor`."""
+    home = tmp_path / "flw-home"
+    home.mkdir()
+    monkeypatch.setattr(flw, "FLW_HOME", home)
+
+    monkeypatch.setenv("FLW_DIR", value)
+    with pytest.raises(SystemExit) as caught:
+        flw.flw_dir_name()
+    assert "$FLW_DIR" in str(caught.value)
+
+    monkeypatch.delenv("FLW_DIR")
+    (home / "config.toml").write_text(f'[paths]\nflw = "{value}"\n')
+    with pytest.raises(SystemExit) as caught:
+        flw.flw_dir_name()
+    assert "~/.flw/config.toml" in str(caught.value)
+
+
+def test_flw_dir_name_refuses_a_value_that_is_not_a_string(tmp_path, monkeypatch):
+    """`flw_dir_name` is on every root resolution, so a non-string was a TypeError
+    from every command rather than a message from one."""
+    home = tmp_path / "flw-home"
+    home.mkdir()
+    (home / "config.toml").write_text("[paths]\nflw = 3\n")
+    monkeypatch.setattr(flw, "FLW_HOME", home)
+    monkeypatch.delenv("FLW_DIR", raising=False)
+
+    with pytest.raises(SystemExit) as caught:
+        flw.flw_dir_name()
+    assert "not a string" in str(caught.value)
+
+
+def test_doctor_never_prints_a_blank_directory_name(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
+    monkeypatch.setenv("FLW_DIR", "")
+
+    with pytest.raises(SystemExit):
+        flw.doctor(argparse.Namespace(root=None))
+    assert "flw dir:" not in capsys.readouterr().out
+
+
 def test_project_chain_finds_a_root_by_its_relocated_directory(tmp_path, monkeypatch):
     """One name is in force at a time: a directory under a previous name is not
     a project, and a walk probes exactly the resolved name per level."""
@@ -2860,6 +2905,21 @@ def test_context_shows_where_a_symlinked_extension_really_points(
     assert f"-> {flw.tilde(outside)}" in _body(capsys.readouterr().out)
 
 
+def test_context_names_a_dangling_extension_symlink_rather_than_skipping_it(
+    tmp_path, capsys, monkeypatch
+):
+    """`flw doctor` calls this out and `flw context` did not: is_file() is false
+    for a broken link, and the skip read as an extension nobody wrote."""
+    root = tmp_path / "work"
+    (root / ".flw" / "extensions").mkdir(parents=True)
+    (root / ".flw" / "extensions" / "flw-spec.md").symlink_to(tmp_path / "gone.md")
+
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(root)) == 0
+    body = _body(capsys.readouterr().out)
+    assert "could not be read" in body
+    assert "no extensions on this chain" not in body
+
+
 def test_doctor_names_a_dangling_extension_symlink_for_what_it_is(
     tmp_path, capsys, monkeypatch
 ):
@@ -3196,6 +3256,35 @@ def test_flw_test_exports_the_resolved_flw_dir_to_the_check_environment(
 
     args = argparse.Namespace(path=str(root), all=False, timeout=30, stream=False)
     assert flw.test(args) == 0
+
+
+def test_the_three_messages_that_name_the_flw_directory_use_its_real_name(
+    tmp_path, capsys, monkeypatch
+):
+    """Each said `.flw/` whatever name was in force, sending the reader to a
+    directory that is not there on a machine that relocated it."""
+    monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    bare = tmp_path / "nothing"
+    bare.mkdir()
+    with pytest.raises(SystemExit) as caught:
+        flw.project_root(bare)
+    assert ".cache/flw/ at or above" in str(caught.value)
+    assert ".flw/ at or above" not in str(caught.value)
+
+    empty = tmp_path / "empty"
+    (empty / ".cache" / "flw").mkdir(parents=True)
+    args = argparse.Namespace(path=str(empty), all=False, timeout=30, stream=False)
+    assert flw.test(args) == 2
+    assert ".cache/flw/config.toml declares none either" in capsys.readouterr().err
+
+    (empty / ".cache" / "flw" / "config.toml").write_text(
+        '[tests]\nchecks = ["true"]\nyours = ["true"]\n'
+    )
+    assert flw.test(args) == 2
+    assert f"{empty}/.cache/flw/config.toml" in capsys.readouterr().err
 
 
 def test_flw_test_all_refuses_a_directory_with_no_contract(tmp_path, capsys, monkeypatch):

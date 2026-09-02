@@ -230,7 +230,9 @@ def test_the_diff_runs_against_the_mirrored_path_in_the_file_s_own_repo(monkeypa
 
     knowledge.changed(knowledge.load(store / "api" / "api.md", store, shop))
     args, cwd = calls[0]
-    assert args == ["diff", "--numstat", "8be0117", "HEAD", "--", "api"]
+    # No HEAD: the revision is compared against the working tree, so an
+    # uncommitted edit under api/ counts.
+    assert args == ["diff", "--numstat", "8be0117", "--", "api"]
     assert cwd == shop
 
     knowledge.changed(knowledge.load(store / "shop.md", store, shop))
@@ -298,7 +300,7 @@ def test_stamp_rewrites_revision_and_leaves_every_other_byte_alone(acme, monkeyp
     before = path.read_text()
     canned(monkeypatch, {"rev-parse": (0, "abc1234\n")})
 
-    assert knowledge.stamp([path], store, shop, {}) == [path]
+    assert knowledge.stamp([path], store, shop, {}) == [(path, "")]
     after = path.read_text()
     assert after == before.replace('revision = "1f4ac02"', 'revision = "abc1234"')
 
@@ -595,7 +597,7 @@ def test_check_from_the_parent_is_the_plan_s_sample(capsys, monkeypatch):
     canned(monkeypatch, {"-- api": (0, NUMSTAT), "diff": (0, "")})
     assert run(["know", "--check", "--root", str(ACME)]) == 0
     assert capsys.readouterr().out == (
-        "knowledge: 2 roots, one store each · 4 files\n"
+        "knowledge: 3 roots, one store each · 4 files\n"
         "\n"
         "  acme      system.md                  current     "
         "shop 1f4ac02 · worker 3c81d90\n"
@@ -836,3 +838,294 @@ def test_the_other_formats_are_reachable_from_the_command(capsys, monkeypatch):
     # The NODE filter reaches every format, not only the text one.
     assert '"shop/api" -> "worker"' in out
     assert '"shop" -> "worker"' in out
+
+
+# --- what a stamp may and may not do ------------------------------------------ #
+
+
+def test_a_stamp_on_a_dirty_mirror_is_written_and_says_which_path(
+    acme, capsys, monkeypatch
+):
+    """Refusing would stop research on any checkout with local changes, which is
+    most of them. The stamp is written and the line says what it is wrong by."""
+    shop = acme / "shop"
+    canned(monkeypatch, {"rev-parse": (0, "abc1234\n"),
+                         "status": (0, " M api/orders.py\n")})
+    path = store_of(shop) / "api" / "api.md"
+
+    assert run(["know", "--stamp", str(path), "--root", str(acme)]) == 0
+    assert (
+        "api has uncommitted changes; recorded HEAD, re-stamp once they are "
+        "committed"
+    ) in capsys.readouterr().out
+    assert knowledge.load(path, store_of(shop), shop).revision == "abc1234"
+
+
+def test_a_stamp_on_a_clean_mirror_carries_no_warning(acme, capsys, monkeypatch):
+    canned(monkeypatch, {"rev-parse": (0, "abc1234\n"), "status": (0, "")})
+    path = store_of(acme / "shop") / "shop.md"
+
+    assert run(["know", "--stamp", str(path), "--root", str(acme)]) == 0
+    assert "uncommitted" not in capsys.readouterr().out
+
+
+def test_a_system_stamp_names_only_the_member_whose_tree_is_dirty(
+    acme, capsys, monkeypatch
+):
+    def fake(args: list[str], cwd: Path) -> tuple[int, str]:
+        joined = " ".join(args)
+        if "rev-parse" in joined:
+            return 0, "abc1234\n"
+        if "status" in joined:
+            return (0, " M drain.py\n") if cwd.name == "worker" else (0, "")
+        return 0, ""
+
+    monkeypatch.setattr(knowledge, "git", fake)
+    path = store_of(acme) / "system.md"
+
+    assert run(["know", "--stamp", str(path), "--root", str(acme)]) == 0
+    out = capsys.readouterr().out
+    assert "worker has uncommitted changes" in out
+    assert "shop has uncommitted" not in out
+
+
+def test_a_batch_resolves_every_head_before_it_writes_anything(
+    acme, capsys, monkeypatch
+):
+    """`nothing was written` was true of one file and false of every file before
+    it — and from a parent, system.md needs every member's HEAD."""
+    shop, worker = acme / "shop", acme / "worker"
+
+    def fake(args: list[str], cwd: Path) -> tuple[int, str]:
+        if "rev-parse" in " ".join(args):
+            if cwd == worker:
+                return 128, "fatal: ambiguous argument 'HEAD'\n"
+            return 0, "abc1234\n"
+        return 0, ""
+
+    monkeypatch.setattr(knowledge, "git", fake)
+    first = store_of(shop) / "shop.md"
+    second = store_of(worker) / "worker.md"
+    before = (first.read_text(), second.read_text())
+
+    assert run(["know", "--stamp", str(first), str(second), "--root", str(acme)]) == 1
+    err = capsys.readouterr().err
+    assert str(worker) in err
+    assert "ambiguous argument" in err
+    assert "nothing was written" in err
+    assert (first.read_text(), second.read_text()) == before
+
+
+def test_a_refusal_quotes_what_git_said_rather_than_replacing_it(acme, monkeypatch):
+    """git absent from PATH is an OSError, and the reader needs its text: the bare
+    `rev-parse failed` sent them looking for a HEAD the repository does have."""
+    def fake(args: list[str], cwd: Path) -> tuple[int, str]:
+        return 127, "[Errno 2] No such file or directory: 'git'"
+
+    monkeypatch.setattr(knowledge, "git", fake)
+    shop = acme / "shop"
+    with pytest.raises(knowledge.Refused) as raised:
+        knowledge.stamp([store_of(shop) / "shop.md"], store_of(shop), shop, {})
+    assert "No such file or directory: 'git'" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("spelling", "block"),
+    [
+        ("a [revision] section", '[revision]\nshop = "old0000"\n'),
+        ("an indented key", '  revision = "old0000"\n'),
+        ("a revision inside [[connects]]",
+         '[[connects]]\nto = "worker"\nrevision = "old0000"\n'),
+    ],
+)
+def test_a_spelling_the_rewrite_cannot_reach_is_refused_and_nothing_written(
+    tmp_path, monkeypatch, spelling, block
+):
+    """Each of these parsed before the rewrite and said something else after, and
+    each was reported as `1 file stamped`."""
+    root = tmp_path / "repo"
+    store = store_of(root)
+    store.mkdir(parents=True)
+    path = store / "repo.md"
+    text = f'+++\ntype = "Repository"\ndescription = "x"\n{block}+++\nbody\n'
+    path.write_text(text)
+    canned(monkeypatch, {"rev-parse": (0, "abc1234\n")})
+
+    with pytest.raises(knowledge.Refused):
+        knowledge.stamp([path], store, root, {})
+    assert path.read_text() == text, spelling
+
+
+def test_a_stamp_keeps_a_trailing_comment_and_crlf_line_endings(
+    tmp_path, monkeypatch
+):
+    """Both were promised by the docstring and neither survived: `.*$` swallowed
+    the comment, and the write translated the endings."""
+    root = tmp_path / "repo"
+    store = store_of(root)
+    store.mkdir(parents=True)
+    path = store / "repo.md"
+    text = (
+        '+++\r\ntype = "Repository"\r\ndescription = "x"\r\n'
+        'revision = "old0000"  # stamped by hand\r\n+++\r\nbody\r\n'
+    )
+    path.write_bytes(text.encode())
+    canned(monkeypatch, {"rev-parse": (0, "abc1234\n"), "status": (0, "")})
+
+    knowledge.stamp([path], store, root, {})
+    after = path.read_bytes().decode()
+    assert after == text.replace("old0000", "abc1234")
+
+
+# --- names the CLI accepts ---------------------------------------------------- #
+
+
+def test_reindex_writes_no_listing_into_a_dot_directory(acme, capsys, monkeypatch):
+    """A `[knowledge] dir` of `.` makes the repository the store, and the walk
+    would otherwise write index.md into .git/."""
+    canned(monkeypatch, {"diff": (0, "")})
+    hidden = store_of(acme / "shop") / ".git"
+    hidden.mkdir()
+
+    assert run(["know", "--reindex", "--root", str(acme)]) == 0
+    assert not (hidden / "index.md").exists()
+    assert (store_of(acme / "shop") / "index.md").is_file()
+
+
+def test_a_knowledge_dir_that_is_absolute_is_refused_naming_file_and_key(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "repo"
+    (root / ".flw").mkdir(parents=True)
+    config = root / ".flw" / "config.toml"
+    config.write_text(f'[knowledge]\ndir = "{tmp_path / "elsewhere"}"\n')
+
+    with pytest.raises(SystemExit) as raised:
+        flw.knowledge_dir(root)
+    assert str(config) in str(raised.value)
+    assert "[knowledge] dir" in str(raised.value)
+
+
+# --- what the walk answers from a parent -------------------------------------- #
+
+
+def test_a_dot_from_the_parent_is_the_orientation(acme, capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    monkeypatch.chdir(acme)
+
+    assert run(["know", "."]) == 0
+    assert capsys.readouterr().out.startswith("system: acme · 2 roots")
+
+
+def test_a_path_under_no_member_is_refused_rather_than_read_as_the_first(
+    acme, capsys, monkeypatch
+):
+    """`flw know .flw` from the parent answered with `shop`: the cwd form existed,
+    and the member-relative form was tried anyway."""
+    canned(monkeypatch, {"diff": (0, "")})
+    monkeypatch.chdir(acme)
+
+    assert run(["know", ".flw"]) == 1
+    assert "is under no repository acme declares" in capsys.readouterr().err
+
+
+def test_a_path_more_than_one_member_holds_is_refused_naming_them(
+    acme, capsys, monkeypatch
+):
+    canned(monkeypatch, {"diff": (0, "")})
+    for member in ("shop", "worker"):
+        (acme / member / "README.md").write_text("# read me\n")
+    monkeypatch.chdir(acme.parent)
+
+    assert run(["know", "README.md", "--root", str(acme)]) == 1
+    err = capsys.readouterr().err
+    assert "under more than one repository acme declares: shop, worker" in err
+
+
+def test_a_member_relative_path_still_answers_from_the_parent(
+    acme, capsys, monkeypatch
+):
+    canned(monkeypatch, {"-- api": (0, NUMSTAT), "diff": (0, "")})
+    monkeypatch.chdir(acme)
+
+    assert run(["know", "api/orders.py"]) == 0
+    assert capsys.readouterr().out.startswith("shop · api/orders.py ·")
+
+
+def test_a_path_beside_a_whole_store_mode_is_refused_rather_than_dropped(
+    acme, capsys, monkeypatch
+):
+    """`flw know nonexistent/path --check` exited 0 for a path that alone is 1."""
+    canned(monkeypatch, {"diff": (0, "")})
+
+    assert run(["know", "nonexistent/path", "--check", "--root", str(acme)]) == 1
+    assert "--check reads the whole store" in capsys.readouterr().err
+
+    assert run(["know", "--full", "--reindex", "--root", str(acme)]) == 1
+    assert "--reindex reads the whole store" in capsys.readouterr().err
+
+
+# --- three listings that said less than they knew ------------------------------ #
+
+
+def test_a_member_with_no_store_still_counts_its_levels(acme, capsys, monkeypatch):
+    canned(monkeypatch, {"diff": (0, "")})
+    shutil.rmtree(store_of(acme / "shop"))
+
+    # Three candidates under shop and system.md above them. Computed inside the
+    # store guard, this printed `1 of 1 levels` for system.md alone.
+    assert run(["know", "api/orders.py", "--root", str(acme)]) == 0
+    assert "1 of 4 levels have knowledge" in capsys.readouterr().out
+
+
+def test_a_parent_with_no_store_of_its_own_walks_a_member_s(acme, capsys, monkeypatch):
+    canned(monkeypatch, {"-- api": (0, NUMSTAT), "diff": (0, "")})
+    shutil.rmtree(store_of(acme))
+
+    assert run(["know", "api/orders.py", "--root", str(acme)]) == 0
+    assert "shop · api/orders.py · 2 of 3 levels" in capsys.readouterr().out
+
+
+def test_orientation_says_why_a_member_has_no_head_rather_than_no_store(
+    acme, capsys, monkeypatch
+):
+    canned(monkeypatch, {"diff": (0, "")})
+    shutil.rmtree(acme / "worker")
+    shutil.rmtree(store_of(acme / "shop"))
+
+    assert run(["know", "--root", str(acme)]) == 0
+    out = capsys.readouterr().out
+    assert "shop      (no store)" in out
+    assert "worker    (missing)" in out
+
+    (store_of(acme / "shop")).mkdir(parents=True)
+    (store_of(acme / "shop") / "shop.md").write_text("+++\nnot toml\n+++\n")
+    assert run(["know", "--root", str(acme)]) == 0
+    assert "shop      (malformed)" in capsys.readouterr().out
+
+
+def test_check_counts_the_stores_it_read_and_not_the_members_declared(
+    acme, capsys, monkeypatch
+):
+    canned(monkeypatch, {"diff": (0, "")})
+    shutil.rmtree(acme / "worker")
+
+    assert run(["know", "--check", "--root", str(acme)]) == 0
+    assert capsys.readouterr().out.startswith("knowledge: 2 roots, one store each")
+
+
+def test_a_directory_named_system_is_refused_naming_the_collision(
+    tmp_path, capsys, monkeypatch
+):
+    """Its repository file and the system file share a name by the mirror rule, so
+    either reading is wrong for one of the two directories."""
+    canned(monkeypatch, {"diff": (0, "")})
+    root = tmp_path / "system"
+    store = store_of(root)
+    store.mkdir(parents=True)
+    (store / "system.md").write_text(
+        '+++\ntype = "Repository"\ndescription = "x"\nrevision = "abc1234"\n+++\n'
+    )
+
+    assert run(["know", "--root", str(root)]) == 1
+    assert "a directory named system has no store" in capsys.readouterr().err

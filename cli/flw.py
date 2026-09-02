@@ -2072,7 +2072,9 @@ def _resolve_flw_dir() -> tuple[str, str]:
     this name locates, so it cannot be found before the name is known.
 
     An absolute value from either source is refused: that placement is
-    `$FLW_HOME`'s job, not this setting's.
+    `$FLW_HOME`'s job, not this setting's. So are a value that is not a string,
+    one that is empty, and `.` or `..` — each of those makes every directory a
+    project or none, and `export FLW_DIR=` is how a person unsets a variable.
     """
     value = os.environ.get("FLW_DIR")
     if value is not None:
@@ -2090,11 +2092,32 @@ def _resolve_flw_dir() -> tuple[str, str]:
 
     if value is None:
         return ".flw", "default"
+    if not isinstance(value, str):
+        raise SystemExit(
+            f"error: {source} names {value!r}, which is not a string. The "
+            "per-project directory's name must be one relative path segment."
+        )
+    if not value.strip():
+        raise SystemExit(
+            f"error: {source} names {value!r}, an empty name. Every directory "
+            "would then be a project. Unset it rather than setting it empty."
+        )
     if Path(value).is_absolute():
         raise SystemExit(
             f"error: {source} names {value!r}, an absolute path. The per-project "
             "directory's name must be relative — an absolute location is "
             "$FLW_HOME's job, not this setting's."
+        )
+    parts = Path(value).parts
+    if not parts:
+        raise SystemExit(
+            f"error: {source} names {value!r}, which names no directory. Every "
+            "directory would then be a project."
+        )
+    if ".." in parts:
+        raise SystemExit(
+            f"error: {source} names {value!r}, which walks upward. The "
+            "per-project directory sits inside the project, not above it."
         )
     return value, source
 
@@ -2157,8 +2180,8 @@ def project_root(start: Path | None = None) -> Path:
     if found is None:
         here = (start or Path.cwd()).resolve()
         raise SystemExit(
-            f"error: no specs/ or .flw/ at or above {here}. Run `flw` from inside a "
-            "project, or run the spec skill to start one."
+            f"error: no specs/ or {flw_dir_name()}/ at or above {here}. Run `flw` "
+            "from inside a project, or run the spec skill to start one."
         )
     return found
 
@@ -2190,7 +2213,8 @@ def test(args: argparse.Namespace) -> int:
     if not checks:
         print(
             f"error: {specs / 'current.toml'} declares no tests and no removal "
-            "checks, and .flw/config.toml declares none either. Nothing to run.",
+            f"checks, and {flw_dir_name()}/config.toml declares none either. "
+            "Nothing to run.",
             file=sys.stderr,
         )
         return 2
@@ -2203,7 +2227,8 @@ def test(args: argparse.Namespace) -> int:
     if not runnable:
         print(
             "error: every declared check is covered by [tests] yours in "
-            f"{root}/.flw/config.toml (or the global one) — nothing left to run here.",
+            f"{root}/{flw_dir_name()}/config.toml (or the global one) — nothing "
+            "left to run here.",
             file=sys.stderr,
         )
         return 2
@@ -2654,7 +2679,10 @@ def _context_extensions(chain: list[Path], skill: str | None) -> None:
     for root in chain:
         for stem in wanted:
             path = flw_dir(root) / "extensions" / f"{stem}.md"
-            if not path.is_file():
+            # A dangling symlink or a directory under the name is not absent —
+            # somebody meant to put an extension here — so it falls through to
+            # the read below and is reported rather than skipped.
+            if not (path.exists() or path.is_symlink()):
                 continue
             try:
                 body = path.read_text()
@@ -3111,6 +3139,12 @@ def knowledge_dir(root: Path) -> Path:
             raise SystemExit(
                 f"error: {config}: [knowledge] dir is not a path: {declared!r}"
             )
+        if declared is not None and Path(declared).is_absolute():
+            raise SystemExit(
+                f"error: {config}: [knowledge] dir is {declared!r}, an absolute "
+                "path. It names a directory inside this repository, so it must "
+                "be relative to the repository's root."
+            )
     return (root / declared) if declared else (flw_dir(root) / "knowledge")
 
 
@@ -3162,10 +3196,12 @@ def know(args: argparse.Namespace) -> int:
         return 1
     members = project_roots(root)
     store = knowledge_dir(root)
-    if not store.is_dir():
+    if not any(s.is_dir() for _, s in _knowledge_stores(root, members)):
         # A missing [knowledge] key and a missing directory read the same, and
         # neither is a fault: every repository has no store until research
-        # writes one.
+        # writes one. From a parent the store is any member's as much as its
+        # own — a parent that has written no system.md still has a system to
+        # walk, and answering `no store` hid every member's.
         print("no store")
         return 0
 
@@ -3177,6 +3213,26 @@ def know(args: argparse.Namespace) -> int:
 
 
 def _know(args, engine, root: Path, store: Path, members: dict[str, Path]) -> int:
+    mode = next(
+        (
+            name
+            for name, given in (
+                ("--stamp", args.stamp is not None),
+                ("--reindex", args.reindex),
+                ("--check", args.check),
+            )
+            if given
+        ),
+        None,
+    )
+    if mode is not None:
+        # Silently dropping these read as an answer: `flw know nonexistent/path
+        # --check` exited 0 for a path that alone is exit 1.
+        for extra in ("a path" if args.path else "", "--full" if args.full else ""):
+            if extra:
+                raise engine.Refused(
+                    f"{mode} reads the whole store; {extra} describes a walk"
+                )
     if args.stamp is not None:
         return _know_stamp(args, engine, root, members)
     if args.reindex:
@@ -3191,15 +3247,23 @@ def _know(args, engine, root: Path, store: Path, members: dict[str, Path]) -> in
 
 
 def _member_head(engine, path: Path):
-    """(concept, diff) for one member's repository file, or (None, None)."""
+    """(concept, diff, reason) for one member's repository file.
+
+    The reason is what to print in the member's slot when there is no concept,
+    and it is the whole value of the line: `(no store)` was printed for a
+    member whose directory is gone, which `flw context` calls `missing` one
+    command earlier, and for a member whose file is there and malformed.
+    """
+    if not path.is_dir():
+        return None, None, "missing"
     store = knowledge_dir(path)
     own = store / f"{path.name}.md"
     if not (store.is_dir() and own.is_file()):
-        return None, None
+        return None, None, "no store"
     concept = engine.load(own, store, path)
     if not concept.listable:
-        return None, None
-    return concept, engine.changed(concept)
+        return None, None, concept.problems[0]
+    return concept, engine.changed(concept), ""
 
 
 def _know_orientation(engine, root: Path, store: Path, members: dict[str, Path]) -> int:
@@ -3216,8 +3280,8 @@ def _know_orientation(engine, root: Path, store: Path, members: dict[str, Path])
     heads: list[tuple[str, object]] = []
     changes: dict[str, object] = {}
     for path in members.values():
-        concept, diff = _member_head(engine, path)
-        heads.append((path.name, concept))
+        concept, diff, reason = _member_head(engine, path)
+        heads.append((path.name, concept, reason))
         if diff is not None:
             changes[path.name] = diff
     where = tilde(system_path) if system is not None else f"({engine.SYSTEM} not written)"
@@ -3228,20 +3292,23 @@ def _know_orientation(engine, root: Path, store: Path, members: dict[str, Path])
 def _know_walk(args, engine, root: Path, store: Path, members: dict[str, Path]) -> int:
     given = Path(args.path)
     if members:
-        target = next((p for p in members.values() if engine.under(p, given)), None)
-        if target is None:
-            raise engine.Refused(
-                f"{args.path} is under no repository {root.name} declares"
-            )
+        here = given if given.is_absolute() else Path.cwd() / given
+        if here.exists() and here.resolve() == root.resolve():
+            # `.` standing in the parent names the parent, and the parent is
+            # not a member — the answer it wants is the orientation.
+            return _know_orientation(engine, root, store, members)
+        target = engine.member_for(root, members, given)
         rel = engine.relative_to_root(target, given)
     else:
         target, rel = root, engine.relative_to_root(root, given)
 
     target_store = knowledge_dir(target)
     rows = []
-    total = 0
+    # The denominator is how many levels the path has, which is a fact about
+    # the path and not about the store — computed inside the guard, a member
+    # with no store printed `1 of 1 levels` for system.md alone.
+    total = len(engine.candidates(target, target_store, rel))
     if target_store.is_dir():
-        total = len(engine.candidates(target, target_store, rel))
         for path in reversed(engine.walk(target, target_store, rel)):
             concept = engine.load(path, target_store, target)
             rows.append((concept, engine.changed(concept)))
@@ -3276,9 +3343,11 @@ def _know_check(engine, root: Path, members: dict[str, Path]) -> int:
     """The whole store, writing nothing, exit 0 whatever it finds."""
     rows: list = []
     notes: list[str] = []
+    read = 0
     for owner, store in _knowledge_stores(root, members):
         if not store.is_dir():
             continue
+        read += 1
         expected = dict(engine.orphans(store, owner))
         for path in engine.concepts(store):
             concept = engine.load(path, store, owner)
@@ -3307,9 +3376,9 @@ def _know_check(engine, root: Path, members: dict[str, Path]) -> int:
             rows.append(engine.Row(owner.name, concept.rel, state, detail))
 
     if members:
-        noun = "root" if len(members) == 1 else "roots"
+        noun = "root" if read == 1 else "roots"
         header = (
-            f"knowledge: {len(members)} {noun}, one store each "
+            f"knowledge: {read} {noun}, one store each "
             f"{engine.DASH} {len(rows)} files"
         )
     else:
@@ -3334,7 +3403,9 @@ def _know_stamp(args, engine, root: Path, members: dict[str, Path]) -> int:
         raise engine.Refused("--stamp names the files to re-stamp; it was given none")
 
     stores = _knowledge_stores(root, members)
-    written: list[Path] = []
+    # Every named file is resolved before any is stamped, so that the batch's
+    # one-write-or-none property survives files spanning several stores.
+    items = []
     for given in args.stamp:
         path = Path(given)
         path = path if path.is_absolute() else (Path.cwd() / path)
@@ -3348,9 +3419,16 @@ def _know_stamp(args, engine, root: Path, members: dict[str, Path]) -> int:
             raise engine.Refused(f"{given} is in no store under {root.name}")
         owner, store = owned
         # `members` only reaches system.md, which lives in this root's own store.
-        written += engine.stamp([path], store, owner, members if owner == root else {})
-    for path in written:
-        print(f"  {tilde(path)}")
+        items.append((path, store, owner, members if owner == root else {}))
+    written = engine.stamp_all(items)
+    for path, dirty in written:
+        note = (
+            f" {engine.DASH} {dirty} has uncommitted changes; recorded HEAD, "
+            "re-stamp once they are committed"
+            if dirty
+            else ""
+        )
+        print(f"  {tilde(path)}{note}")
     noun = "file" if len(written) == 1 else "files"
     print(f"{len(written)} {noun} stamped")
     return 0
@@ -3371,7 +3449,7 @@ def know_map(args: argparse.Namespace) -> int:
     if root is None:
         return 1
     members = project_roots(root)
-    if not knowledge_dir(root).is_dir():
+    if not any(s.is_dir() for _, s in _knowledge_stores(root, members)):
         print("no store")
         return 0
 
