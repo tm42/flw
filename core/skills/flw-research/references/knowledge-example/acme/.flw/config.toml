@@ -1,0 +1,5 @@
+# The parent of a two-repo system. It is a project root like any other, and the
+# only thing its own store holds is system.md.
+[project.roots]
+shop   = "./shop"
+worker = "./worker"
