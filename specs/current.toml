@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.11.9"
+spec_version = "0.11.8"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -20,7 +20,6 @@ applied = [
   "commits-name-a-part",
   "narrow-what-a-reviewer-loads",
   "opening-is-one-call",
-  "claim-the-specs-directory",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -228,7 +227,7 @@ provides = [
 
 [[final_state.components]]
 name  = "the project surface"
-paths = ["docs/", "README.md", "LICENSE", "package.json", ".gitignore", "plans/", "specs/"]
+paths = ["docs/", "README.md", "LICENSE", "package.json", ".gitignore", "plans/"]
 provides = [
   "A stranger can install flw, understand what it is for, and write their own skill for it without reading the author's mind.",
   "A reader can find why flw is shaped the way it is, including what was deliberately not built.",
