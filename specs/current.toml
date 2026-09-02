@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.12.0"
+spec_version = "0.12.1"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -27,6 +27,7 @@ applied = [
   "finish-the-store",
   "an-added-file-is-a-change",
   "review-opens-solo",
+  "a-solo-review-fills-the-store",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -174,7 +175,7 @@ provides = [
   "A user gets commits that are one part of the product each, complete with the check that proves them, because what a commit is and what its message says are written once in one file every skill cites rather than restates — so an agent proposing a commit and an agent working outside a flw run follow the same rule.",
   "A user can spec two changes at once on separate branches without either having to be renumbered when it lands, because a version record is addressed by a name it keeps, the order they landed in is recorded by the contract rather than by the records, and the release number moves by itself when a run finishes.",
   "A user can run a version's work without waiting for its checks, and gets a report that says the version was built and not verified rather than one that reads as finished.",
-  "A user gets a store that fills itself, because flw-execute, flw-research and each dispatched flw-review reviewer are offered a write at the point they have just finished learning something — and offered it, never blocked by it.",
+  "A user gets a store that fills itself, because flw-execute, flw-research and every flw-review reviewer — the one that runs by default as much as each one a team dispatches — are offered a write at the point they have just finished learning something, and offered it, never blocked by it.",
   "A user who runs flw-research on a repository gets its architecture written into that repo's knowledge store — the repo file, area files where reading one removes reading several, and with [project.roots] declared, system.md at the parent from a pass that reads the topology before any member — reviewed per level rather than in one block, and shaped like a shipped toy example rather than invented.",
   "A user's spec, execute and review runs read the store from where they are working: orientation across the declared roots at spec time, the walk from the record's paths at execute time, the walk from the diff at review time. An execute run that changes code re-reads and re-stamps the files describing what it changed, at the phase boundary, and its report lists them.",
   "Any skill that finds a knowledge file wrong may rewrite that one file and re-stamp it. That permission is one sentence in each skill and not a rule in the shared context, because a permission granted there reads as permission to write anything.",
@@ -183,7 +184,7 @@ provides = [
 [[final_state.components]]
 name  = "validation and checks"
 paths = ["core/scripts/validate_spec.py", "core/scripts/run_tests.py", "core/scripts/scout.py", "core/scripts/scout.mjs", "core/scripts/ledger.py",
-  "core/scripts/store.py", "tests/"]
+  "core/scripts/store.py", "core/scripts/budget.py", "tests/"]
 provides = [
   "A malformed contract or version file fails at authoring time with the offending field named, rather than quietly at execution time.",
   "A break in the record set — a name the contract says was applied with no file to match, a record whose name disagrees with its filename, a dag that cannot be walked — is named rather than found later.",

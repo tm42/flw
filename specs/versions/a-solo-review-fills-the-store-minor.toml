@@ -1,0 +1,116 @@
+base    = "review-opens-solo"
+name    = "a-solo-review-fills-the-store"
+summary = "the reviewer that runs by default is offered the note write, the contract declares the script its own check runs, the solo path may be given more than one lens, and the discipline every reviewer follows exists once"
+
+approach = """
+Four findings from `.flw/reports/2026-09-02T2240-quick-correctness-footprint.md`, a solo
+correctness-then-footprint read over the five commits of `review-opens-solo`. No new
+capability. Three of the four are gaps in the record I wrote rather than in the run that
+executed it, and two of those are the same mistake twice: a `contract_edit` that rewrote one
+sentence and left the sentences around it describing the shape that sentence used to have.
+
+The store stops filling from the default path. `specs/current.toml:177` reads "flw-execute,
+flw-research and each dispatched flw-review reviewer are offered a write at the point they
+have just finished learning something". Before `review-opens-solo` that covered every
+reviewer, because every reviewer was dispatched. It now covers the one run in ten, and
+`grep 'kb write'` finds the offer in `references/team-dispatch.md` and nowhere in
+`SKILL.md`. The run half-corrected this from the other end: it changed `_context_notes` so
+`flw context flw-review` prints the note listing, dropping the `skill` parameter and the
+omission with it, on the reasoning that a skill which reviews needs the store it used to
+skip. That reasoning is right and it moved the read end only, so the default reviewer is
+handed the store and never asked to add to it.
+
+A file the contract's own check runs and no component declares. `core/scripts/budget.py` is
+covered by no `paths`: "validation and checks" enumerates six specific files under
+`core/scripts/` and "the knowledge store" declares a seventh, and a new sibling is covered by
+none of them -- which is the exact shape flw-execute names as the case to stop on. The run
+built it because my `budget-script` task told it to and my `contract_edit` added the check
+without adding the path, so the executor was handed a task the contract did not cover. The
+contract is now internally inconsistent: `success_criteria.tests` runs
+`.venv/bin/python core/scripts/budget.py` against a path the component list does not contain.
+`flw validate` exits 0 through all of this, because it checks the documents against the
+schema and never checks a declared path against the tree. That gap is worth naming and is not
+fixed here -- a check that every declared path exists, and that every path a check names is
+declared, is its own record.
+
+One lens or several. `SKILL.md:72` says "you are the sole reviewer, through exactly one
+lens"; line 102, the first step of the procedure below it, says "One lens at a time, finished
+before the next starts", and line 104 names the two-lens case outright. The executor recorded
+choosing one lens as a design call and did not reconcile step 1, which is text promoted from
+the old section 3b where the narrowing to one lens happened elsewhere. Invoked as
+`flw-review correctness,footprint`, the review that found this followed step 1 and ran both.
+Line 72 is the half to change: a solo run through two lenses in sequence is worth having, and
+step 1 is the rule that makes it worth having.
+
+The discipline exists twice. 26 lines over 40 characters are byte-identical across `SKILL.md`
+and the reference, and the block from "Read and probe only" to "It is a file, not a reply"
+measures 420 tokens in the reference. It is the text that must not differ between the two
+paths, and two copies is how it starts to. `SKILL.md` is loaded on every run and the
+reference only when a team is named, so the block belongs in the first and the second should
+point at it.
+
+What this is not. Not a change to what a reviewer does: the discipline's text is moved and
+referenced, never edited. Not a change to the solo default, to the three authorship cases, or
+to `--scope`. Not the validate gap named above, which is real and is a separate record.
+
+Coverage carried from the report. It ran `--scope` in both match directions, the outside-root
+refusal, a non-existent path inside the root, the narrowing sizes (44,433 bytes of contract
+against 590 for a one-file scope and 870 for `core/schemas/`), `budget.py` from two working
+directories, and the split's token counts (2,573 and 3,316 against 4,654 before). It did not
+read the 11 added tests, did not compare the moved prose against its pre-move bytes, did not
+exercise the team path at all, and produced no measurement of a solo review against a
+dispatched one on the same scope.
+"""
+
+contract_edit = """
+In `final_state.components`, component **the skills**:
+
+`provides` -- replace:
+  "A user gets a store that fills itself, because flw-execute, flw-research and each
+  dispatched flw-review reviewer are offered a write at the point they have just finished
+  learning something -- and offered it, never blocked by it."
+with:
+  "A user gets a store that fills itself, because flw-execute, flw-research and every
+  flw-review reviewer -- the one that runs by default as much as each one a team dispatches
+  -- are offered a write at the point they have just finished learning something, and
+  offered it, never blocked by it."
+
+In `final_state.components`, component **validation and checks**:
+
+`paths` -- add, after "core/scripts/store.py":
+  "core/scripts/budget.py"
+"""
+
+[[decisions]]
+topic     = "which half of the one-lens disagreement changes"
+options   = ["line 72 allows the lenses named, matching step 1", "step 1 loses its cross-lens sentence, matching line 72"]
+chosen    = "line 72 allows the lenses named, matching step 1"
+rationale = "Step 1 is the rule that makes a multi-lens solo run worth doing at all -- finish one lens before the next, and re-examine under the second what the first passed. Holding line 72 keeps a sentence that forbids something valuable and that the first real invocation ignored. A team selection already spells lenses as a comma-separated list, so this makes the two paths agree."
+
+[[decisions]]
+topic     = "where the discipline block lives"
+options   = ["in SKILL.md, referenced by the team file", "in the reference, referenced by SKILL.md", "left duplicated"]
+chosen    = "in SKILL.md, referenced by the team file"
+rationale = "SKILL.md is loaded on every run and the reference only when a team is named, so the copy that is always present is the one to keep. It also takes 420 tokens off the file the team path pays for. Leaving it duplicated keeps two copies of the one text whose whole value is being identical for both kinds of reviewer."
+
+[[decisions]]
+topic     = "the validate gap this record found and does not fix"
+options   = ["name it in approach and leave it", "add the path check to flw validate here"]
+chosen    = "name it in approach and leave it"
+rationale = "flw validate checking that every declared path exists, and that every path a check command names is declared, would have caught the budget.py finding at the moment it was introduced. It is a capability rather than a correction, it touches the validation component's own behaviour, and folding it into a fix batch is how a fix batch becomes a feature nobody reviewed."
+
+[[dag]]
+group = 1
+phase = "the default reviewer writes to the store"
+tasks = [
+  { id = "solo-offers-a-note", desc = "core/skills/flw-review/SKILL.md: the solo procedure ends with the same note-write offer references/team-dispatch.md carries -- one sentence gating it (write it only if it was measured, and the next agent, in a repository that does not hold this one's history, could not get it faster than measuring it again), yes means read `flw kb write --help` first, and it is an offer that the run declines by doing nothing. Place it after section 4's summary, so it is the last thing a run reaches. Do not restate the reference's version in different words: the gate sentence is the same sentence." },
+  { id = "declare-budget-py", desc = "The contract_edit adds core/scripts/budget.py to the paths of the component 'validation and checks'. Nothing else changes -- the file, its check and its tests stay where they are. Confirm afterwards that `flw context flw-review --scope core/scripts/budget.py` prints that component rather than the names block alone, and say so in the report; that command returning nothing is what the finding measured." },
+]
+
+[[dag]]
+group = 2
+phase = "the skill says one thing about lenses"
+tasks = [
+  { id = "lenses-plural", desc = "core/skills/flw-review/SKILL.md:72: replace 'you are the sole reviewer, through exactly one lens' with wording that admits the lenses named, one at a time -- a comma-separated selection, the way a team's lens selection is already spelled. Step 1 of the procedure and its correctness-then-footprint sentence stay exactly as they are. The default when the request names no lens is still correctness, which is stated in the same section and does not change." },
+  { id = "discipline-once", desc = "core/skills/flw-review/references/team-dispatch.md: delete the duplicated discipline block -- from 'Read and probe only' to 'It is a file, not a reply' -- and replace it with a pointer to the block in SKILL.md by its heading, saying it goes to every reviewer verbatim. The surrounding sentence in section 2 that lists the eight things a reviewer is given keeps naming the discipline as one of them. Verify afterwards that no line over 40 characters is byte-identical across the two files except headings, and report the reference's new token count against 3,316." },
+]
