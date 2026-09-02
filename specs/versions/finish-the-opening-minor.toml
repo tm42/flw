@@ -1,0 +1,150 @@
+base    = "opening-is-one-call"
+name    = "finish-the-opening"
+summary = "flw context reports what it cannot read and carries on, prints no shared context when no skill is named, says which root it took and how, and every document that described the old opening now describes this one"
+
+approach = """
+Fifteen findings from `.flw/reports/2026-09-02T0903-deep.md`, three lenses over the whole
+of `opening-is-one-call` after its fix round, plus seven decisions the user made on
+2026-09-02 (`.flw/reports/2026-09-02-review-summary.md`). Coverage: the deep round read
+`cli/flw.py` end to end, every `SKILL.md`, `core/shared/`, `docs/`, `README.md`, the two
+records, and ran `flw context` from inside, beside and outside a project. It did not run a
+skill in a host, which nothing has yet.
+
+What is measured and would otherwise be re-derived. `flw context flw-spec` is 1,989 tokens,
+of which `core/shared/context.md` is 1,467 (73.8%); bare `flw context` is 1,626 of which the
+same file is 1,467 (90.2%). The whole opening trade, from the earlier round: flw-spec's
+three-call opening at 1,581 tokens became one call at 1,989, +192 of it mechanism. The
+`tests` lens mutated `cli/flw.py` 28 times and 17 survived; the six that mattered now fail.
+The two-way surface drift test at `tests/test_cli.py` is the reason every surface line lands
+in the same tree state as its parser change; nothing here adds a subcommand, so nothing here
+has to be pre-declared.
+
+Three things this version is not. It is not a claim on `specs/` — `claim-the-specs-directory`
+was reverted in `acd7a59` before this record was written, on the decision that a path
+claimed by no component is a legitimate state; the contract now says so once, in
+`assumptions`, so it is not filed again. It is not ambient drift detection — the block is
+install-once by decision, and the one document that said the style was the only untracked
+install now says there are two. It is not a rule about editing landed records — the user
+declined one either way, so `opening-is-one-call`'s `approach` simply gets its economics
+corrected, in place, with no note in the file, because the correction is the whole point
+and a marker would be writing about the writing.
+
+Why bare `flw context` drops the shared context. Every `SKILL.md` passes its own name, so
+the bare call is only the ambient line's case: a session in a flw project that invokes no
+skill. That session wants the tail — root, chain, extensions, notes, contract — and
+`context.md` opens with "Read once per run, by every flw skill". It was 90.2% of that call.
+The `provides` sentence shipped three days ago said the command prints the shared context;
+it is corrected here rather than left to disagree with the code.
+
+Why the provenance line gains fourteen words. A `--root` that does not exist was made loud
+in the fix round. A wrong root that exists is silent: from a sibling checkout, bare
+`flw context` prints component names identical to this repository's, and the only signals
+are the directory name and `spec_version`. The line `root: <path> (from $PWD — if the
+request named a different repository, re-run with --root)` is the smallest thing that
+turns the version's own subject from silent into one sentence.
+
+Why `nearest_project` becomes a one-liner. `nearest_project(p) == project_chain(p)[-1]`
+was verified over four paths; the two functions are the same walk written twice, with the
+same `$HOME` guard for the same reason. Keeping both is the footprint the lens named, and
+the fix is a deletion — the signature and every caller stay.
+"""
+
+contract_edit = """
+Top-level `assumptions` — append:
+  "Not every tracked path belongs to a component. specs/, .flw/ and pyproject.toml are
+  read by flw and by hosts and delivered by no component; a path claimed by none is a
+  state, not a gap, and flw validate does not check for it."
+
+In `final_state.components`, component **the flw CLI**:
+
+`provides` — replace:
+  "A user can print everything a skill reads at its opening — the shared context, the
+  resolved root and where it came from, this repo's extensions from the outermost project
+  root inward, the note store listing where that skill's own opening reads one, and the
+  contract's component names and paths — with one command, and can run it without invoking
+  a skill at all, so work flw has no skill for still starts from what the repository
+  records."
+with:
+  "A user can print everything a skill reads at its opening — the shared context, the
+  resolved root and where it came from, this repo's extensions from the outermost project
+  root inward, the note store listing where that skill's own opening reads one, and the
+  contract's component names and paths — with one command. Run with no skill named it
+  omits the shared context: that call serves a session flw has no skill for, which wants
+  what the repository records and not the file every skill already reads."
+
+`provides` — append:
+  "flw context reports what it cannot read and continues: an extension it cannot open, a
+  contract without final_state.components, a note store root it cannot reach. It exits 1
+  only for an input it was given and could not use — a --root that does not exist, a skill
+  name that is not installed."
+
+`provides` — append:
+  "flw install --ambient writes its block between markers and replaces it whole on
+  reinstall. Nothing between installs is tracked or verified, and text outside the markers
+  is never touched. The style is verified by digest and the ambient block deliberately is
+  not: every skill carries its own opening, so the block serves only the session that
+  invokes none, and a stale one costs that session a line it would have run anyway."
+"""
+
+[[decisions]]
+topic     = "how specs/ leaves the project surface"
+options   = ["git revert 9b93aeb before this record", "a contract_edit here removing the path, claim-the-specs-directory staying applied"]
+chosen    = "git revert 9b93aeb before this record"
+rationale = "The commit was unpushed and the record file and the applied entry go together, so a revert leaves the contract at 0.11.8 with nothing to explain. A contract_edit would leave a path added and removed in consecutive records and a landed version whose only effect was undone."
+
+[[decisions]]
+topic     = "whether every tracked top-level path must belong to a component"
+options   = ["yes, and flw validate enforces it", "no — unclaimed is legitimate, said once in assumptions", "only paths a skill reads"]
+chosen    = "no — unclaimed is legitimate, said once in assumptions"
+rationale = "Enforcement makes every new top-level file a contract change. The sentence in assumptions is what stops the next review filing specs/, .flw/ and pyproject.toml as three findings again."
+
+[[decisions]]
+topic     = "ambient drift"
+options   = ["a digest in ambient.toml and a doctor line, parity with style", "declare the block install-once and fix README.md:160"]
+chosen    = "declare the block install-once and fix README.md:160"
+rationale = "Every SKILL.md opens with its own flw context call, so a stale block affects only a session that invokes no skill, and reinstall replaces it whole. Text outside the markers is already the user's by the tagged-block contract. A digest would detect edits inside the markers, which the convention says not to make."
+
+[[decisions]]
+topic     = "whether bare flw context keeps printing context.md"
+options   = ["stop — the bare call is the no-skill case and wants the tail", "keep — one behaviour, one provides sentence"]
+chosen    = "stop — the bare call is the no-skill case and wants the tail"
+rationale = "1,467 of 1,626 tokens for a file that says it is read by every skill, in the one call no skill makes. The provides sentence is corrected in the same record so the contract and the code do not disagree for an interval."
+
+[[decisions]]
+topic     = "whether a landed record may be corrected"
+options   = ["prose fields only, marked with a date", "immutable — correct in the next record", "no rule either way"]
+chosen    = "no rule either way"
+rationale = "The user's call: neither prohibition nor explicit permission, left to agent and human judgment case by case. opening-is-one-call's approach is corrected in place here because its economics claim was wrong and a reader is misled by it."
+
+[[dag]]
+group = 1
+phase = "read what it can"
+tasks = [
+  { id = "extension-read", desc = "cli/flw.py _context_extensions: an extension on the chain that cannot be opened is reported on its own line with the error and the walk continues to the next; the notes and contract sections are still reached. Test: one unreadable file among three, exit 0, the other two printed." },
+  { id = "no-root-store", desc = "cli/flw.py _context_notes: with no project root, print `notes: no project root — the store is not searched` and nothing else; never the machine-wide listing under `category none`. Test: outside any project, the store's contents do not appear." },
+  { id = "old-contract", desc = "cli/flw.py _context_contract: a contract that parses but has no final_state.components prints `contract: <path> · schema_version N · no final_state.components` and stops, never the version line followed by nothing. Test: a schema_version 2 fixture." },
+  { id = "review-header", desc = "cli/flw.py _context_notes: for flw-review print the `notes: category <name>` header and then the omission line, so the category is visible and only the listing is skipped. Test: the header appears for flw-review and the listing does not." },
+]
+
+[[dag]]
+group = 2
+phase = "print less, say more"
+tasks = [
+  { id = "bare-omits-context", desc = "cli/flw.py context(): print core/shared/context.md only when a skill is named. Test: bare output does not contain the file's first line; `flw context flw-spec` does.", depends_on = ["extension-read"] },
+  { id = "root-provenance", desc = "cli/flw.py context(): the root line becomes `root: <path> (from $PWD — if the request named a different repository, re-run with --root)` when the root came from $PWD, and stays `(from --root)` otherwise. Test: both forms." },
+  { id = "root-guard-once", desc = "cli/flw.py: the twelve-line --root guard duplicated in doctor() and context() becomes one helper both call; the comment claiming doctor prints a provenance line is deleted, because it does not. Test: both commands still refuse an empty and a nonexistent --root with the same two messages." },
+  { id = "one-walk", desc = "cli/flw.py: nearest_project(start) returns project_chain(start)[-1] or None; the duplicate walk is deleted; signature and callers unchanged. Test: the existing nearest_project tests pass unchanged, plus one asserting equality over a nested fixture." },
+]
+
+[[dag]]
+group = 3
+phase = "the documents describe this opening"
+tasks = [
+  { id = "extending-md", desc = "docs/extending.md: lines 82-84 teach the one-call opening and point at `flw context <name>` rather than a SKILL.md comment that no longer exists; the doctor sample at 34-39 is replaced with a real run's output showing per-level sections and sizes.", depends_on = ["bare-omits-context", "root-provenance"] },
+  { id = "model-prose", desc = "README.md:50, docs/layout.md:15, docs/extending.md:12, docs/install.md:108: the extension model is the chain — every project root from the outermost inward, shared.md then the skill's own file — not one directory." },
+  { id = "readme-exceptions", desc = "README.md:160: the style is verified by digest and the ambient block is install-once; there are two installs flw does not re-verify, and it says which and why." },
+  { id = "context-md-fixes", desc = "core/shared/context.md: line 106 'above' becomes 'below', because the extensions print after that line in the command's output; §The project gains one sentence that a working copy created outside the parent — a worktree, a second clone — sits outside the chain and loses the levels above it, and that the check is whether the parent's shared.md appears in flw context's output." },
+  { id = "good-contract", desc = "core/skills/flw-spec/references/good-contract.md:82: the example provides sentence describes the one-call opening." },
+  { id = "measuring-md", desc = "docs/measuring.md:12-19: flw context is named as the hottest path — run at every skill open and by the ambient line outside one — and the protocol says to measure it first." },
+  { id = "record-economics", desc = "specs/versions/opening-is-one-call-minor.toml approach: the paragraph on what flw context prints says the saving is turns and the no-skill case, not tokens inside a skill, because three of four skills read the whole contract a turn later. Corrected in place, no marker." },
+]
