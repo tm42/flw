@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="flw: agree on what you are building, in writing, before an agent builds it. Four skills, one CLI, two files everything turns on.">
+<meta name="color-scheme" content="light dark">
+<style>
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>flw Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+
+</head>
+<body>
+<style>
+  :root {
+    --paper:      #eff2f5;
+    --raised:     #ffffff;
+    --sunken:     #e4e8ed;
+    --ink:        #15181c;
+    --muted:      #5b6674;
+    --faint:      #8b95a3;
+    --rule:       #d3d9e0;
+    --rule-soft:  #e6eaef;
+
+    --research:   #0b8a80;
+    --spec:       #c0492a;
+    --execute:    #2a5ea8;
+    --review:     #73459f;
+    --cli:        #616b7a;
+    --hub:        #15181c;
+
+    --shadow:     0 1px 2px rgba(21,24,28,.05), 0 10px 26px -14px rgba(21,24,28,.22);
+    --shadow-lit: 0 2px 6px rgba(21,24,28,.10), 0 16px 36px -14px rgba(21,24,28,.34);
+
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body:    "Source Serif 4", Georgia, "Times New Roman", serif;
+    --mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #131619;
+      --raised:    #1b1f25;
+      --sunken:    #23282f;
+      --ink:       #e7ebf0;
+      --muted:     #9aa5b3;
+      --faint:     #737e8c;
+      --rule:      #2e343d;
+      --rule-soft: #232830;
+
+      --research:  #34c2b4;
+      --spec:      #f08359;
+      --execute:   #74a4ea;
+      --review:    #b58ae0;
+      --cli:       #98a2b0;
+      --hub:       #e7ebf0;
+
+      --shadow:     0 1px 2px rgba(0,0,0,.5), 0 10px 26px -14px rgba(0,0,0,.85);
+      --shadow-lit: 0 2px 8px rgba(0,0,0,.6), 0 18px 40px -14px rgba(0,0,0,.95);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #131619;
+    --raised:    #1b1f25;
+    --sunken:    #23282f;
+    --ink:       #e7ebf0;
+    --muted:     #9aa5b3;
+    --faint:     #737e8c;
+    --rule:      #2e343d;
+    --rule-soft: #232830;
+
+    --research:  #34c2b4;
+    --spec:      #f08359;
+    --execute:   #74a4ea;
+    --review:    #b58ae0;
+    --cli:       #98a2b0;
+    --hub:       #e7ebf0;
+
+    --shadow:     0 1px 2px rgba(0,0,0,.5), 0 10px 26px -14px rgba(0,0,0,.85);
+    --shadow-lit: 0 2px 8px rgba(0,0,0,.6), 0 18px 40px -14px rgba(0,0,0,.95);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 54px 22px 90px;
+    display: flex;
+    flex-direction: column;
+    gap: 74px;
+  }
+
+  h1, h2, h3, .display { font-family: var(--display); }
+
+  h1 {
+    font-size: clamp(38px, 6.2vw, 62px);
+    font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.0;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  h2 {
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+
+  .sec-head {
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 12px;
+    margin-bottom: 26px;
+  }
+  .sec-head p { color: var(--muted); font-size: 15.5px; margin: 0; max-width: 72ch; }
+
+  h3 { font-size: 19px; font-weight: 600; letter-spacing: -.012em; margin: 0; }
+
+  p { margin: 0 0 14px; max-width: 70ch; }
+  p:last-child { margin-bottom: 0; }
+
+  code {
+    font-family: var(--mono);
+    font-size: .84em;
+    background: var(--rule-soft);
+    padding: .12em .38em;
+    border-radius: 3px;
+  }
+
+  .lede {
+    font-size: clamp(19px, 2.5vw, 24px);
+    line-height: 1.44;
+    max-width: 32ch;
+    margin: 24px 0 0;
+    color: var(--muted);
+    text-wrap: balance;
+  }
+
+  header .rule {
+    height: 5px;
+    width: 96px;
+    margin-top: 30px;
+    border-radius: 3px;
+    background: linear-gradient(90deg,
+      var(--research) 0 25%, var(--spec) 25% 50%,
+      var(--execute) 50% 75%, var(--review) 75% 100%);
+  }
+
+  .intro { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 46px; }
+  @media (max-width: 760px) { .intro { grid-template-columns: 1fr; } }
+
+  /* ================= the map ================= */
+
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    aspect-ratio: 1000 / 690;
+  }
+  @media (max-width: 880px) { .stage { display: none; } }
+
+  .stage svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .link {
+    fill: none;
+    stroke: var(--rule);
+    stroke-width: 2;
+    transition: stroke .3s ease, stroke-width .3s ease, opacity .3s ease;
+  }
+  .link.lit { stroke: var(--c); stroke-width: 3.5; }
+  .stage.focusing .link:not(.lit) { opacity: .3; }
+
+  .node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 22.4%;
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-top: 4px solid var(--c);
+    border-radius: 9px;
+    padding: 13px 14px 14px;
+    box-shadow: var(--shadow);
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: transform .28s cubic-bezier(.2,.7,.3,1), box-shadow .28s ease,
+                opacity .28s ease, border-color .28s ease;
+  }
+  .node:hover, .node:focus-visible { outline: none; transform: translate(-50%, -50%) scale(1.045); box-shadow: var(--shadow-lit); }
+  .node:focus-visible { border-color: var(--c); }
+  .node.lit { box-shadow: var(--shadow-lit); transform: translate(-50%,-50%) scale(1.05); }
+  .stage.focusing .node:not(.lit) { opacity: .38; }
+
+  .node .when {
+    font-family: var(--display);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--c);
+    line-height: 1.35;
+    margin-bottom: 7px;
+  }
+  .node .name {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin-bottom: 7px;
+  }
+  .node .blurb { font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+  .node .writes {
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px dashed var(--rule);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--faint);
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+
+  .hub-node {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 19%;
+    background: var(--raised);
+    border: 2px solid var(--hub);
+    border-radius: 11px;
+    padding: 15px 12px;
+    text-align: center;
+    box-shadow: var(--shadow-lit);
+  }
+  .hub-node .name { font-family: var(--display); font-size: clamp(22px, 2.9vw, 30px); font-weight: 700; letter-spacing: -.025em; }
+  .hub-node .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .step-dot {
+    position: absolute;
+    width: 25px; height: 25px;
+    border-radius: 50%;
+    background: var(--c);
+    color: #fff;
+    font-family: var(--display);
+    font-size: 12.5px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform .3s cubic-bezier(.2,1.5,.4,1);
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,.28);
+  }
+  .step-dot.on { transform: translate(-50%, -50%) scale(1); }
+
+  /* stacked fallback */
+  .stack { display: none; flex-direction: column; gap: 14px; }
+  @media (max-width: 880px) { .stack { display: flex; } }
+  .stack .node { position: static; transform: none; width: 100%; }
+  .stack .node:hover, .stack .node:focus-visible { transform: none; }
+
+  /* ================= controls + panel ================= */
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    align-items: center;
+    margin-bottom: 22px;
+  }
+  .controls .cap {
+    font-family: var(--display);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .chip {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--rule);
+    background: var(--raised);
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .2s ease, color .2s ease, border-color .2s ease;
+  }
+  .chip:hover { border-color: var(--faint); color: var(--ink); }
+  .chip[aria-pressed="true"] {
+    background: var(--c, var(--ink));
+    border-color: var(--c, var(--ink));
+    color: #fff;
+  }
+  .chip:focus-visible { outline: 2px solid var(--c, var(--ink)); outline-offset: 2px; }
+
+  .panel {
+    margin-top: 24px;
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--c, var(--rule));
+    border-radius: 9px;
+    padding: 22px 24px 24px;
+    box-shadow: var(--shadow);
+    min-height: 150px;
+  }
+  .panel .eyebrow {
+    font-family: var(--display);
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--c, var(--muted));
+    margin-bottom: 6px;
+  }
+  .panel h3 { margin-bottom: 10px; font-family: var(--mono); font-size: 17px; }
+  .panel .lead { font-size: 16px; }
+  .panel .meta {
+    margin-top: 16px; padding-top: 14px;
+    border-top: 1px dashed var(--rule);
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+  }
+  @media (max-width: 640px) { .panel .meta { grid-template-columns: 1fr; } }
+  .panel .meta dt {
+    font-family: var(--display); font-size: 10px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .panel .meta dd { margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.8; overflow-wrap: anywhere; }
+
+  ol.route { list-style: none; margin: 4px 0 0; padding: 0; counter-reset: leg; }
+  ol.route > li {
+    counter-increment: leg;
+    position: relative;
+    padding: 0 0 18px 38px;
+    border-left: 2px solid var(--rule);
+    margin-left: 12px;
+  }
+  ol.route > li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.route > li::before {
+    content: counter(leg);
+    position: absolute; left: -13px; top: -2px;
+    width: 25px; height: 25px; border-radius: 50%;
+    background: var(--s); color: #fff;
+    font-family: var(--display); font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .leg-what { font-family: var(--mono); font-size: 13.5px; font-weight: 600; color: var(--s); }
+  .leg-why { font-size: 15px; margin: 3px 0 0; }
+
+  /* ================= generic blocks ================= */
+
+  .pair, .two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 700px) { .pair, .two-up { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: 20px 22px 22px;
+    box-shadow: var(--shadow);
+  }
+  .card .tag {
+    font-family: var(--display); font-size: 10.5px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+  }
+  .card .path {
+    font-family: var(--mono); font-size: 14px; font-weight: 600;
+    margin: 7px 0 12px; overflow-wrap: anywhere;
+  }
+  .card .plain { font-family: var(--body); font-size: 17px; font-weight: 600; }
+  .card p { font-size: 15px; }
+  .card .kicker {
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px dashed var(--rule);
+    font-size: 14px; color: var(--muted);
+  }
+
+  .callout {
+    background: var(--sunken);
+    border-radius: 9px;
+    padding: 17px 21px;
+  }
+  .callout p { font-size: 15.5px; }
+
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 560px; }
+  th {
+    font-family: var(--display); font-size: 10.5px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+    text-align: left; padding: 0 14px 9px 0; border-bottom: 1px solid var(--rule);
+  }
+  td { padding: 13px 14px 13px 0; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <h1>flw Field Guide</h1>
+    <p class="lede">Agree on what you are building, in writing, before an agent builds it.</p>
+    <div class="rule"></div>
+  </header>
+
+  <section class="intro">
+    <div>
+      <p>Ask an AI agent to build something and it will. The trouble starts one step earlier: you and it never
+      wrote down what "it" was. So the agent guesses, guesses reasonably, and you find out three files later.</p>
+      <p>flw settles that first. You have a conversation, and the conversation becomes a file that says what will
+      be true when the work is done. A second agent builds against that file, and anything it finds missing comes
+      back as a question rather than an invention.</p>
+    </div>
+    <div>
+      <p>It is four skills your AI coding assistant loads, plus a small command-line tool. It intercepts nothing,
+      runs nothing in the background, and never declares work finished — that judgment stays yours.</p>
+      <p>Any project, any language. Nothing chains automatically: you drive each step, and each one leaves
+      something on disk you can read.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>The map</h2>
+      <p>Five things sit around one idea. Click any of them to read more — or trace one of the routes below to see
+      the order people actually use them in.</p>
+    </div>
+
+    <div class="controls" id="flowbar">
+      <span class="cap">Trace a route</span>
+    </div>
+
+    <div class="stage" id="stage">
+      <svg viewBox="0 0 1000 690" preserveAspectRatio="none" aria-hidden="true">
+        <path class="link" data-key="cli"      d="M 500 345 Q 500 250 500 130"      style="--c: var(--cli)"></path>
+        <path class="link" data-key="research" d="M 500 345 Q 352 258 231 242"      style="--c: var(--research)"></path>
+        <path class="link" data-key="spec"     d="M 500 345 Q 352 432 231 448"      style="--c: var(--spec)"></path>
+        <path class="link" data-key="execute"  d="M 500 345 Q 648 432 769 448"      style="--c: var(--execute)"></path>
+        <path class="link" data-key="review"   d="M 500 345 Q 648 258 769 242"      style="--c: var(--review)"></path>
+      </svg>
+
+      <div class="hub-node">
+        <div class="name">flw</div>
+        <div class="sub">four skills · one CLI</div>
+      </div>
+
+      <button class="node" data-key="research" style="--c: var(--research); left: 23.1%; top: 35.1%">
+        <div class="when">First, on a repo you did not set up</div>
+        <div class="name">/flw-research</div>
+        <div class="blurb">Reads how this place already works and writes it down. Records what <em>is</em>; what
+        <em>must be</em> stays yours.</div>
+        <div class="writes">.flw/config.toml<br>.flw/extensions/*.md</div>
+      </button>
+
+      <button class="node" data-key="spec" style="--c: var(--spec); left: 23.1%; top: 64.9%">
+        <div class="when">When a plan is agreed</div>
+        <div class="name">/flw-spec</div>
+        <div class="blurb">Interviews you, then writes the agreement down. If you did not say it, it asks rather
+        than assuming.</div>
+        <div class="writes">specs/current.toml<br>specs/versions/&lt;name&gt;.toml</div>
+      </button>
+
+      <button class="node" data-key="execute" style="--c: var(--execute); left: 76.9%; top: 64.9%">
+        <div class="when">When the agreement exists</div>
+        <div class="name">/flw-execute</div>
+        <div class="blurb">Builds it phase by phase and runs the project's own checks. A gap stops the run and
+        becomes a proposal.</div>
+        <div class="writes">commits, one per phase<br>.flw/reports/*.md</div>
+      </button>
+
+      <button class="node" data-key="review" style="--c: var(--review); left: 76.9%; top: 35.1%">
+        <div class="when">At any stage</div>
+        <div class="name">/flw-review</div>
+        <div class="blurb">Reads the work back to you. One reviewer by default, a team of lenses if you name one.
+        Reports; fixes nothing.</div>
+        <div class="writes">.flw/reports/*.md</div>
+      </button>
+
+      <button class="node" data-key="cli" style="--c: var(--cli); left: 50%; top: 18.8%">
+        <div class="when">Whenever you want</div>
+        <div class="name">the flw command</div>
+        <div class="blurb">Small tools you run yourself, to ask the project questions and check flw is wired up
+        right.</div>
+        <div class="writes">flw know · map · scout<br>flw test · validate · doctor</div>
+      </button>
+    </div>
+
+    <div class="stack" id="stack"></div>
+
+    <div class="panel" id="panel"></div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>The two files everything turns on</h2>
+      <p>One says where the software is. The other says how it got there. Neither is a substitute for the other.</p>
+    </div>
+    <div class="pair">
+      <div class="card">
+        <div class="tag">The destination</div>
+        <div class="path">specs/current.toml</div>
+        <p>One file per project. It describes what is true when the work is done — the parts the software has, what
+        each promises, and how you would know one was broken.</p>
+        <p class="kicker">It moves only when work actually lands, so it always describes what shipped, never what
+        was merely planned.</p>
+      </div>
+      <div class="card">
+        <div class="tag">The route</div>
+        <div class="path">specs/versions/&lt;name&gt;.toml</div>
+        <p>One file per change. It records how the destination moved this time: what was decided and why, what was
+        rejected, and the ordered list of work.</p>
+        <p class="kicker">Named, never numbered — so two people can plan two changes at once and neither has to be
+        renamed when it lands.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Three places things get written down</h2>
+      <p>Agents forget everything between sessions. These are the three kinds of memory flw keeps, held apart on
+      purpose — mixing them is how notes go stale without anyone noticing.</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Where</th><th>What it holds</th><th>What makes it wrong</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>.flw/extensions/</td>
+            <td>House rules for this repo — conventions, how you like things done.</td>
+            <td>A human changes their mind.</td>
+          </tr>
+          <tr>
+            <td>flw know</td>
+            <td>What the code is built of and what connects to what, filed by location.</td>
+            <td>Someone changes the structure.</td>
+          </tr>
+          <tr>
+            <td>flw kb</td>
+            <td>Hard-won craft that travels — a library's quirk, a trap somebody measured.</td>
+            <td>Rarely anything.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top: 20px">
+      <p><strong>Unsure where something goes?</strong> Ask whether a commit could make it wrong. If yes, it is
+      knowledge. If only a decision could make it wrong, it is a house rule.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Knowing when not to</h2>
+    </div>
+    <div class="two-up">
+      <div class="card">
+        <div class="tag">Reach for it</div>
+        <div class="path plain">Any change worth agreeing on before building</div>
+        <p>Anything where you would be annoyed to find out afterwards that the agent understood it differently.
+        Anything more than one person will touch.</p>
+      </div>
+      <div class="card">
+        <div class="tag">Skip it</div>
+        <div class="path plain">A one-line fix, or no agreement to reach</div>
+        <p>If there is no contract yet and nobody asked for one, just do the work. flw is a way to agree, not a tax
+        on every edit.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    flw records no notion of "done" — no flag, no verdict, no stored state. It keeps the agreement in a file, makes
+    the work happen against it, surfaces gaps as proposals instead of inventions, and runs what it can of the
+    project's checks. The verification is yours.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var NODES = {
+    research: {
+      name: "/flw-research", colour: "var(--research)",
+      when: "First, on a repo you did not set up",
+      lead: "Before anyone agrees anything, somebody has to find out how the place already works. This skill reads the repo and writes down how tests are run, how it is laid out, and what it calls things.",
+      body: "The line it holds is worth knowing: it records what <em>is</em>, never what ought to be. If the project builds in a way you dislike, that is a decision for you, not something a reading agent gets to quietly fix. Skip this step and you get an agent inventing a second way to run the tests when the repo already had one.",
+      writes: ".flw/config.toml<br>.flw/extensions/*.md",
+      pairs: "Run once when you arrive. Re-run when the repo's shape really changes."
+    },
+    spec: {
+      name: "/flw-spec", colour: "var(--spec)",
+      when: "When a plan is agreed",
+      lead: "The interview. It asks about the change until there is nothing important left unsaid, then writes two files: the agreement itself, and a record of how this change moved it.",
+      body: "Its one rule is no silent inference. Anything you have not said gets asked about, or gets marked as an open question — never guessed and quietly written in. You read and edit the result before a line of code is written, which is the cheapest moment to disagree that will ever exist on this change.",
+      writes: "specs/current.toml<br>specs/versions/&lt;name&gt;.toml",
+      pairs: "Nothing is built here. That is the next one."
+    },
+    execute: {
+      name: "/flw-execute", colour: "var(--execute)",
+      when: "When the agreement exists",
+      lead: "The build. It walks the phases the agreement laid out, proposes a commit at each boundary, and runs the project's own checks at the end.",
+      body: "The rule that matters: if it needs something the agreement does not cover, it stops and hands you a proposal instead of improvising. A check it could not run is reported as failed, never quietly excused — an agent that gets to decide which failures do not count is worse than no check at all.",
+      writes: "one commit per phase<br>.flw/reports/*.md",
+      pairs: "Give this one to a cheaper model. It has the written agreement and needs none of the conversation."
+    },
+    review: {
+      name: "/flw-review", colour: "var(--review)",
+      when: "At any stage",
+      lead: "A second reading. One reviewer by default; name a team and you get several at once, each hunting for something different — bugs, dead weight, thin tests, or ways to break it.",
+      body: "It reports and fixes nothing, on purpose: reporting and fixing in one pass is how a review becomes a diff nobody read. It also tells you what it did <em>not</em> check, which is the half the next round starts from — and it says up front what its own position makes it bad at, depending on whether it wrote the code, wrote the plan, or neither.",
+      writes: ".flw/reports/*.md",
+      pairs: "A finding is not a verdict. What to do about it is your call."
+    },
+    cli: {
+      name: "the flw command", colour: "var(--cli)",
+      when: "Whenever you want",
+      lead: "The parts you run yourself. Nothing here needs an agent, and none of it changes your code.",
+      body: "<code>flw know</code> and <code>flw map</code> answer what this system is built of and what connects to what. <code>flw scout</code> ranks a repo by what depends on what, in about a second. <code>flw test</code> runs whatever checks the project declared; <code>flw validate</code> confirms the written record and the code still agree. <code>flw doctor</code> checks flw's own wiring.",
+      writes: "flw know · map · scout<br>flw test · validate · doctor",
+      pairs: "Read-only, all of it, apart from install and update."
+    }
+  };
+
+  var FLOWS = [
+    {
+      id: "plain", label: "The plain loop",
+      sub: "A change worth agreeing on first",
+      note: "The common case, on a repo you already know. Talk, write it down, build it, read it back.",
+      legs: [
+        { key: "spec", what: "/flw-spec", why: "You get interviewed about the change. The result is a record you read and edit before anything is built. Disagree here — it is cheap now and expensive later." },
+        { key: "execute", what: "/flw-execute", why: "The work happens in phases, a commit proposed at each boundary, the project's tests run at the end. Anything the agreement does not cover stops the run and comes back as a question." },
+        { key: "review", what: "/flw-review", why: "Someone reads the result back and hands you a report — findings, and just as usefully, what was not checked." },
+        { key: "cli", what: "flw validate", why: "A last check that the written record and the code still agree with each other." }
+      ]
+    },
+    {
+      id: "new", label: "A repo you did not set up",
+      sub: "One extra step at the front",
+      note: "Skipping the first step is how an agent invents a second way to run the tests when the repo already had one.",
+      legs: [
+        { key: "cli", what: "flw scout .", why: "A one-second ranking of the repo by what depends on what, so you know which files matter before opening any of them." },
+        { key: "research", what: "/flw-research", why: "Reads the conventions out of the code and writes them into this repo's config, so every later step leans on what exists. What is, not what should be." },
+        { key: "spec", what: "/flw-spec", why: "Now the interview is worth having, because the answers can lean on what the repo already does instead of on guesses." },
+        { key: "execute", what: "/flw-execute", why: "Builds it, running the tests the research step found rather than tests it made up." }
+      ]
+    },
+    {
+      id: "two", label: "Planner + builder",
+      sub: "Two agents of different sizes",
+      note: "Give the expensive model the deciding and the cheaper one the typing. The planner reviews too, because it wrote the agreement and can tell whether the result matches it.",
+      legs: [
+        { key: "spec", what: "planner · /flw-spec", why: "The strong model runs the interview and writes the record. Deciding what to build is the part worth paying for." },
+        { key: "execute", what: "builder · /flw-execute", why: "A cheaper model builds against the record in a fresh context. It has the written agreement, so it needs none of the conversation that produced it." },
+        { key: "review", what: "planner · /flw-review", why: "The planner reads the result. It did not write this code, so it is a real second pair of eyes — but it did write the plan, so it can confirm the work matches and cannot judge whether the plan was right. The skill states which of those you are before you start." }
+      ]
+    }
+  ];
+
+  var OVERVIEW = '<div class="eyebrow">Start here</div>' +
+    '<h3 style="font-family: var(--display); font-size: 21px">One idea, five things around it</h3>' +
+    '<p class="lead">Every box on the map is something you invoke on purpose. None of them run on their own, and ' +
+    'none of them run each other — you decide what happens next, every time.</p>' +
+    '<p class="lead" style="margin-top:12px;color:var(--muted)">Click a box to read what it does. Or pick a route ' +
+    'above and watch the order light up.</p>';
+
+  var stage = document.getElementById("stage");
+  var panel = document.getElementById("panel");
+  var stack = document.getElementById("stack");
+  var flowbar = document.getElementById("flowbar");
+  var nodes = Array.prototype.slice.call(stage.querySelectorAll(".node"));
+  var links = Array.prototype.slice.call(stage.querySelectorAll(".link"));
+  var timers = [];
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // The narrow-screen fallback reuses the same markup, so the two never drift.
+  nodes.forEach(function (n) {
+    var copy = n.cloneNode(true);
+    copy.removeAttribute("style");
+    copy.style.setProperty("--c", NODES[n.dataset.key].colour);
+    stack.appendChild(copy);
+  });
+
+  function clearTimers() {
+    timers.forEach(clearTimeout);
+    timers = [];
+  }
+
+  function dropDots() {
+    Array.prototype.slice.call(stage.querySelectorAll(".step-dot")).forEach(function (d) { d.remove(); });
+  }
+
+  function reset() {
+    clearTimers();
+    dropDots();
+    stage.classList.remove("focusing");
+    nodes.concat(links).forEach(function (el) { el.classList.remove("lit"); });
+  }
+
+  function pressChips(id) {
+    Array.prototype.slice.call(flowbar.querySelectorAll(".chip")).forEach(function (c) {
+      c.setAttribute("aria-pressed", String(c.dataset.flow === id));
+    });
+  }
+
+  function showNode(key) {
+    var d = NODES[key];
+    reset();
+    pressChips(null);
+    stage.classList.add("focusing");
+    nodes.concat(links).forEach(function (el) {
+      if (el.dataset.key === key) el.classList.add("lit");
+    });
+    panel.style.setProperty("--c", d.colour);
+    panel.innerHTML =
+      '<div class="eyebrow">' + d.when + '</div>' +
+      '<h3>' + d.name + '</h3>' +
+      '<p class="lead">' + d.lead + '</p>' +
+      '<p class="lead" style="margin-top:12px">' + d.body + '</p>' +
+      '<dl class="meta">' +
+        '<div><dt>What it leaves behind</dt><dd>' + d.writes + '</dd></div>' +
+        '<div><dt>Worth knowing</dt><dd style="font-family:var(--body);font-size:15px;line-height:1.5">' + d.pairs + '</dd></div>' +
+      '</dl>';
+  }
+
+  function traceFlow(flow) {
+    reset();
+    pressChips(flow.id);
+    stage.classList.add("focusing");
+
+    var seen = {};
+    flow.legs.forEach(function (leg, i) {
+      var delay = reduced ? 0 : 90 + i * 320;
+      timers.push(setTimeout(function () {
+        nodes.forEach(function (n) { if (n.dataset.key === leg.key) n.classList.add("lit"); });
+        links.forEach(function (l) { if (l.dataset.key === leg.key) l.classList.add("lit"); });
+
+        var host = stage.querySelector('.node[data-key="' + leg.key + '"]');
+        if (!host) return;
+        // A node used twice in one route gets a second dot, offset so both read.
+        var n = seen[leg.key] = (seen[leg.key] || 0) + 1;
+        var dot = document.createElement("div");
+        dot.className = "step-dot";
+        dot.textContent = String(i + 1);
+        dot.style.setProperty("--c", NODES[leg.key].colour);
+        var left = parseFloat(host.style.left) - 11.2;   // half the node's 22.4% width
+        dot.style.left = left + "%";
+        dot.style.top = "calc(" + host.style.top + " + " + ((n - 1) * 30) + "px)";
+        stage.appendChild(dot);
+        requestAnimationFrame(function () { dot.classList.add("on"); });
+      }, delay));
+    });
+
+    var legs = flow.legs.map(function (leg, i) {
+      return '<li style="--s: ' + NODES[leg.key].colour + '">' +
+        '<div class="leg-what">' + leg.what + '</div>' +
+        '<p class="leg-why">' + leg.why + '</p></li>';
+    }).join("");
+
+    panel.style.setProperty("--c", "var(--ink)");
+    panel.innerHTML =
+      '<div class="eyebrow">' + flow.label + '</div>' +
+      '<h3 style="font-family: var(--display); font-size: 21px">' + flow.sub + '</h3>' +
+      '<p class="lead" style="color: var(--muted); margin-bottom: 18px">' + flow.note + '</p>' +
+      '<ol class="route">' + legs + '</ol>';
+  }
+
+  FLOWS.forEach(function (flow) {
+    var b = document.createElement("button");
+    b.className = "chip";
+    b.type = "button";
+    b.dataset.flow = flow.id;
+    b.setAttribute("aria-pressed", "false");
+    b.textContent = flow.label;
+    b.addEventListener("click", function () {
+      if (b.getAttribute("aria-pressed") === "true") { reset(); pressChips(null); panel.innerHTML = OVERVIEW; panel.style.setProperty("--c", "var(--rule)"); }
+      else traceFlow(flow);
+    });
+    flowbar.appendChild(b);
+  });
+
+  document.addEventListener("click", function (e) {
+    var hit = e.target.closest ? e.target.closest(".node") : null;
+    if (hit) showNode(hit.dataset.key);
+  });
+
+  panel.style.setProperty("--c", "var(--rule)");
+  panel.innerHTML = OVERVIEW;
+})();
+</script>
+
+</body>
+</html>
