@@ -63,6 +63,12 @@ def test_flw_own_specs_validate():
         assert result.returncode == 0, result.stderr
 
 
+def test_budget_runs_directly():
+    result = run_script("budget.py")
+    assert result.returncode == 0, result.stderr
+    assert "SKILL.md" in result.stdout
+
+
 def test_the_commit_rules_are_written_in_exactly_one_place():
     """One authority, cited rather than restated. A second copy is what drifts,
     and this file exists because the rules previously lived inside one skill
