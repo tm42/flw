@@ -184,6 +184,13 @@ flw-review — <config>
 Do not summarise the findings inline as well. The findings are already in the report;
 repeating them here doubles the reading.
 
+## 5. Offer a note
+
+*Write it only if it was measured, and the next agent, in a repository that does not hold
+this one's history, could not get it faster than measuring it again.* Yes means read `flw
+kb write --help` first, then say what you would write. It is an offer — the run declines
+by doing nothing.
+
 ## Rules
 
 1. **Review by default; orchestrate when a team was named.** Dispatch adds no findings
