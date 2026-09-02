@@ -80,8 +80,7 @@ level down.
 `<store>/P/D.md`, a repository by `<store>/<basename>.md`, and the parent of a multi-repo
 system by `system.md`, at `<root>/<[knowledge] dir>/`, defaulting to the flw directory's
 `knowledge/`. So reading it is a walk up from the path you are standing at, outermost
-first, and never a lookup. It is sparse on purpose: a file earns its tokens only by
-removing more code reading than it costs, so missing is the normal case.
+first, and never a lookup. The store is sparse, so missing is the normal case.
 
 ```
 flw know                orientation — the system file, or this repository's own

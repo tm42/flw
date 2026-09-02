@@ -142,8 +142,7 @@ validation.
    most of this stops: what the parts are and what crosses between them, before a file is
    opened. Then `flw know <path>` for the parts the interview named — heads, not bodies —
    and `flw map <node>` where the change lands on a seam, because a contract edit at a seam
-   is the one both sides have to survive. A root with no store says `no store`, which is a
-   state and not a reason to stop.
+   is the one both sides have to survive.
 
    **A cross-repo change gets one plan at the parent**, written before any repository
    specs its own record, and every record cites it by path in `approach`. A seam under

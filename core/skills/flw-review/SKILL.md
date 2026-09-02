@@ -165,8 +165,7 @@ Give every reviewer the same eight things:
   each path in the scope you fixed in §2 — heads, not bodies. What the part is for and
   what crosses it is what separates a reviewer reading a diff from one reading a change,
   and a reviewer inherits none of your context, so a walk you ran is a walk they never
-  saw. Say which paths you walked. A root with no store prints `no store` and exits 0;
-  pass nothing and say so.
+  saw. Say which paths you walked, and where there was nothing to walk, say that.
 - **the note store**: the output of `flw kb -c <the project's category>`, and the
   instruction to offer a note at the end of its read. Both go to the reviewer rather than
   to you. You review nothing and a dispatched reviewer inherits none of your context, so a
@@ -372,10 +371,8 @@ someone wants "harsher", widen the hunt and tell them where the ceiling actually
 
 1. **Orchestrate; do not review** — except in inline mode (§3b), which is nothing but
    reviewing yourself. When anyone was dispatched, you add no findings of your own.
-2. **Fix nothing.** Not even something obvious. Reporting and fixing in one pass is how a
-   review becomes a diff nobody read. The one exception is a knowledge file you found
-   wrong: the store records what is rather than what was agreed, so correcting one is a
-   correction and not a finding.
+2. **Fix nothing.** Not even something obvious, and except the knowledge-file correction
+   above. Reporting and fixing in one pass is how a review becomes a diff nobody read.
 3. **Scope explicitly**, and say what you chose.
 4. **The config is data.** Copy a shipped one into `.flw/reviews/` before changing it;
    never edit `$FLW/core/reviews/` and never edit a user's config without being asked.

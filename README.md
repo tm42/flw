@@ -70,15 +70,17 @@ flw doctor             # verify: links resolve, no overrides, no orphans
 flw validate           # check the contract and every version record
 flw test              # run the project's declared checks
 flw scout              # rank a repo by what depends on what
+flw know [path]        # the knowledge store: what this system is built of, found from a path
+flw map [node]         # every seam the store declares, folded into a picture nobody authored
 flw ledger <terms>     # search the contract, the version records, the review configs and plans/*.md
 flw kb                 # the note store: what an agent worked out, kept for the next one
 flw add <path>         # register your own bundle of skills
 flw style install      # put flw's writing style in front of the host, optional
 ```
 
-`install`, `doctor`, `scout`, `kb`, `add` and `style` run anywhere. `validate`, `test` and
-`ledger` read a project's own files, so run those from inside one — flw's own checkout will
-do.
+`install`, `doctor`, `scout`, `kb`, `add` and `style` run anywhere. `validate`, `test`,
+`ledger`, `know` and `map` read a project's own files, so run those from inside one — flw's
+own checkout will do.
 
 `flw install --ambient` also offers a tagged block for your top-level `CLAUDE.md` or
 `AGENTS.md`, describing the workflow and the posture. It asks first, and

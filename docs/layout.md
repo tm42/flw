@@ -43,6 +43,7 @@ skill for that.
 specs/current.toml                  the contract — what is true when the work is done
 specs/versions/<name>.toml          one per version — how that version came about
 .flw/reviews/<team>.toml            a reviewer team, as data
+.flw/knowledge/                     the knowledge store, mirroring the code it describes
 ```
 
 ## Tracked, or ignored — and nothing in between

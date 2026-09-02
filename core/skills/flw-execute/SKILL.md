@@ -116,10 +116,7 @@ Read the contract, the version file, and enough of the tree to
 know what already exists.
 
 **Run `flw know <path>` for each path the record names**, and read the plan the record's
-`approach` cites. The walk prints every knowledge file describing that path, outermost
-first, with how much has moved under it since each was written — `--full` where the work
-actually lands. A root with no store says `no store` and exits 0, so the call needs no
-guard, and a file reported as changed is a warning and never a stop.
+`approach` cites. Use `--full` where the work actually lands.
 
 **Now search the note store**, with the terms the version file just gave you — the
 components it touches, the libraries, the failure it is about. Titles scanned at the
@@ -156,11 +153,17 @@ At the phase boundary, **propose a commit** — the files touched and a message 
 the user or their agent make it, in whatever VCS the repo uses. flw does not commit or
 tag. It does stage, by name, and step 6 says why.
 
-**Also at the boundary, re-stamp what this phase falsified.** A run that builds something
+**Also at the boundary, re-read what this phase falsified.** A run that builds something
 has falsified the knowledge file describing that part, and this is the commoner trigger of
 the two. For each path this phase changed, re-read the files `flw know <path>` returns
-against the code as it now is, correct what is wrong, then `flw know --stamp <file>…` and
-`flw know --reindex` once. Step 6's report lists the files re-stamped.
+against the code as it now is, and correct what is wrong.
+
+**The `flw know --stamp <file>…` follows the commit**, with `flw know --reindex` once
+after it. A stamp records HEAD, so stamping before the commit records the revision from
+before this phase, and the first read after the user commits reports the file falsified by
+the diff it was just re-read against. When the run makes the commit, stamp right after it.
+When the run only proposes one, leave the files unstamped and let step 6's `Knowledge:`
+line name them as awaiting the commit, so whoever makes it knows what to stamp.
 
 **What a commit is, and what its message says, are in `$FLW/core/shared/commits.md`.**
 Read it before proposing the first one. It is the only place those rules are written, so
@@ -304,7 +307,7 @@ report block.
 flw-execute — <version>
   Phases: <n> of <m>
   Checks: <p> passed · <q> failed · <r> for you
-  Knowledge: <files re-stamped, or none>
+  Knowledge: <files re-stamped · files awaiting the commit, or none>
   Left to do: <what stopped, or nothing>
 ```
 
