@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.11.12"
+spec_version = "0.11.13"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -24,6 +24,7 @@ applied = [
   "project-roots",
   "flw-dir-setting",
   "knowledge-store",
+  "finish-the-store",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -41,6 +42,7 @@ assumptions = [
   "Claude Code is the only host with a switchable output style. On the others, style guidance can only sit in the always-on instructions file, so flw writes it there as its own removable block.",
   "The user's project may use any version control system, or none; flw proposes commits but does not make them, and reads no VCS state except to locate a project root when nothing nearer is found.",
   "Not every tracked path belongs to a component. specs/, .flw/ and pyproject.toml are read by flw and by hosts and delivered by no component; a path claimed by none is a state, not a gap, and flw validate does not check for it.",
+  "A repository or parent whose directory is named `system` has no store: its repository file and the system file share a name, and flw know refuses it naming the collision rather than pick a reading.",
 ]
 
 open_questions = [
@@ -105,7 +107,7 @@ properties = [
   "flw context run outside any project prints what it can and exits 0. A directory with no contract and no configuration is a state rather than a fault, which is the reading flw validate already takes.",
   "flw test <path> walks upward from the path it is given and flw scout <path> does not, deliberately: flw test src/ inside a project is a normal invocation, and a scout must not walk out of the tree it was aimed at.",
   "A [project.roots] path resolves relative to the project directory whose config declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
-  "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside the directory it would name. One name is in force at a time: a directory under another name is not a project, and a walk probes exactly one name per level.",
+  "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside the directory it would name. One name is in force at a time: a directory under another name is not a project, and a walk probes exactly one name per level. A name that is not a string, is empty, is `.` or `..`, or is absolute is refused naming its source, because each of those makes every directory a project or none.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -138,7 +140,7 @@ surfaces = [
   "flw kb show <slug>",
   "flw kb write <category> <title> [-d|--description DESC] [--type TYPE] [--tags a,b] [--here]",
   "flw kb lint",
-  "flw know [PATH] [--root PATH] [--full] [--check|--reindex] [--stamp PATH...]",
+  "flw know [PATH] [--root PATH] [--full] [--check|--reindex|--stamp PATH...]",
   "flw map [NODE] [--root PATH] [--format text|mermaid|dot]",
   "flw version",
   "Exit codes: 0 success, 1 something failed or was refused. `flw test` also uses 2 for a run that proved nothing — nothing declared to run, nothing left runnable here, a full run with a check the project handed back, or a full run with no contract to read. `flw validate` uses 2 for a file it was given and could not check, and 0 for a project that has no contract yet, which is a state and not a fault.",
@@ -262,10 +264,11 @@ provides = [
 properties = [
   "A knowledge file's path is the code path it describes, under its own repo's store: a directory D at path P is <store>/P/D.md, a file is <store>/<path>.md, the repo itself is <store>/<basename>.md, and the parent of a multi-repo system holds system.md. Nothing is indexed, registered or named with a slug.",
   "The store is read from the root it belongs to, resolved as flw context resolves one. A parent with [project.roots] orients across system.md and every member's repo file, and a path under a declared member walks that member's store and ends at system.md; a member standing inside itself sees its own store alone. Nothing walks upward from a member looking for a parent that claims it.",
-  "Staleness is a git diff and never a judgment. No output since the recorded revision is current; any output is changed, with files, insertions and deletions; a diff that cannot run is unverifiable and the file is read normally. system.md carries one revision per member, keyed by the member's directory basename, and is checked in each member's repo.",
+  "Staleness is a git diff and never a judgment, taken from the recorded revision to the working tree, so an uncommitted edit counts and an untracked file does not yet. No output is current; any output is changed, with files, insertions and deletions; a diff that cannot run is unverifiable and the file is read normally. system.md carries one revision per member, keyed by the member's directory basename, and is checked in each member's repo.",
+  "A stamp writes HEAD into revision and changes nothing else — not line endings, not a comment on the line, not any other key — and refuses, leaving the file as it was, rather than write a block that no longer parses or whose top-level revision is not the value written. Every HEAD a batch needs is read before its first write, so a stamp that fails has written nothing. A stamp taken while the described path has uncommitted changes is written and says so on the file's line, because HEAD is then not the revision the file was read against.",
   "Frontmatter is +++ TOML read by the note store's reader. A block tomllib rejects reads as a file with no frontmatter and is reported by --check, never raised. Missing type or description is reported and the file left out of listings and orientation; missing revision is unstamped and the file is read normally; a file that is not UTF-8 is unreadable and skipped.",
   "index.md is written only by flw know --reindex and nothing may trust it: a reader that doubts one reads the directory. It is a convenience for readers with no tooling and never a source of truth.",
-  "A root with no store prints `no store` and exits 0, for a missing [knowledge] key and a missing directory alike. flw know and flw map exit 0 whenever they ran, including when every file is changed, and 1 only for an input they were given and could not use: no root, a path not in the code or under no declared member, --full or --stamp with no path, a stamp whose repo has no HEAD, a node no file names.",
+  "A root with no store prints `no store` and exits 0, for a missing [knowledge] key and a missing directory alike; from a parent, the store is any member's as much as its own. flw know and flw map exit 0 whenever they ran, including when every file is changed, and 1 only for an input they were given and could not use: no root, a path not in the code or under no declared member or under more than one, a path or --full beside a whole-store mode, --full or --stamp with no path, a stamp whose repo has no HEAD or whose block would not parse, a node no file names, a [knowledge] dir that is absolute.",
 ]
 surfaces = [
   "<root>/<[knowledge] dir>/ — one store per project root, defaulting to <flw dir>/knowledge, in a directory the repo already ignores, the mirror rooted at that root. A concept file is markdown with +++ TOML frontmatter: type (System | Repository | Area | Module), description (one or two sentences — the head), revision (the git HEAD it was true at; in system.md a table of member directory basename to HEAD), optionally [[connects]] tables of to, how and carries, and optionally measured. Every edge in connects also appears in the body as a markdown link within the same store. index.md at any level is a generated listing and never a concept.",

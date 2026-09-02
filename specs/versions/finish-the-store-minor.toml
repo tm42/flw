@@ -1,0 +1,251 @@
+base    = "knowledge-store"
+name    = "finish-the-store"
+summary = "the fixes from the eng review of 9b93aeb..HEAD: the store's diff and stamp tell the truth about the working tree, every name the CLI accepts is checked, the suite pins what the four records claimed, and the prose stops repeating itself"
+
+approach = """
+Speccing from `.flw/reports/2026-09-02T1420-eng.md` — four lenses over the fifteen commits
+landing finish-the-opening, project-roots, flw-dir-setting and knowledge-store. No CRITICAL;
+11 MAJOR and 14 MINOR after grouping, every MAJOR reproduced on a copy of the toy or a scratch
+repository. Every finding is here; nothing new arrives. Also here: the `terse_prose.md` rule
+change drafted in the worktree `.claude/worktrees/agent-a7d194837a97f1898` on 2026-09-02,
+which touches a file nothing since has touched.
+
+Measurements the report made and this record carries, because reading cannot re-derive them.
+The tests lens ran 42 one-line mutations of `cli/flw.py`, `knowledge.py`, `ledger.py` and
+`run_tests.py`; 19 were caught, 22 real survivors, grouped into phase 2. With `FLW_DIR=.cache/flw`
+in the shell 48 of 581 tests fail. Reverting any of eight `flw_dir()` read sites to the
+literal `.flw` passes the suite. At scale, 2001 files: `--check` 29.4 s and `--stamp` of all
+28.6 s — one git subprocess per file, ~14 ms each; `--reindex` 0.9 s; the walk 0.09 s. A
+number and not a finding: a store is sparse by design.
+
+The one decision the knowledge-store record left open, now taken. `numstat` ran
+`git diff <revision> HEAD`, two commits, so an uncommitted edit under a described path read
+`current`; and flw-execute §3 re-stamped at the phase boundary, before the commit flw proposes
+and does not make, so the stamp recorded the pre-phase HEAD and the first read after the
+user's commit reported the file falsified by the diff it had just been re-read against. Both
+lenses that found it reproduced the whole loop. The fix is in three places and they only work
+together: the diff runs revision-to-working-tree, so `--check` is right while the tree is
+dirty; a stamp on a dirty mirror writes HEAD and says so on the file's line, because refusing
+would stop research on any tree with local changes; and §3 puts the re-stamp after the commit,
+with a run that only proposes commits listing the files awaiting one. An untracked file is
+not yet a change — that is what `git diff` sees, and the property says so.
+
+What the stamp may not do. `_rewrite` matched `^revision[ \t]*=` on one line and inserted
+above the first `[` otherwise; three spellings tomllib accepts — a `[revision]` section, an
+indented line, a `revision` key inside `[[connects]]` — became a duplicate key, a second line,
+or an overwritten edge field, each reported as `1 file stamped`. `stamp()` parsed the block
+before writing and never after. One parse after the rewrite, requiring the top-level
+`revision` to be the value just written, covers all three; the file is refused and left as it
+was. Two more things the docstring promised and the code did not keep: CRLF endings were
+rewritten to LF and a trailing comment on the revision line was swallowed by `.*$`.
+
+The batch. `head()` was called inside the per-file loop, so its refusal "nothing was written"
+was true of one file and false of every file before it — and from a parent, `system.md`
+needs every member's HEAD, so this was the ordinary shape of a stamp there. Every HEAD the
+batch needs is resolved first, one per repository, before the first write. The message also
+carries what git said: with git absent from PATH or the member directory gone, `head()`
+discarded the `OSError` text and printed the same "rev-parse failed", sending the reader to
+look for a HEAD the repository has.
+
+Names the CLI accepted and should not have. `[paths] flw` or `$FLW_DIR` set to `""`, `.` or
+`..` made every directory a project root (`export FLW_DIR=` is how people unset one) and
+`flw doctor` printed a blank name; a non-string value was a `TypeError` from every command,
+since `flw_dir_name()` is on every root resolution. `[knowledge] dir` accepted an absolute
+path and `.`, after which `--reindex` wrote `index.md` into every directory including `.git/`.
+Each is one `isinstance` or one parts check with the message shape the absolute case already
+uses; `reindex` skips dot-directories. The empty-name case was rated MAJOR by one lens and
+MINOR by another and the fix is the same either way.
+
+A directory named `system`. `level_of` calls a top-level `system.md` the System file, so a
+repository whose directory is `system` has a repository file the module reads as System, and
+`changed()` raised a bare `ValueError` for it. Both readings collide by construction — the
+repository file and the system file share a name — so the record does not pick one: the
+guard becomes a refusal that names the collision, and the contract records the directory
+name as unsupported. Rare enough that a sentence beats a rule.
+
+What the walk answers from a parent. `under()` tried `$PWD/given` then `<member>/given` per
+member in declared order and took the first that existed, so `flw know .` and `flw know
+.flw` from the parent answered with `shop`, and a `README.md` present in both members named
+only one. The contract says a path under no declared member is exit 1. Now: when the cwd
+form exists under no member, refuse; fall back to the member-relative form only when the
+cwd form does not exist; refuse when more than one member has it, naming them. `.` from a
+parent is the orientation. A positional or `--full` beside `--check`, `--reindex` or
+`--stamp` was silently dropped, so `flw know nonexistent/path --check` exited 0 for a path
+that alone is exit 1; refused now, with the sentence `--full` alone already gets.
+
+Three listings that said less than they knew. Orientation printed `(no store)` for a member
+whose store exists and whose repo file lacks a description, and for a member whose directory
+is gone — which `flw context` calls `missing` one command earlier; `_member_head` returns
+the reason and the line prints it. The walk's denominator was computed only when the target
+store existed, so a member with no store printed `1 of 1 levels` for `system.md` alone. A
+parent whose own store is missing printed `no store` for a walk though every member had
+one; the gate is whether any store among the roots exists. `--check`'s header counted a
+vanished member as a root with a store.
+
+The suite. `_isolated_flw_home` isolates `$FLW_HOME` and not `$FLW_DIR`, and `flw.test()`
+and `flw.ledger()` assign `os.environ["FLW_DIR"]` with nothing restoring it —
+`monkeypatch.delenv(raising=False)` on an absent name records nothing (the note store now
+holds this under `pytest`). One `delenv` in the autouse fixture makes the suite green on a
+machine that uses the setting flw-dir-setting shipped. Then the pins the tests lens named:
+the eight in-process `flw_dir()` read sites, `[knowledge] dir` with a real directory, the
+Module level (the toy holds no `<path>.md`, so `mirror`'s `with_suffix("")` was unpinned and
+a real `flw know src/engine.py` said `current` for a changed file under the mutation — the one
+verdict the store must not give), the rows `--check` and orientation print for a bad or
+changed file, a binary file's `-\t-` numstat line, and `system.md` stamped through the
+command. Two engine-level exact-output tests are deleted: they assert the same bytes as the
+CLI test one screen later and the clone stayed green without them.
+
+Prose. `context.md` §Three stores already says at every opening how `flw know` walks, that
+changed warns and never stops, and that a root with no store needs no guard; flw-execute
+restated all three, flw-spec and flw-review the last, and flw-review states the correction
+lane twice in one file. The restatements go; `context.md:83-84`, the token-budget bar,
+goes too, since the record tasked it into research §4 and it lives there. `README.md` and
+`docs/` never mention `flw know`, `flw map` or the store, against the project surface's
+promise. Three error messages say `.flw/` whatever name is in force. The style rule
+"No teasers" becomes "Give the finding before any comment on it", the Bad/Good pair taken
+from the sentence that prompted it, minus the clause "even one sentence ahead is ahead",
+which is the figurative kind of line the file forbids.
+
+Not done, and why. `flw know --reindex --root <the shipped toy>` writes three listings into
+the checkout and turns two tests red, because both depend on the fixture staying
+half-indexed; that is the fixture's design and the command's job, and the way to hold both
+is to not run the command over the checkout. The `canned()` git fake matches an answer key
+as a substring of the joined arguments; no lens traced whether a test passes on that
+looseness, and no test here changes it. Two members whose directories share a basename fold
+to one key by a recorded decision. The scale numbers stand as numbers.
+
+Coverage of what the round read: `cli/flw.py` diff against the functions it lands in,
+`core/scripts/knowledge.py` whole, `tests/test_knowledge.py` whole, the `tests/test_cli.py`
+diff, the four `SKILL.md` diffs, `core/shared/context.md`, `docs/*.md`, `README.md`,
+`specs/current.toml` whole, the four version records. Not read or run: any skill in a host;
+`ledger.py` and `run_tests.py` beyond their one `FLW_DIR` line; `store.py`; `--format
+mermaid` and `dot` beyond one run each; a store directory that is a symlink; `flw doctor`'s
+host states; Windows paths.
+
+The `flw know` surface line changes text and not flag set — `[--check|--reindex|--stamp
+PATH...]`, which is what the parser has — so it lands in `contract_edit` without deadlocking
+the drift test, which compares flag sets.
+"""
+
+contract_edit = """
+In `final_state.components`, component **the flw CLI**:
+
+`properties` — replace:
+  "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in
+  ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside
+  the directory it would name. One name is in force at a time: a directory under another
+  name is not a project, and a walk probes exactly one name per level."
+with:
+  "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in
+  ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside
+  the directory it would name. One name is in force at a time: a directory under another
+  name is not a project, and a walk probes exactly one name per level. A name that is not
+  a string, is empty, is `.` or `..`, or is absolute is refused naming its source, because
+  each of those makes every directory a project or none."
+
+`surfaces` — replace:
+  "flw know [PATH] [--root PATH] [--full] [--check|--reindex] [--stamp PATH...]"
+with:
+  "flw know [PATH] [--root PATH] [--full] [--check|--reindex|--stamp PATH...]"
+
+In `final_state.components`, component **the knowledge store**:
+
+`properties` — replace:
+  "Staleness is a git diff and never a judgment. No output since the recorded revision is
+  current; any output is changed, with files, insertions and deletions; a diff that cannot
+  run is unverifiable and the file is read normally. system.md carries one revision per
+  member, keyed by the member's directory basename, and is checked in each member's repo."
+with:
+  "Staleness is a git diff and never a judgment, taken from the recorded revision to the
+  working tree, so an uncommitted edit counts and an untracked file does not yet. No output
+  is current; any output is changed, with files, insertions and deletions; a diff that
+  cannot run is unverifiable and the file is read normally. system.md carries one revision
+  per member, keyed by the member's directory basename, and is checked in each member's
+  repo."
+
+`properties` — append:
+  "A stamp writes HEAD into revision and changes nothing else — not line endings, not a
+  comment on the line, not any other key — and refuses, leaving the file as it was, rather
+  than write a block that no longer parses or whose top-level revision is not the value
+  written. Every HEAD a batch needs is read before its first write, so a stamp that fails
+  has written nothing. A stamp taken while the described path has uncommitted changes is
+  written and says so on the file's line, because HEAD is then not the revision the file
+  was read against."
+
+`properties` — replace:
+  "A root with no store prints `no store` and exits 0, for a missing [knowledge] key and a
+  missing directory alike. flw know and flw map exit 0 whenever they ran, including when
+  every file is changed, and 1 only for an input they were given and could not use: no
+  root, a path not in the code or under no declared member, --full or --stamp with no
+  path, a stamp whose repo has no HEAD, a node no file names."
+with:
+  "A root with no store prints `no store` and exits 0, for a missing [knowledge] key and a
+  missing directory alike; from a parent, the store is any member's as much as its own.
+  flw know and flw map exit 0 whenever they ran, including when every file is changed, and
+  1 only for an input they were given and could not use: no root, a path not in the code or
+  under no declared member or under more than one, a path or --full beside a whole-store
+  mode, --full or --stamp with no path, a stamp whose repo has no HEAD or whose block would
+  not parse, a node no file names, a [knowledge] dir that is absolute."
+
+Top-level `assumptions` — append:
+  "A repository or parent whose directory is named `system` has no store: its repository
+  file and the system file share a name, and flw know refuses it naming the collision
+  rather than pick a reading."
+"""
+
+[[decisions]]
+topic     = "which side of the commit the stamp lands on, and what the diff compares"
+options   = ["diff revision to working tree; a stamp on a dirty mirror writes HEAD and warns on the file's line; flw-execute re-stamps after the commit", "diff revision to working tree; a stamp on a dirty mirror is refused", "keep the revision..HEAD diff and move only the skill's re-stamp"]
+chosen    = "diff revision to working tree; a stamp on a dirty mirror writes HEAD and warns on the file's line; flw-execute re-stamps after the commit"
+rationale = "The diff answers whether the file is still true, and the working tree is what the reader is looking at. A refusal would stop research on any tree with local changes — the common state of a checkout at work — for a stamp that is wrong by exactly the changes the warning names. Keeping HEAD leaves --check blind to every uncommitted edit, which is the state flw-execute is in for the whole of a run."
+
+[[decisions]]
+topic     = "a repository or parent whose directory is named system"
+options   = ["refuse, naming the collision, and record the name as unsupported", "level_of calls system.md the repository file when the root declares no members", "delete the guard and let the file be read as System"]
+chosen    = "refuse, naming the collision, and record the name as unsupported"
+rationale = "The repository file and the system file share a name by the mirror rule, so any reading is right for one of the two directories and wrong for the other. A sentence in the contract costs less than a rule that is wrong half the time, and the case is one directory name."
+
+[[decisions]]
+topic     = "whether the two engine-level exact-output tests stay"
+options   = ["delete them; the CLI test asserts the same bytes through the parser", "keep both layers"]
+chosen    = "delete them; the CLI test asserts the same bytes through the parser"
+rationale = "The footprint lens deleted them in a clone and nothing else went red; the tests lens credits the exact-text tests with catching most of its mutations, and the CLI copies are the ones that stay. One layer asserting the plan's Samples is the contract; two is the same assertion paid twice."
+
+[[dag]]
+group = 1
+phase = "the store tells the truth"
+tasks = [
+  { id = "tree-diff", desc = "core/scripts/knowledge.py numstat(): `git diff --numstat <revision> -- <rel>` — no HEAD — so the comparison is revision to working tree; docstring says so. Tests: the argument list carries no HEAD; a canned diff still sums. Contract sentence in contract_edit." },
+  { id = "stamp-warns", desc = "core/scripts/knowledge.py stamp(): per file, `git status --porcelain -- <mirror>` in the file's root through git(); for system.md, per member in the member's root. Non-empty → the file is still written and stamp() returns, beside the path, a warning naming the mirror; None otherwise. cli/flw.py _know_stamp prints it on the file's line: `  <file> — <mirror> has uncommitted changes; recorded HEAD, re-stamp once they are committed`. Tests: canned status non-empty → written and the line printed; empty → no warning; system.md with one dirty member names that member.", depends_on = ["tree-diff"] },
+  { id = "stamp-batch", desc = "core/scripts/knowledge.py stamp(): resolve every head() the batch needs before the first write — one per repository, cached by root — so a rev-parse that fails leaves every named file as it was. git(): when the exit code is non-zero, out carries stderr (and already the OSError text), and head()'s refusal quotes it: `<root>: git rev-parse HEAD failed: <what git said>; nothing was written`. Tests: two files under two roots, the second with no HEAD → neither file changed, message names the second root and git's text; git absent from PATH → the OSError text in the message." },
+  { id = "stamp-parses-after", desc = "core/scripts/knowledge.py: after _rewrite, tomllib.loads the new block and require its top-level `revision` to equal the value written (a string, or for system.md the member table); otherwise Refused naming the path and nothing written. REVISION ends at the closing quote or brace, not end of line, so a trailing comment survives; read and write with newline=\"\" so CRLF survives. Tests: the three spellings from the report — a [revision] section, an indented line, a revision key inside [[connects]] — each refused with the file unchanged; a trailing comment kept; CRLF kept." },
+  { id = "name-refusals", desc = "cli/flw.py _resolve_flw_dir(): refuse a non-string value, a value empty after strip, and one whose Path(value).parts is empty or contains `..`, each with the message shape the absolute case uses and naming the source. knowledge_dir(): refuse an absolute [knowledge] dir naming file and key. knowledge.py reindex(): skip directories whose name starts with a dot. Tests: each refusal for both $FLW_DIR and [paths] flw; flw doctor never prints a blank name; an absolute dir refused; reindex over a store containing .git/ writes no index.md there." },
+  { id = "know-paths", desc = "core/scripts/knowledge.py under()/_reachable() and cli/flw.py _know_walk(): from a parent, when $PWD/given exists under no member, refuse `<path> is under no repository <root> declares`; try the member-relative form only when the cwd form does not exist; when more than one member has it, refuse naming them; `.` from a parent is the orientation. cli/flw.py _know(): a positional or --full beside --check, --reindex or --stamp is Refused with the sentence --full alone gets. Tests: `.` and `.flw` from the parent orient; a README.md in both members refused naming both; `api/orders.py --root shop` from the parent still answers shop; `nonexistent/path --check` exits 1." },
+  { id = "know-states", desc = "cli/flw.py: _know_walk computes total unconditionally and guards only the walk() call; know() and know_map() gate on whether any store among _knowledge_stores(root, members) is a directory, not the parent's alone; _member_head returns a reason — `missing` when the directory is gone, `no store`, or the file's first problem — and render_orientation prints it in the member's slot; _know_check's header counts the stores it read. Tests: a member with no store prints `1 of 3 levels`; a parent with no own store walks a member's path; the three orientation reasons; a vanished member not counted as a store.", depends_on = ["know-paths"] },
+  { id = "unread-things", desc = "core/scripts/knowledge.py: delete Concept.measured, Edge.carries and its constructor line in fold(); changed()'s ValueError for a System-level file becomes Refused(`<root>: a directory named system has no store — its repository file and the system file share a name`); cut the comment on Concept.problems to `By name.`; render_node writes one loop over ((\"in\", inbound), (\"out\", outbound)); node_of derives its tail from mirror(). Tests: a repository named system is exit 1 with that message; the exact-output tests unchanged." },
+  { id = "context-extensions", desc = "cli/flw.py _context_extensions(): a path that is a dangling symlink or exists and is not a regular file goes through the existing `could not be read` line instead of `continue`. Test: a dangling symlink named for the skill is reported by flw context." },
+  { id = "error-text", desc = "cli/flw.py lines 2160, 2193 and 2206: the `.flw/` in each message becomes the name flw_dir_name() resolves. Tests: with $FLW_DIR set, each message names it." },
+]
+
+[[dag]]
+group = 2
+phase = "the suite pins what the records claimed"
+tasks = [
+  { id = "no-machine-leaks", desc = "tests/conftest.py _isolated_flw_home: monkeypatch.delenv(\"FLW_DIR\", raising=False); delete the autouse _default_flw_dir in tests/test_knowledge.py; tests/test_knowledge.py loads cli/flw.py under the name test_cli.py uses, so one file is one module object in a session. Check: `FLW_DIR=.cache/flw python3 -m pytest tests/ -q` is green.", depends_on = ["name-refusals"] },
+  { id = "pin-flw-dir", desc = "tests/test_cli.py: one test with FLW_DIR=.cache/flw and a root whose .cache/flw/ holds config.toml with [kb] category, [project.roots] and [knowledge] dir, extensions/shared.md and reviews/eng.toml, asserting that flw context prints the extension and the category, flw doctor lists the member, flw validate finds the review, and flw ledger lists it — so reverting any of _section_config, project_roots, report_extensions, report_members, _context_extensions, validate's reviews glob, knowledge_dir's default or ledger()'s export to the literal .flw fails.", depends_on = ["no-machine-leaks"] },
+  { id = "pin-knowledge-dir", desc = "tests/test_knowledge.py test_the_knowledge_dir_is_read_from_the_project_file_and_never_the_machine_s: [knowledge] dir = \"docs/arch\" with a repository file inside it; assert the orientation names that path, so `flw_dir(root) / \"knowledge\"` in place of the declared-or-default expression fails.", depends_on = ["no-machine-leaks"] },
+  { id = "pin-module", desc = "tests/test_knowledge.py: write api/orders.py.md into the acme copy; assert mirror gives api/orders.py, the walk's diff runs for that path (the canned key sees `-- api/orders.py`), the node is shop/api/orders.py, and renaming orders.py orphans it.", depends_on = ["no-machine-leaks"] },
+  { id = "pin-rows", desc = "tests/test_knowledge.py: --check over the acme copy with one malformed file and one with no description asserts the two rows and the footer tail `· 1 malformed`; orientation from the parent with the canned diff changed asserts `1 changed` and the description-less member's line carries its reason; a NUMSTAT line `-\\t-\\tapi/logo.png` asserts the sums ignore it and the file count includes it.", depends_on = ["know-states", "no-machine-leaks"] },
+  { id = "pin-system-stamp", desc = "tests/test_knowledge.py: `know --stamp <system.md> --root <acme copy>` through the parser with rev-parse canned, asserting both members' revisions moved — so `{}` in place of `members if owner == root else {}` fails.", depends_on = ["stamp-batch", "no-machine-leaks"] },
+  { id = "prune-tests", desc = "tests/test_knowledge.py: delete test_the_toy_folds_to_the_plan_s_sample_exactly and test_a_node_folds_in_both_directions_and_names_what_a_change_touches; a map test whose [project.roots] declares worker before shop, so edges.sort is pinned by declaration order and not by the fixture's.", depends_on = ["no-machine-leaks"] },
+]
+
+[[dag]]
+group = 3
+phase = "the documents say what the code does"
+tasks = [
+  { id = "execute-boundary", desc = "core/skills/flw-execute/SKILL.md §3 boundary paragraph: the re-read and correction stay at the boundary; the `flw know --stamp` follows the commit — when the run makes it, right after; when the run only proposes it, the report's `Knowledge:` line lists the files awaiting a stamp and says why. §6's block line reads `Knowledge: <files re-stamped · files awaiting the commit, or none>`.", depends_on = ["stamp-warns"] },
+  { id = "prose-cuts", desc = "core/skills/flw-execute/SKILL.md §2 knowledge paragraph keeps `Run flw know <path> for each path the record names, and read the plan the record's approach cites` and `--full where the work actually lands`, and loses the rest; core/skills/flw-spec/SKILL.md and core/skills/flw-review/SKILL.md lose their `no store … needs no guard` clause; core/shared/context.md loses the token-budget sentence at lines 83-84 (it lives in flw-research §4); core/skills/flw-review/SKILL.md rule 2 replaces the restated rationale with `except the knowledge-file correction above`." },
+  { id = "surface-docs", desc = "README.md commands block: `flw know` and `flw map` lines beside `flw scout`; docs/layout.md: the store's directory in the per-project layout, one row. No other document changes." },
+  { id = "style-rule", desc = "core/styles/terse_prose.md: replace the `No teasers` rule and its Bad/Good pair with the `Give the finding before any comment on it` rule and pair as drafted in .claude/worktrees/agent-a7d194837a97f1898 (git diff there), minus the clause `— even one sentence ahead is ahead`; then `git worktree remove` that worktree. Its own commit." },
+]
