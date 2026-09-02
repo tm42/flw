@@ -1,0 +1,91 @@
+base    = "finish-the-opening"
+name    = "project-roots"
+summary = "a project's config can name the repositories it spans, and flw context and flw doctor list them with whether each exists"
+
+approach = """
+Change 4 of `plans/multi-root-projects.md` §5, reduced to its declaration. The key is
+`[project.roots]`, a table of member name to path, exactly as that plan wrote it and for
+the reason it gave: a map, not a list, because the name is used in contract paths. This
+record does not use the names for anything — it reads the values — but it lands the shape
+the rest of Part B will need, so the key never changes under anyone.
+
+Why now. `plans/knowledge-store.md` stamps knowledge per repo and orients across a system,
+and both need to know which directories are the repos. Nothing today says. This is the
+smallest record that does, and everything else in Part B — member-prefixed component
+paths, one contract across several roots, delegation of checks, the coordinated retraction
+a seam change after one repo landed would need — stays unbuilt, on the same premise as
+before: nobody has run it.
+
+Two things the plan settled that this record inherits without re-deciding. A member path
+resolves relative to the directory holding the config file that declares it, never
+against `$PWD` and never absolute by default — the parent is checked out at a different
+path on every machine. And there is no reverse lookup: standing inside a member, flw sees
+that member alone, because a member cannot tell a parent that declares it from one that
+merely contains it. To see the system, name its root with `--root`.
+
+One thing decided here. `_section_config` merges `~/.flw/config.toml` under the project's
+file for every section it is asked for, so `[tests]`, `[paths]` and `[kb]` all take a
+machine-wide underlay. `[project]` does not: a machine-wide roots map is wrong for every
+project but one, so `project_roots()` reads the project file only and the contract's
+surface line says so, rather than the merge rule being true of four sections and silently
+false of a fifth.
+
+What `flw context` prints for a member is its name, its resolved path and whether the
+directory exists — `missing` when it does not. Not whether it has a store; that is the
+knowledge store's concern and its command's line to print. `flw doctor` prints the same
+and adds `not a project` when the directory exists but holds neither `specs/` nor
+`.flw/`, because a member in that state has no extensions and can have no store, and a
+doctor that said only `exists` would be calling a directory healthy that no skill can read
+anything from.
+
+Coverage of what was read: `cli/flw.py` `_section_config`, `_specs_dir`, `_kb_category`,
+`context()`, `doctor()` and `report_extensions`; `specs/current.toml` lines 111 and 120;
+`plans/multi-root-projects.md` §5 and §6.
+"""
+
+contract_edit = """
+In `final_state.components`, component **the flw CLI**:
+
+`provides` — append:
+  "A user can declare the repositories a project spans in its config, and flw context and
+  flw doctor list them with whether each exists, so a session rooted at the parent of
+  several checkouts knows what it is standing above."
+
+`properties` — append:
+  "A [project.roots] path resolves relative to the directory holding the config file that
+  declares it, never against $PWD. Nothing walks upward from a member looking for a project
+  that declares it: standing inside a member, flw sees that member alone, and the system is
+  seen by naming its root."
+
+`surfaces` — replace:
+  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project
+  wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests]
+  setup, checks, yours; [kb] category."
+with:
+  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project
+  wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests]
+  setup, checks, yours; [kb] category. [project] roots — a table of member name to path —
+  is read from the project file only: a machine-wide roots map is wrong for every project
+  but one."
+"""
+
+[[decisions]]
+topic     = "whether [project] takes the machine-wide config underlay every other section takes"
+options   = ["no — project file only, and the surface line says so", "yes — same merge as every section, for consistency"]
+chosen    = "no — project file only, and the surface line says so"
+rationale = "A roots map in ~/.flw/config.toml would apply to every project on the machine and be right for at most one. Consistency of the merge rule is worth less than a key that cannot be wrong by inheritance; the contract names the exception so the merge claim stays true as stated."
+
+[[decisions]]
+topic     = "what flw context says about a member"
+options   = ["name, path, exists or missing", "also whether it has a knowledge store", "also its own spec_version"]
+chosen    = "name, path, exists or missing"
+rationale = "The store is the knowledge-store record's concern and flw know's line to print. spec_version would have flw context open another project's contract at every call, for a fact the member's own flw context prints when asked."
+
+[[dag]]
+group = 1
+phase = "declare and list"
+tasks = [
+  { id = "roots-key", desc = "cli/flw.py: project_roots(root) -> dict[str, Path] reads [project] roots from <root>/.flw/config.toml only — not through _section_config — resolving each value against the config file's directory; an absent section is an empty dict. A value that is not a string, or a section that is not a table, is exit 1 with the file and key named. Tests: relative resolution, an absent section, a malformed value, and that ~/.flw/config.toml's [project] is ignored." },
+  { id = "context-members", desc = "cli/flw.py context(): after the root: line, one line per member — `  member <name>: <tilde path>` with ` (missing)` when the directory does not exist — in the order declared; nothing when there are none. Tests: two members one missing; a root with no roots prints no member lines; the output with a skill named is unchanged apart from these lines.", depends_on = ["roots-key"] },
+  { id = "doctor-members", desc = "cli/flw.py doctor(): a `members:` section after the extensions report, one line per member: exists, missing, or `not a project` when the directory holds neither specs/ nor .flw/. Honours --root. Tests: the three states; absent when no roots are declared.", depends_on = ["roots-key"] },
+]

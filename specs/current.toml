@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.11.9"
+spec_version = "0.11.10"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -21,6 +21,7 @@ applied = [
   "narrow-what-a-reviewer-loads",
   "opening-is-one-call",
   "finish-the-opening",
+  "project-roots",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -88,6 +89,7 @@ provides = [
   "A host's instructions file keeps the line endings it had. flw appending or removing its own tagged block changes the block and nothing else, so the diff in someone else's repository is the size of the change.",
   "flw context reports what it cannot read and continues: an extension it cannot open, a contract without final_state.components, a note store root it cannot reach. It exits 1 only for an input it was given and could not use — a --root that does not exist, a skill name that is not installed.",
   "flw install --ambient writes its block between markers and replaces it whole on reinstall. Nothing between installs is tracked or verified, and text outside the markers is never touched. The style is verified by digest and the ambient block deliberately is not: every skill carries its own opening, so the block serves only the session that invokes none, and a stale one costs that session a line it would have run anyway.",
+  "A user can declare the repositories a project spans in its config, and flw context and flw doctor list them with whether each exists, so a session rooted at the parent of several checkouts knows what it is standing above.",
 ]
 properties = [
   "Every subcommand and flag the CLI accepts is declared in surfaces, and every declared one exists: the parser and the contract cannot drift apart unnoticed.",
@@ -99,6 +101,7 @@ properties = [
   "A dry run predicts the run it is a dry run of. flw update -n says which of a fast-forward and a rebase a real pull would do, and says when it could not find out, rather than reporting a clean state it did not verify.",
   "flw context run outside any project prints what it can and exits 0. A directory with no contract and no configuration is a state rather than a fault, which is the reading flw validate already takes.",
   "flw test <path> walks upward from the path it is given and flw scout <path> does not, deliberately: flw test src/ inside a project is a normal invocation, and a scout must not walk out of the tree it was aimed at.",
+  "A [project.roots] path resolves relative to the directory holding the config file that declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -108,7 +111,7 @@ surfaces = [
   "~/.flw/ambient.toml — [[host]], keys: host, path, created. Which instructions files flw wrote a block into, and whether flw created the file; uninstall reads it to decide what it may delete.",
   "~/.flw/style.toml — [[host]], keys: host, name, source, path, previous, installed_sha, created, settings_created, selected. `previous` is the user's own outputStyle, restored on uninstall.",
   "~/.flw/styles/<name>.md — a style of the user's own, installed by name.",
-  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests] setup, checks, yours; [kb] category.",
+  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests] setup, checks, yours; [kb] category. [project] roots — a table of member name to path — is read from the project file only: a machine-wide roots map is wrong for every project but one.",
   "<project root>/.flw/extensions/<skill name>.md and <project root>/.flw/extensions/shared.md — prose read at a skill's opening, from every project root at or above the resolved one and below $HOME, outermost first so the nearest overrides; within a level shared.md is read before the skill's own file, so a nearer level beats a farther one and, within one level, a skill's own file beats shared. shared.md is read by every skill; a file named for anything else is read by nobody, and flw doctor says so.",
   "<!-- flw:begin --> / <!-- flw:end --> and <!-- flw:style:begin --> / <!-- flw:style:end --> — the marker pairs bounding flw's skills block and its style block in a host's instructions file. What lies between a pair is flw's to rewrite; what lies outside is the user's and is never touched.",
   "flw install [hosts...] [-n|--dry-run] [--ambient] [-y|--yes]",
