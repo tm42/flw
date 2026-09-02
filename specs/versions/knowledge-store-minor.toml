@@ -1,0 +1,289 @@
+base    = "project-roots"
+name    = "knowledge-store"
+summary = "a third prose store holding a system's architecture in the shape of its code, stamped with the git revision it was true at, found by walking up from a path, checked by a diff, and folded into a map nobody authors"
+
+approach = """
+`plans/knowledge-store.md` is the plan and says everything this record does not repeat,
+including — under Samples — the exact output of every command over the toy example, which
+is what the tests hold the code to. The artifact it links has the diagrams and the four
+worked sessions and is for a person; nothing an executor needs is only there. Reviewed on
+2026-09-02 by a dispatched design critic (six findings, all folded) and a spec critic
+(eight, all folded — `.flw/reports/2026-09-02T1318-spec-critic-knowledge-store.md`), and
+interviewed the same day; every decision below was the user's.
+
+What was measured and would otherwise be re-derived. `flw kb`'s opening listing is 177
+tokens for a 40- or 400-note store at `CAP = 5`; that is the shape of a capped listing
+this store does not print at all. `flw context flw-spec` is 1,989 tokens; the design holds
+that number by printing nothing about knowledge at any opening. The four-repo toggle in
+the plan — config, runtime, backend, ui — costs four description lines and two bodies, and
+that ledger is the case the store has to keep cheap or it is a tax on every small change.
+
+The bar, because it decides everything downstream. Knowledge is architecture — parts,
+purposes, what crosses between them. A measured fact about a tool goes to `flw kb`; a
+convention goes to an extension. The sorting question is one sentence: does a commit make
+it wrong. Yes is knowledge and carries a revision; only a decision makes it wrong is an
+extension and carries none. The test a file must pass — it earns its tokens only by
+removing more code reading than it costs — is also the sparseness rule, and it is prose in
+`flw-research` plus a toy example, with no guardrail, by decision.
+
+Why the toy example is built first. The fold, both commands and the resolution tests all
+need a three-store fixture — a parent and two members with a seam declared from both
+sides — and the toy example is exactly that shape. It depends on nothing, so it is phase 1
+and every later test reads it; the plan's Samples section is its output.
+
+Why staleness is a number and not a kind. The first design classified each diff line as
+structural or content and needed a glob list per repo to do it; the user replaced that
+with any change counts, quantified. `git diff --numstat <revision> HEAD -- <path>` runs in
+milliseconds, and `3 files · +41 −12` against `38 files · +2,410 −611` tells a reader
+what a classifier was trying to guess. The word is `changed`, not `stale`: the code moved,
+and whether the claim survived is the reader's call with the number in front of them. Git
+only, for now, because it is what the first system to use this runs; another VCS is two
+config keys later and not a design change. The one file that is not in a git repo is
+`system.md`, in a parent that spans several — it carries a table of member basename to
+HEAD, matched to `[project.roots]` by value, and is checked in each member's repo.
+
+Why `no store` is exit 0. Three skills run `flw know` on every run, and every repository
+flw runs in today has no `[knowledge]` key until research adds one. `flw context` already
+prints what it can and exits 0 outside a project, on the reading that a directory with no
+configuration is a state rather than a fault; `flw know` takes the same reading for a
+missing key and a missing directory alike, so no skill sentence has to guard the call.
+
+Why the frontmatter is `+++` TOML and the store is OKF-shaped rather than OKF-conformant.
+The Open Knowledge Format prescribes YAML; everything else it prescribes — a directory of
+markdown, path as identity, `type` and `description`, a reserved `index.md`, links as the
+graph — is structure and survives the syntax. The stdlib has no YAML reader and the note
+store already reads `+++` TOML through `core/scripts/store.py`'s `_frontmatter`, so
+`knowledge.py` imports that one function and flw gains no second dialect. It shares
+nothing else with the note store: `store.py`'s renderers take a note with a cost and an
+age and cap at `CAP`, which is the listing this store never prints.
+
+Why `index.md` exists and nothing may trust it. It is the answer to a reader with no flw
+installed — Codex, or any host with only a file tool — and it is a fold materialised to
+disk, which is the drift class this design dropped an authored map to avoid. So it is
+written only by `--reindex`, and a reader that doubts one reads the directory instead.
+A stale listing costs one directory read, never a wrong answer.
+
+Why two commands. A graph is a different kind of output from a listing, and one command
+with a mode flag that means two unrelated things is smaller only on the help page.
+
+Why `flw kb` is untouched. It is addressed by topic, listed at every opening, rots rarely
+and is gated on portability — the opposite of this store on every axis. A note in kb's
+repo root that describes how the system is built moves to the tree, once, in research's
+prose.
+
+The two surface lines. `flw know` and `flw map` are declared in the CLI component's
+`surfaces` by the task that adds each parser, in the same tree state, because
+`tests/test_cli.py` reads the contract off disk and diffs it against the parser both ways
+— a line that waits for the `contract_edit` fails the run it is part of, and a line that
+lands early fails the run before it. Flag groups in those lines carry no spaces around
+`|`, because the test splits on whitespace before it splits on `|`.
+
+Where the store lives. `[knowledge] dir` defaults to `<flw dir>/knowledge`, where the flw
+directory is `.flw/` unless `[paths] flw` in the machine's config or `$FLW_DIR` says
+otherwise — the `flw-dir-setting` record, which this one assumes has landed. Research
+proposes the key from what the repo already ignores; the user confirms.
+
+One wording correction carried from the `project-roots` run. Its executor applied the
+property "resolves relative to the directory holding the config file that declares it"
+verbatim and proposed "relative to the project directory whose config declares it" — read
+strictly the first means `<root>/.flw/`, and the code resolves against `<root>`, as
+`multi-root-projects.md` §5 says. The `contract_edit` below makes that replacement.
+
+What this record is not. Not one contract across several roots, not member-prefixed
+component paths, not `flw seam`, not vector search, not a `log.md`, not a `structural`
+key, and not a rule about what happens when the store is committed — every one of those
+was excluded by decision and the plan says so.
+"""
+
+contract_edit = """
+Append a new component to `final_state.components`, after **the project surface**:
+
+  name  = "the knowledge store"
+  paths = ["core/scripts/knowledge.py", "tests/test_knowledge.py", "core/skills/flw-research/references/knowledge-example/"]
+  provides = [
+    "A user can have a repository's architecture — what its parts are, what each is for,
+    what crosses between them — written once by a survey and found again by every later
+    session from the path it is standing at, with nothing printed at any skill's opening.",
+    "A user can see, per knowledge file, whether the code under the path it describes has
+    changed since the file was written and by how much — files, insertions, deletions —
+    so a reader judges with a number rather than a flag, and a changed file warns and
+    never stops a run.",
+    "A user can see which knowledge files describe paths that no longer exist, so a rename
+    does not leave a subtree nobody will look up.",
+    "A user can fold every declared edge across a system's stores into one picture that
+    nobody authored and nothing can drift from, and ask which parts touch one node.",
+    "A user can re-stamp a knowledge file with one command after re-reading it, and
+    regenerate every directory listing with another, so the cheap-update loop is two
+    commands and not an edit nobody makes.",
+  ]
+  properties = [
+    "A knowledge file's path is the code path it describes, under its own repo's store: a
+    directory D at path P is <store>/P/D.md, a file is <store>/<path>.md, the repo itself
+    is <store>/<basename>.md, and the parent of a multi-repo system holds system.md.
+    Nothing is indexed, registered or named with a slug.",
+    "The store is read from the root it belongs to, resolved as flw context resolves one.
+    A parent with [project.roots] orients across system.md and every member's repo file,
+    and a path under a declared member walks that member's store and ends at system.md;
+    a member standing inside itself sees its own store alone. Nothing walks upward from a
+    member looking for a parent that claims it.",
+    "Staleness is a git diff and never a judgment. No output since the recorded revision
+    is current; any output is changed, with files, insertions and deletions; a diff that
+    cannot run is unverifiable and the file is read normally. system.md carries one
+    revision per member, keyed by the member's directory basename, and is checked in each
+    member's repo.",
+    "Frontmatter is +++ TOML read by the note store's reader. A block tomllib rejects
+    reads as a file with no frontmatter and is reported by --check, never raised. Missing
+    type or description is reported and the file left out of listings and orientation;
+    missing revision is unstamped and the file is read normally; a file that is not UTF-8
+    is unreadable and skipped.",
+    "index.md is written only by flw know --reindex and nothing may trust it: a reader
+    that doubts one reads the directory. It is a convenience for readers with no tooling
+    and never a source of truth.",
+    "A root with no store prints `no store` and exits 0, for a missing [knowledge] key and
+    a missing directory alike. flw know and flw map exit 0 whenever they ran, including
+    when every file is changed, and 1 only for an input they were given and could not
+    use: no root, a path not in the code or under no declared member, --full or --stamp
+    with no path, a stamp whose repo has no HEAD, a node no file names.",
+  ]
+  surfaces = [
+    "<root>/<[knowledge] dir>/ — one store per project root, defaulting to <flw dir>/knowledge,
+    in a directory the repo already ignores, the mirror rooted at that root. A concept file
+    is markdown with +++ TOML frontmatter: type (System | Repository | Area | Module),
+    description (one or two sentences — the head), revision (the git HEAD it was true at;
+    in system.md a table of member directory basename to HEAD), optionally [[connects]]
+    tables of to, how and carries, and optionally measured. Every edge in connects also
+    appears in the body as a markdown link within the same store. index.md at any level is
+    a generated listing and never a concept.",
+    "core/skills/flw-research/references/knowledge-example/ — a parent and two members,
+    five files, the shape a first survey imitates and the fixture flw's own tests read.",
+  ]
+
+In `final_state.components`, component **the flw CLI**:
+
+`properties` — replace:
+  "A [project.roots] path resolves relative to the directory holding the config file that
+  declares it, never against $PWD. Nothing walks upward from a member looking for a
+  project that declares it: standing inside a member, flw sees that member alone, and the
+  system is seen by naming its root."
+with:
+  "A [project.roots] path resolves relative to the project directory whose config
+  declares it, never against $PWD. Nothing walks upward from a member looking for a
+  project that declares it: standing inside a member, flw sees that member alone, and the
+  system is seen by naming its root."
+
+`surfaces` — replace:
+  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project
+  wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests]
+  setup, checks, yours; [kb] category. [project] roots — a table of member name to path —
+  is read from the project file only: a machine-wide roots map is wrong for every project
+  but one."
+with:
+  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project
+  wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests]
+  setup, checks, yours; [kb] category. [project] roots — a table of member name to path —
+  and [knowledge] dir — where that root's knowledge store is, relative to the root — are
+  read from the project file only: neither is a fact about the machine."
+
+(The two `flw know` and `flw map` surface lines are not here. Each is written into this
+component's `surfaces` by the task that adds its parser, in the same step, because the
+drift check reads both directions and either half alone is red. If `flw-dir-setting` has
+changed the config surface line before this record runs, apply this replacement to the
+sentence as it then stands.)
+
+In `final_state.components`, component **the skills**:
+
+`provides` — append:
+  "A user who runs flw-research on a repository gets its architecture written into that
+  repo's knowledge store — the repo file, area files where reading one removes reading
+  several, and with [project.roots] declared, system.md at the parent from a pass that
+  reads the topology before any member — reviewed per level rather than in one block, and
+  shaped like a shipped toy example rather than invented."
+
+`provides` — append:
+  "A user's spec, execute and review runs read the store from where they are working:
+  orientation across the declared roots at spec time, the walk from the record's paths at
+  execute time, the walk from the diff at review time. An execute run that changes code
+  re-reads and re-stamps the files describing what it changed, at the phase boundary, and
+  its report lists them."
+
+`provides` — append:
+  "Any skill that finds a knowledge file wrong may rewrite that one file and re-stamp it.
+  That permission is one sentence in each skill and not a rule in the shared context,
+  because a permission granted there reads as permission to write anything."
+"""
+
+[[decisions]]
+topic     = "how staleness is decided"
+options   = ["any change under the path counts, quantified as files and lines", "classify each diff line as structural or content, with a per-repo glob list", "an absolute stale_after instant, as OKF prescribes"]
+chosen    = "any change under the path counts, quantified as files and lines"
+rationale = "A classifier needs a glob list per repo to say what kind of change happened and still guesses; a number says how much and lets the reader decide. The module-level question — is an edit to the one file a module describes structural — disappears, because everything counts. stale_after cannot know whether anything changed."
+
+[[decisions]]
+topic     = "which version control the check binds to"
+options   = ["git, hardcoded, for now", "a declared command template with {revision} and {path}, git as the default"]
+chosen    = "git, hardcoded, for now"
+rationale = "The first system to use this runs git. A template is two config keys that nobody would set today; adding them when a second VCS appears is not a design change."
+
+[[decisions]]
+topic     = "frontmatter syntax"
+options   = ["+++ TOML through the note store's existing reader", "YAML, for OKF conformance, through a sixty-line subset parser"]
+chosen    = "+++ TOML through the note store's existing reader"
+rationale = "One dialect in one tool, no new parser, and every structural thing OKF prescribes survives the change of syntax. An agent needs no parser to read type = \"Area\"; only flw know does, and it has one. A converter to YAML is twenty lines if OKF tooling ever matters."
+
+[[decisions]]
+topic     = "whether flw kb and the knowledge store merge"
+options   = ["separate stores, sharing the frontmatter reader and nothing else", "one store with both addressing schemes"]
+chosen    = "separate stores, sharing the frontmatter reader and nothing else"
+rationale = "kb is addressed by topic, listed at every opening, rots rarely and is gated on portability; knowledge is addressed by path, never listed at opening, rots on a diff and is gated on removing reading. Merging forces either knowledge into every opening or kb out of it. kb's renderers take a note with a cost and an age and cap at CAP, which is the listing this store never prints, so they are not shared either."
+
+[[decisions]]
+topic     = "one command or two"
+options   = ["flw know and flw map", "flw know with a --map mode"]
+chosen    = "flw know and flw map"
+rationale = "A graph is a different kind of output from a listing; a mode flag meaning two unrelated things is a smaller CLI only on the help page."
+
+[[decisions]]
+topic     = "the toy example's shape, and when it is built"
+options   = ["two tiny repos and a parent, built first as the fixture every test reads", "one repo, three files, built last as documentation"]
+chosen    = "two tiny repos and a parent, built first as the fixture every test reads"
+rationale = "The seam is the hardest thing to show and the first survey imitates this; one repo shows a store, two and a parent show the system file and an edge declared from both sides. The fold and both commands need exactly that fixture, and the toy depends on nothing, so building it first means one file set serves the tests and the documentation and the plan's Samples are its output."
+
+[[decisions]]
+topic     = "whether a root with no store is a refusal"
+options   = ["no — print `no store`, exit 0", "yes — exit 1, and each skill guards the call"]
+chosen    = "no — print `no store`, exit 0"
+rationale = "Three skills run flw know on every run and every repo has no store until research writes one. flw context already treats no configuration as a state rather than a fault."
+
+[[dag]]
+group = 1
+phase = "the fixture"
+tasks = [
+  { id = "toy-example", desc = "core/skills/flw-research/references/knowledge-example/: a parent `acme` with members `shop` and `worker` — acme/.flw/config.toml declaring both under [project.roots], acme/.flw/knowledge/system.md with a revision table keyed by basename, shop/.flw/knowledge/shop.md and shop/.flw/knowledge/api/api.md, worker/.flw/knowledge/worker.md left unstamped on purpose, and one index.md — every concept file carrying the frontmatter and a body with its edge as a link, the seam declared from both sides, deliberately small. The plan's Samples section is this fixture's output and the tests in every later task read it from here." },
+]
+
+[[dag]]
+group = 2
+phase = "the module"
+tasks = [
+  { id = "read-and-walk", desc = "core/scripts/knowledge.py: import _frontmatter from store.py; load(path) -> a record with type, description, revision, connects, measured, body, and a list of problems by name — malformed, missing type, missing description, unstamped, type disagrees with position, unreadable (not UTF-8, as store.walk already treats a note); walk(root, store, path) -> the candidates nearest-first per the plan's algorithm; level_of(store, file) from position. Exit-1 conditions are exceptions the CLI turns into messages. Tests in tests/test_knowledge.py over the toy: every problem kind by name; a file with a problem other than unstamped is absent from orientation and from index.md; walk order and misses; a path outside the root refused; the repo file is basename.", depends_on = ["toy-example"] },
+  { id = "diff-and-stamp", desc = "core/scripts/knowledge.py: one function git(args, cwd) that every git call goes through, so tests replace it; changed(record) -> current | changed(files, insertions, deletions, first_path) | unverifiable, summing numstat lines; for system.md, once per member of [project.roots] in that member's directory, keyed by the member's basename and matched by value. stamp(files) rewrites revision and nothing else: a missing revision is inserted at the end of the block; a file with no parseable block is refused with the path named; a stamp whose rev-parse fails changes nothing and exits 1 naming the path; in system.md a key naming no declared member is left alone, and a declared member with no key is added. --check reports a system.md key that names no declared member. Tests: no output -> current; canned numstat -> the right sums and first path; a failing call -> unverifiable; system.md checked in each member's cwd; each of the four stamp edges; stamp leaves every other byte alone.", depends_on = ["read-and-walk"] },
+  { id = "orphans-and-index", desc = "core/scripts/knowledge.py: orphans(store, root) lists concept files whose mirrored path does not exist; reindex(store) writes one index.md per directory in the plan's shape — each concept and each subdirectory with its description, a subdirectory with no concept file by name, a file with a problem other than unstamped omitted — and is idempotent. Tests: a renamed directory yields one orphan per file; reindex twice is a no-op; a listing line per shape; the omission.", depends_on = ["read-and-walk"] },
+  { id = "fold", desc = "core/scripts/knowledge.py: fold(roots) reads every concept file's connects across one store or, from a parent, every member's store; nodes are repo basenames or basename/area-path; a to that names no file is a node counted as undescribed; filter(node) keeps edges touching it in either direction; render as text, mermaid, dot. Tests: the toy folds to the plan's Samples text exactly; NODE both directions; an undescribed target counted; an unknown node is an error.", depends_on = ["read-and-walk"] },
+]
+
+[[dag]]
+group = 3
+phase = "the commands"
+tasks = [
+  { id = "know-command", desc = "cli/flw.py: flw know [PATH] [--root PATH] [--full] [--check|--reindex] [--stamp PATH...] exactly as the plan's synopsis and Samples: orientation with no PATH — system.md and every member's repo file from a parent, the repo file alone from a repo, `(no store)` for a member without one; the walk with PATH, heads only, --full for bodies, each printed file checked; from a parent a PATH under a declared member walks that member's store rooted at the member and ends at system.md, and a PATH under no member is exit 1; --check for the whole store — from a parent, system.md and every member's store — writing nothing, exit 0 whatever it finds; --reindex and --stamp the two modes that write, both covering the same set from a parent; a root with no [knowledge] key or no such directory prints `no store` and exits 0. Resolution via nearest_project / --root and project_roots; the store at [knowledge] dir, defaulting to the flw directory's knowledge/. In the same step, add the line `flw know [PATH] [--root PATH] [--full] [--check|--reindex] [--stamp PATH...]` to the CLI component's surfaces in specs/current.toml — no spaces around | — because the drift test reads both directions and either half alone is red. Tests: each resolution row of the plan over the toy; each exit-1 input; `no store` exit 0 for a missing key and a missing directory; the Samples' orientation, walk and --check text.", depends_on = ["diff-and-stamp", "orphans-and-index"] },
+  { id = "map-command", desc = "cli/flw.py: flw map [NODE] [--root PATH] [--format text|mermaid|dot] over fold(); in the same step add the line `flw map [NODE] [--root PATH] [--format text|mermaid|dot]` to the CLI component's surfaces in specs/current.toml. Tests: the drift test stays green with both new lines; the Samples' map text exactly; NODE filter; unknown node exit 1.", depends_on = ["fold"] },
+]
+
+[[dag]]
+group = 4
+phase = "the prose"
+tasks = [
+  { id = "context-md", desc = "core/shared/context.md: a short section — the three stores and the one sorting question, the walk-up as the read pattern, that flw context prints none of it on purpose.", depends_on = ["know-command", "map-command"] },
+  { id = "research-skill", desc = "core/skills/flw-research/SKILL.md: §1 — with [project.roots] declared the survey is every member, parent pass first, and the parent gets a shared.md as well as system.md; §4 — the knowledge tree written per level and reviewed per level, the bar and the earns-its-tokens sentence, the [knowledge] dir key proposed from what the repo already ignores, `flw know --stamp` for every file written and `--reindex` at the end, the migration sentence for a kb repo-root note that describes architecture, and the toy example named as the shape to imitate. The table of what goes where gains the store's row.", depends_on = ["know-command"] },
+  { id = "spec-execute-review", desc = "flw-spec SKILL.md amend step 3: flw know orientation, heads for the parts the interview named, flw map <node> at a seam, and that a cross-repo change gets one plan at the parent every record cites by path. flw-execute SKILL.md §2: flw know <path> for each path the record names and the plan the record cites; §3: at the boundary, re-read and --stamp the files describing what the phase changed, then --reindex, and §6's report lists them. flw-review SKILL.md §3: the orchestrator passes flw know heads for the scope's paths as an eighth thing given to every reviewer. All four: the one-sentence correction lane.", depends_on = ["know-command", "map-command"] },
+]

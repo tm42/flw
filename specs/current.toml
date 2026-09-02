@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.11.11"
+spec_version = "0.11.12"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -23,6 +23,7 @@ applied = [
   "finish-the-opening",
   "project-roots",
   "flw-dir-setting",
+  "knowledge-store",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -103,7 +104,7 @@ properties = [
   "A dry run predicts the run it is a dry run of. flw update -n says which of a fast-forward and a rebase a real pull would do, and says when it could not find out, rather than reporting a clean state it did not verify.",
   "flw context run outside any project prints what it can and exits 0. A directory with no contract and no configuration is a state rather than a fault, which is the reading flw validate already takes.",
   "flw test <path> walks upward from the path it is given and flw scout <path> does not, deliberately: flw test src/ inside a project is a normal invocation, and a scout must not walk out of the tree it was aimed at.",
-  "A [project.roots] path resolves relative to the directory holding the config file that declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
+  "A [project.roots] path resolves relative to the project directory whose config declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
   "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside the directory it would name. One name is in force at a time: a directory under another name is not a project, and a walk probes exactly one name per level.",
 ]
 surfaces = [
@@ -114,7 +115,7 @@ surfaces = [
   "~/.flw/ambient.toml — [[host]], keys: host, path, created. Which instructions files flw wrote a block into, and whether flw created the file; uninstall reads it to decide what it may delete.",
   "~/.flw/style.toml — [[host]], keys: host, name, source, path, previous, installed_sha, created, settings_created, selected. `previous` is the user's own outputStyle, restored on uninstall.",
   "~/.flw/styles/<name>.md — a style of the user's own, installed by name.",
-  "~/.flw/config.toml and <project root>/<flw dir>/config.toml — merged in that order, project wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests] setup, checks, yours; [kb] category. [project] roots — a table of member name to path — is read from the project file only: a machine-wide roots map is wrong for every project but one. [paths] flw — the per-project directory's name, relative, default .flw — is read from the machine's file only, or $FLW_DIR, because the project's file lives inside the directory it names.",
+  "~/.flw/config.toml and <project root>/<flw dir>/config.toml — merged in that order, project wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests] setup, checks, yours; [kb] category. [project] roots — a table of member name to path — and [knowledge] dir — where that root's knowledge store is, relative to the root — are read from the project file only: neither is a fact about the machine. [paths] flw — the per-project directory's name, relative, default .flw — is read from the machine's file only, or $FLW_DIR, because the project's file lives inside the directory it names.",
   "<project root>/<flw dir>/extensions/<skill name>.md and <project root>/<flw dir>/extensions/shared.md — prose read at a skill's opening, from every project root at or above the resolved one and below $HOME, outermost first so the nearest overrides; within a level shared.md is read before the skill's own file, so a nearer level beats a farther one and, within one level, a skill's own file beats shared. shared.md is read by every skill; a file named for anything else is read by nobody, and flw doctor says so.",
   "<!-- flw:begin --> / <!-- flw:end --> and <!-- flw:style:begin --> / <!-- flw:style:end --> — the marker pairs bounding flw's skills block and its style block in a host's instructions file. What lies between a pair is flw's to rewrite; what lies outside is the user's and is never touched.",
   "flw install [hosts...] [-n|--dry-run] [--ambient] [-y|--yes]",
@@ -168,6 +169,9 @@ provides = [
   "A user can spec two changes at once on separate branches without either having to be renumbered when it lands, because a version record is addressed by a name it keeps, the order they landed in is recorded by the contract rather than by the records, and the release number moves by itself when a run finishes.",
   "A user can run a version's work without waiting for its checks, and gets a report that says the version was built and not verified rather than one that reads as finished.",
   "A user gets a store that fills itself, because flw-execute, flw-research and each dispatched flw-review reviewer are offered a write at the point they have just finished learning something — and offered it, never blocked by it.",
+  "A user who runs flw-research on a repository gets its architecture written into that repo's knowledge store — the repo file, area files where reading one removes reading several, and with [project.roots] declared, system.md at the parent from a pass that reads the topology before any member — reviewed per level rather than in one block, and shaped like a shipped toy example rather than invented.",
+  "A user's spec, execute and review runs read the store from where they are working: orientation across the declared roots at spec time, the walk from the record's paths at execute time, the walk from the diff at review time. An execute run that changes code re-reads and re-stamps the files describing what it changed, at the phase boundary, and its report lists them.",
+  "Any skill that finds a knowledge file wrong may rewrite that one file and re-stamp it. That permission is one sentence in each skill and not a rule in the shared context, because a permission granted there reads as permission to write anything.",
 ]
 
 [[final_state.components]]
@@ -243,6 +247,29 @@ paths = ["docs/", "README.md", "LICENSE", "package.json", ".gitignore", "plans/"
 provides = [
   "A stranger can install flw, understand what it is for, and write their own skill for it without reading the author's mind.",
   "A reader can find why flw is shaped the way it is, including what was deliberately not built.",
+]
+
+[[final_state.components]]
+name  = "the knowledge store"
+paths = ["core/scripts/knowledge.py", "tests/test_knowledge.py", "core/skills/flw-research/references/knowledge-example/"]
+provides = [
+  "A user can have a repository's architecture — what its parts are, what each is for, what crosses between them — written once by a survey and found again by every later session from the path it is standing at, with nothing printed at any skill's opening.",
+  "A user can see, per knowledge file, whether the code under the path it describes has changed since the file was written and by how much — files, insertions, deletions — so a reader judges with a number rather than a flag, and a changed file warns and never stops a run.",
+  "A user can see which knowledge files describe paths that no longer exist, so a rename does not leave a subtree nobody will look up.",
+  "A user can fold every declared edge across a system's stores into one picture that nobody authored and nothing can drift from, and ask which parts touch one node.",
+  "A user can re-stamp a knowledge file with one command after re-reading it, and regenerate every directory listing with another, so the cheap-update loop is two commands and not an edit nobody makes.",
+]
+properties = [
+  "A knowledge file's path is the code path it describes, under its own repo's store: a directory D at path P is <store>/P/D.md, a file is <store>/<path>.md, the repo itself is <store>/<basename>.md, and the parent of a multi-repo system holds system.md. Nothing is indexed, registered or named with a slug.",
+  "The store is read from the root it belongs to, resolved as flw context resolves one. A parent with [project.roots] orients across system.md and every member's repo file, and a path under a declared member walks that member's store and ends at system.md; a member standing inside itself sees its own store alone. Nothing walks upward from a member looking for a parent that claims it.",
+  "Staleness is a git diff and never a judgment. No output since the recorded revision is current; any output is changed, with files, insertions and deletions; a diff that cannot run is unverifiable and the file is read normally. system.md carries one revision per member, keyed by the member's directory basename, and is checked in each member's repo.",
+  "Frontmatter is +++ TOML read by the note store's reader. A block tomllib rejects reads as a file with no frontmatter and is reported by --check, never raised. Missing type or description is reported and the file left out of listings and orientation; missing revision is unstamped and the file is read normally; a file that is not UTF-8 is unreadable and skipped.",
+  "index.md is written only by flw know --reindex and nothing may trust it: a reader that doubts one reads the directory. It is a convenience for readers with no tooling and never a source of truth.",
+  "A root with no store prints `no store` and exits 0, for a missing [knowledge] key and a missing directory alike. flw know and flw map exit 0 whenever they ran, including when every file is changed, and 1 only for an input they were given and could not use: no root, a path not in the code or under no declared member, --full or --stamp with no path, a stamp whose repo has no HEAD, a node no file names.",
+]
+surfaces = [
+  "<root>/<[knowledge] dir>/ — one store per project root, defaulting to <flw dir>/knowledge, in a directory the repo already ignores, the mirror rooted at that root. A concept file is markdown with +++ TOML frontmatter: type (System | Repository | Area | Module), description (one or two sentences — the head), revision (the git HEAD it was true at; in system.md a table of member directory basename to HEAD), optionally [[connects]] tables of to, how and carries, and optionally measured. Every edge in connects also appears in the body as a markdown link within the same store. index.md at any level is a generated listing and never a concept.",
+  "core/skills/flw-research/references/knowledge-example/ — a parent and two members, five files, the shape a first survey imitates and the fixture flw's own tests read.",
 ]
 
 [success_criteria]
