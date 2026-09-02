@@ -74,6 +74,25 @@ def test_nothing_under_flw_reports_is_read(tmp_path):
     assert not any("reports" in str(p) for p in found.plans)
 
 
+def test_flw_dir_relocates_the_reviews_directory(tmp_path, monkeypatch):
+    """ledger.py reads $FLW_DIR the way run_tests.py reads $FLW_HOME, so a
+    renamed per-project directory's reviews are found without importing
+    cli/flw.py, and a stale one under the old name is not."""
+    root = project(tmp_path)
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+    (root / ".cache" / "flw" / "reviews").mkdir(parents=True)
+    (root / ".cache" / "flw" / "reviews" / "eng.toml").write_text(
+        'name = "eng"\n[[reviewer]]\nrole = "footprint"\n'
+    )
+    (root / ".flw" / "reviews").mkdir(parents=True)
+    (root / ".flw" / "reviews" / "old.toml").write_text(
+        'name = "old"\n[[reviewer]]\nrole = "footprint"\n'
+    )
+
+    found = ledger.corpus(root)
+    assert [p.name for p in found.reviews] == ["eng.toml"]
+
+
 def test_a_project_with_a_contract_and_nothing_else_assembles(tmp_path):
     """No plans/, no .flw/. The ordinary shape of a project on the day flw is
     adopted, and it must not need a directory it has no reason to have."""

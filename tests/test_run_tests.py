@@ -354,6 +354,21 @@ def test_a_project_key_wins_over_a_global_key_of_the_same_name(project, monkeypa
     assert engine._local_config(project)["setup"] == "from project"
 
 
+def test_flw_dir_relocates_the_project_config(project, monkeypatch, tmp_path):
+    """run_tests.py reads $FLW_DIR the way it already reads $FLW_HOME, so a
+    renamed per-project directory is found without importing cli/flw.py, and a
+    stale one under the old name is not."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("FLW_HOME", str(home))
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+    (project / ".cache" / "flw").mkdir(parents=True)
+    (project / ".cache" / "flw" / "config.toml").write_text('[tests]\nsetup = "from relocated"\n')
+    (project / ".flw").mkdir()
+    (project / ".flw" / "config.toml").write_text('[tests]\nsetup = "from stale default"\n')
+    assert engine._local_config(project)["setup"] == "from relocated"
+
+
 # --- v4.1: yours covering everything is exit 2, not a silent pass -------- #
 
 

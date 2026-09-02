@@ -1410,6 +1410,9 @@ def doctor(args: argparse.Namespace) -> int:
     root = checkout()
     print(f"flw: {root}")
 
+    name, source = _resolve_flw_dir()
+    print(f"flw dir: {name} (from {source})")
+
     if not ROOT_POINTER.exists():
         print(
             f"  ✗ {tilde(ROOT_POINTER)} missing — skills resolve flw through it, so "
@@ -1569,7 +1572,7 @@ def report_extensions(known: list[str], start: Path | None = None) -> int:
     """
     problems = 0
     for root in project_chain(start):
-        directory = root / ".flw" / "extensions"
+        directory = flw_dir(root) / "extensions"
         if not directory.is_dir():
             continue
 
@@ -1624,7 +1627,7 @@ def report_members(start: Path | None = None) -> None:
     for name, path in members.items():
         if not path.is_dir():
             state = "missing"
-        elif not ((path / "specs").is_dir() or (path / ".flw").is_dir()):
+        elif not ((path / "specs").is_dir() or flw_dir(path).is_dir()):
             state = "not a project"
         else:
             state = "exists"
@@ -2060,6 +2063,52 @@ def version(_args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 
 
+def _resolve_flw_dir() -> tuple[str, str]:
+    """The per-project directory's name, and where it came from.
+
+    $FLW_DIR, else `[paths] flw` in the machine's own config file, else the
+    default. Read directly from `FLW_HOME / "config.toml"` rather than through
+    `_section_config`: the project's own config file lives inside the directory
+    this name locates, so it cannot be found before the name is known.
+
+    An absolute value from either source is refused: that placement is
+    `$FLW_HOME`'s job, not this setting's.
+    """
+    value = os.environ.get("FLW_DIR")
+    if value is not None:
+        source = "$FLW_DIR"
+    else:
+        source = "~/.flw/config.toml"
+        config = FLW_HOME / "config.toml"
+        value = None
+        if config.exists():
+            try:
+                document = tomllib.loads(config.read_text())
+            except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+                raise SystemExit(f"error: {config} does not parse: {exc}") from None
+            value = document.get("paths", {}).get("flw")
+
+    if value is None:
+        return ".flw", "default"
+    if Path(value).is_absolute():
+        raise SystemExit(
+            f"error: {source} names {value!r}, an absolute path. The per-project "
+            "directory's name must be relative — an absolute location is "
+            "$FLW_HOME's job, not this setting's."
+        )
+    return value, source
+
+
+def flw_dir_name() -> str:
+    """The per-project directory's name for this machine. See `_resolve_flw_dir`."""
+    return _resolve_flw_dir()[0]
+
+
+def flw_dir(root: Path) -> Path:
+    """`root`'s per-project directory, under whatever name this machine gives it."""
+    return root / flw_dir_name()
+
+
 def nearest_project(start: Path | None = None) -> Path | None:
     """The nearest directory at or above cwd holding specs/ or .flw/, or None.
 
@@ -2096,7 +2145,7 @@ def project_chain(start: Path | None = None) -> list[Path]:
     for candidate in (here, *here.parents):
         if candidate == home:
             break
-        if (candidate / "specs").is_dir() or (candidate / ".flw").is_dir():
+        if (candidate / "specs").is_dir() or flw_dir(candidate).is_dir():
             found.append(candidate)
     found.reverse()
     return found
@@ -2121,6 +2170,9 @@ def test(args: argparse.Namespace) -> int:
 
     root = project_root(Path(args.path) if args.path else None)
     specs = root / _specs_dir(root)
+    # run_tests.py is stdlib-only and reads no flw.py function, so the resolved
+    # name is exported the way $FLW_HOME already is rather than passed in.
+    os.environ["FLW_DIR"] = flw_dir_name()
 
     if args.all and not (specs / "current.toml").exists():
         # -A is the contract's full definition of done. Without a contract there
@@ -2194,7 +2246,7 @@ def _section_config(root: Path, section: str) -> dict:
     section rather than being copied per section.
     """
     merged: dict = {}
-    for config in (FLW_HOME / "config.toml", root / ".flw" / "config.toml"):
+    for config in (FLW_HOME / "config.toml", flw_dir(root) / "config.toml"):
         if not config.exists():
             continue
         try:
@@ -2222,7 +2274,7 @@ def project_roots(root: Path) -> dict[str, Path]:
     path resolved against the caller's directory would answer differently
     depending on where the caller happened to stand.
     """
-    config = root / ".flw" / "config.toml"
+    config = flw_dir(root) / "config.toml"
     if not config.is_file():
         return {}
     try:
@@ -2517,7 +2569,7 @@ def validate(args: argparse.Namespace) -> int:
         else [
             *([contract] if contract.exists() else []),
             *sorted((specs / "versions").glob("*.toml")),
-            *sorted((root / ".flw" / "reviews").glob("*.toml")),
+            *sorted((flw_dir(root) / "reviews").glob("*.toml")),
         ]
     )
 
@@ -2601,7 +2653,7 @@ def _context_extensions(chain: list[Path], skill: str | None) -> None:
     printed = False
     for root in chain:
         for stem in wanted:
-            path = root / ".flw" / "extensions" / f"{stem}.md"
+            path = flw_dir(root) / "extensions" / f"{stem}.md"
             if not path.is_file():
                 continue
             try:
@@ -3011,6 +3063,7 @@ def ledger(args: argparse.Namespace) -> int:
     import ledger as engine
 
     root = project_root()
+    os.environ["FLW_DIR"] = flw_dir_name()
     found = engine.corpus(root, _specs_dir(root))
 
     # project_root walks upward, so a command issued from a subdirectory is

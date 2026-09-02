@@ -194,8 +194,9 @@ with an unknown one is not.
 
 ## 4. Write it
 
-**Config first.** `.flw/config.toml`, `[tests]`: `setup`, `checks` for the working set,
-`yours` for what this session cannot run. Only commands, only what you verified.
+**Config first.** `.flw/config.toml` (or the directory `flw doctor` names), `[tests]`:
+`setup`, `checks` for the working set, `yours` for what this session cannot run. Only
+commands, only what you verified.
 
 **Read that file before writing it, and edit `[tests]` in place.** It holds three other
 sections — `[paths] specs, reports`, `[interview] mode`, `[kb] category` — and none of

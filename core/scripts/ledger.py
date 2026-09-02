@@ -17,6 +17,7 @@ second, and an index on disk is a second copy that goes stale.
 from __future__ import annotations
 
 import functools
+import os
 import re
 import textwrap
 import tomllib
@@ -74,8 +75,9 @@ def corpus(root: Path, specs_dir: str = "specs") -> Corpus:
     versions = specs / "versions"
     records = load_records(versions) if versions.is_dir() else []
 
+    flw_dir = os.environ.get("FLW_DIR", ".flw")
     reviews: dict[Path, dict] = {}
-    for path in sorted((root / ".flw" / "reviews").glob("*.toml")):
+    for path in sorted((root / flw_dir / "reviews").glob("*.toml")):
         try:
             reviews[path] = tomllib.loads(path.read_text())
         except (tomllib.TOMLDecodeError, UnicodeDecodeError):

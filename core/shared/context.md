@@ -10,8 +10,9 @@ directory or a file, the project root is the nearest directory at or above **tha
 Say which root you resolved to, once, before doing anything with it.
 
 Either way the resolution is the same: go upward from the starting point and stop at the
-first directory holding `specs/` or `.flw/`. Deliberately not a VCS command: flw makes no
-assumption about which version control a project uses, or that it uses one.
+first directory holding `specs/` or `.flw/` — or the directory `flw doctor` names.
+Deliberately not a VCS command: flw makes no assumption about which version control a
+project uses, or that it uses one.
 
 A session started in a directory that holds several checkouts is the case this exists for.
 `$PWD` is the parent, the task names one of the repositories, and resolving from `$PWD`

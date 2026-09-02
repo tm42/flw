@@ -55,7 +55,7 @@ lenses yourself is the whole procedure.
 
 The first argument names a team, defaulting to `quick`. Look in order:
 
-1. `<project root>/.flw/reviews/<name>.toml`
+1. `<project root>/.flw/reviews/<name>.toml` (or the directory `flw doctor` names)
 2. `$FLW/core/reviews/<name>.toml`
 
 Project wins. `flw validate <config>` checks it — do that if it is user-authored and you

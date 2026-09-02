@@ -307,6 +307,26 @@ def test_doctor_is_clean_after_install(home, capsys):
     assert "OK" in capsys.readouterr().out
 
 
+def test_doctor_names_the_default_flw_dir(home, capsys, monkeypatch):
+    monkeypatch.delenv("FLW_DIR", raising=False)
+    doctor()
+    assert "flw dir: .flw (from default)" in capsys.readouterr().out
+
+
+def test_doctor_names_the_flw_dir_from_the_env_var(home, capsys, monkeypatch):
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+    doctor()
+    assert "flw dir: .cache/flw (from $FLW_DIR)" in capsys.readouterr().out
+
+
+def test_doctor_names_the_flw_dir_from_the_machine_config(home, capsys, monkeypatch):
+    monkeypatch.delenv("FLW_DIR", raising=False)
+    (flw.FLW_HOME).mkdir(parents=True, exist_ok=True)
+    (flw.FLW_HOME / "config.toml").write_text('[paths]\nflw = ".local/flw"\n')
+    doctor()
+    assert "flw dir: .local/flw (from ~/.flw/config.toml)" in capsys.readouterr().out
+
+
 def test_doctor_catches_a_deregistered_bundle(home, bundle, capsys):
     """The case that used to report OK.
 
@@ -2201,6 +2221,82 @@ def test_project_chain_is_empty_where_there_is_no_project(tmp_path, monkeypatch)
     assert flw.project_chain(plain) == []
 
 
+# --- the per-project directory's name -------------------------------------- #
+
+
+def test_flw_dir_name_defaults_to_dot_flw(tmp_path, monkeypatch):
+    monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
+    monkeypatch.delenv("FLW_DIR", raising=False)
+    assert flw.flw_dir_name() == ".flw"
+
+
+def test_flw_dir_name_reads_the_env_var(tmp_path, monkeypatch):
+    monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+    assert flw.flw_dir_name() == ".cache/flw"
+
+
+def test_flw_dir_name_reads_the_machine_config_key(tmp_path, monkeypatch):
+    home = tmp_path / "flw-home"
+    home.mkdir()
+    (home / "config.toml").write_text('[paths]\nflw = ".local/flw"\n')
+    monkeypatch.setattr(flw, "FLW_HOME", home)
+    monkeypatch.delenv("FLW_DIR", raising=False)
+    assert flw.flw_dir_name() == ".local/flw"
+
+
+def test_flw_dir_name_env_var_beats_the_config_key(tmp_path, monkeypatch):
+    home = tmp_path / "flw-home"
+    home.mkdir()
+    (home / "config.toml").write_text('[paths]\nflw = ".local/flw"\n')
+    monkeypatch.setattr(flw, "FLW_HOME", home)
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+    assert flw.flw_dir_name() == ".cache/flw"
+
+
+def test_flw_dir_name_refuses_an_absolute_env_var(tmp_path, monkeypatch):
+    monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
+    monkeypatch.setenv("FLW_DIR", "/tmp/somewhere")
+    with pytest.raises(SystemExit) as caught:
+        flw.flw_dir_name()
+    assert "$FLW_DIR" in str(caught.value)
+    assert "/tmp/somewhere" in str(caught.value)
+
+
+def test_flw_dir_name_refuses_an_absolute_config_key(tmp_path, monkeypatch):
+    home = tmp_path / "flw-home"
+    home.mkdir()
+    (home / "config.toml").write_text('[paths]\nflw = "/tmp/somewhere"\n')
+    monkeypatch.setattr(flw, "FLW_HOME", home)
+    monkeypatch.delenv("FLW_DIR", raising=False)
+    with pytest.raises(SystemExit) as caught:
+        flw.flw_dir_name()
+    assert "~/.flw/config.toml" in str(caught.value)
+    assert "/tmp/somewhere" in str(caught.value)
+
+
+def test_project_chain_finds_a_root_by_its_relocated_directory(tmp_path, monkeypatch):
+    """One name is in force at a time: a directory under a previous name is not
+    a project, and a walk probes exactly the resolved name per level."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+    project = tmp_path / "work"
+    (project / ".cache" / "flw").mkdir(parents=True)
+
+    assert flw.project_chain(project) == [project]
+
+
+def test_project_chain_does_not_find_a_stale_default_once_renamed(tmp_path, monkeypatch):
+    """A directory left over under the old name does not make the walk see two
+    roots, or silently keep answering from the one nothing names any more."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+
+    assert flw.project_chain(project) == []
+
+
 # --- the repositories a project spans ------------------------------------- #
 
 
@@ -3077,6 +3173,29 @@ def test_flw_test_prints_the_root_it_resolved(tmp_path, capsys, monkeypatch):
 
     assert flw.test(argparse.Namespace(path=str(inner), all=False, timeout=30, stream=False)) == 0
     assert f"root: {parent}" in capsys.readouterr().out
+
+
+def test_flw_test_exports_the_resolved_flw_dir_to_the_check_environment(
+    tmp_path, capsys, monkeypatch
+):
+    """run_tests.py runs each check as a real subprocess and reads $FLW_DIR
+    itself rather than importing cli/flw.py, so the machine's [paths] flw only
+    reaches the check — and the relocated config it names — if flw.py resolves
+    it and exports it first."""
+    home = tmp_path / "flw-home"
+    home.mkdir()
+    (home / "config.toml").write_text('[paths]\nflw = ".cache/flw"\n')
+    monkeypatch.setattr(flw, "FLW_HOME", home)
+    monkeypatch.delenv("FLW_DIR", raising=False)
+
+    root = tmp_path / "work"
+    (root / ".cache" / "flw").mkdir(parents=True)
+    (root / ".cache" / "flw" / "config.toml").write_text(
+        '''[tests]\nchecks = ['test "$FLW_DIR" = ".cache/flw"']\n'''
+    )
+
+    args = argparse.Namespace(path=str(root), all=False, timeout=30, stream=False)
+    assert flw.test(args) == 0
 
 
 def test_flw_test_all_refuses_a_directory_with_no_contract(tmp_path, capsys, monkeypatch):

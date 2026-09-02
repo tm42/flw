@@ -125,7 +125,8 @@ def _local_config(root: Path) -> dict:
     # in every repo worked in. The project file wins key by key.
     global_path = Path(os.environ.get("FLW_HOME", str(Path.home() / ".flw"))) / "config.toml"
     merged = dict(_tests_section(global_path))
-    merged.update(_tests_section(root / ".flw" / "config.toml"))
+    flw_dir = os.environ.get("FLW_DIR", ".flw")
+    merged.update(_tests_section(root / flw_dir / "config.toml"))
     # Same reason _check refuses a multi-line command: `|| exit` attaches to the
     # last line only, so a setup whose first line failed would let every check run
     # in the wrong environment and report a pass.

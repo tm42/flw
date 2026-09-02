@@ -20,6 +20,9 @@ core/styles/terse_prose.md          read by every skill, and handed to every rev
 <project>/.flw/config.toml          merged over the global one; the same four
 ```
 
+Every `.flw/` above is the default name — one machine-wide setting can rename it, and `flw
+doctor` prints the one actually in force.
+
 **Reference documents are found when someone goes looking.** Nothing loads them. They can be as
 long as their subject deserves.
 
