@@ -2757,7 +2757,7 @@ def _context_scope(root: Path | None, scopes: list[str] | None) -> int:
 
     `flw-review` had a skill intersect `paths` against a scope by hand before
     handing a reviewer the result, and nothing on disk could say whether it
-    actually had. This makes the narrowing a command's output rather than an
+    had. This makes the narrowing a command's output rather than an
     instruction an orchestrator can skip silently.
 
     A component path matches a scope path when either is at or under the
