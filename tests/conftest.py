@@ -49,14 +49,17 @@ tasks = [{ id = "build-it", desc = "build the fixture" }]
 
 @pytest.fixture(autouse=True)
 def _isolated_flw_home(tmp_path, monkeypatch):
-    """No test reads the machine's own ~/.flw/config.toml.
+    """No test reads the machine's own ~/.flw/config.toml or its $FLW_DIR.
 
-    `_local_config` merges it underneath the project's, so a developer who uses
-    the feature flw ships — `[tests] yours`, declared once for this machine —
-    turned the suite red with a diff pointing at a fixture and nothing pointing
-    at their home directory.
+    `_local_config` merges the config file underneath the project's, so a
+    developer who uses the feature flw ships — `[tests] yours`, declared once
+    for this machine — turned the suite red with a diff pointing at a fixture
+    and nothing pointing at their home directory. `$FLW_DIR` is the same shape
+    of leak one release later: every fixture writes a literal `.flw/`, so with
+    the setting in force 48 tests looked for a directory nothing had written.
     """
     monkeypatch.setenv("FLW_HOME", str(tmp_path / "flw-home"))
+    monkeypatch.delenv("FLW_DIR", raising=False)
 
 
 @pytest.fixture

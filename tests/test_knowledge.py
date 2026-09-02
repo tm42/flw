@@ -12,6 +12,7 @@ tests that need a diff replace it with canned numstat output or a failure.
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import sys
 from pathlib import Path
@@ -19,23 +20,26 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core" / "scripts"))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli"))
-import flw
 import knowledge
 
 REPO = Path(__file__).resolve().parent.parent
+
+# The name test_cli.py loads it under, and reused when it already has: two
+# module objects for one file are two sets of module constants, and a fixture
+# that patches FLW_HOME on one leaves the other reading the machine's.
+flw = sys.modules.get("flw_cli")
+if flw is None:
+    _spec = importlib.util.spec_from_file_location("flw_cli", REPO / "cli" / "flw.py")
+    flw = importlib.util.module_from_spec(_spec)
+    sys.modules[_spec.name] = flw
+    _spec.loader.exec_module(flw)
+
 TOY = REPO / "core" / "skills" / "flw-research" / "references" / "knowledge-example"
 ACME = TOY / "acme"
 
 # `git diff --numstat` for the shop's api/ — three files, +41 −12, the plan's
 # Samples line. Tab-separated, because that is what git emits.
 NUMSTAT = "20\t5\tapi/orders.py\n15\t4\tapi/models.py\n6\t3\tapi/routes.py\n"
-
-
-@pytest.fixture(autouse=True)
-def _default_flw_dir(monkeypatch):
-    """The toy's directories are literally `.flw/`, so no $FLW_DIR may leak in."""
-    monkeypatch.delenv("FLW_DIR", raising=False)
 
 
 def store_of(root: Path) -> Path:
@@ -472,32 +476,6 @@ def stores_of(parent: Path) -> list[tuple[Path, Path]]:
     return [(path, store_of(path)) for path in members_of(parent).values()]
 
 
-def test_the_toy_folds_to_the_plan_s_sample_exactly():
-    edges, described, carriers = knowledge.fold(stores_of(ACME))
-    assert knowledge.render_map("acme", edges, described, carriers) == (
-        "acme · folded from 3 concept files\n"
-        "\n"
-        "  shop        ──queue──▶   worker\n"
-        "  shop/api    ──queue──▶   worker\n"
-        "  worker      ──http──▶    shop\n"
-        "\n"
-        "3 edges · 3 nodes\n"
-    )
-
-
-def test_a_node_folds_in_both_directions_and_names_what_a_change_touches():
-    edges, _, _ = knowledge.fold(stores_of(ACME))
-    inbound, outbound = knowledge.touching(edges, "worker")
-    assert knowledge.render_node("worker", inbound, outbound) == (
-        "\n"
-        "  in    shop      ──queue──▶  worker\n"
-        "        shop/api  ──queue──▶  worker\n"
-        "  out   worker    ──http──▶   shop\n"
-        "\n"
-        "changing worker's inbound contract touches: shop, shop/api\n"
-    )
-
-
 def test_a_target_no_file_describes_is_counted_and_never_hidden(acme):
     """A seam nobody wrote up is exactly what a reader wants to be told about."""
     worker = acme / "worker"
@@ -782,6 +760,27 @@ def test_a_file_in_no_store_cannot_be_stamped(acme, capsys, monkeypatch):
     assert run(["know", "--stamp", str(acme / "worker" / "drain.py"),
                 "--root", str(acme)]) == 1
     assert "is in no store" in capsys.readouterr().err
+
+
+def test_the_map_orders_edges_by_name_and_not_by_declaration(acme, capsys, monkeypatch):
+    """`[project.roots]` is a table a person writes in whatever order suits them,
+    and the map is a document read top to bottom. `edges.sort` is what makes the
+    two independent, and a fixture declaring shop first cannot show it."""
+    (acme / ".flw" / "config.toml").write_text(
+        '[project.roots]\nworker = "./worker"\nshop   = "./shop"\n'
+    )
+    canned(monkeypatch, {"diff": (0, "")})
+
+    assert run(["map", "--root", str(acme)]) == 0
+    assert capsys.readouterr().out == (
+        "acme · folded from 3 concept files\n"
+        "\n"
+        "  shop        ──queue──▶   worker\n"
+        "  shop/api    ──queue──▶   worker\n"
+        "  worker      ──http──▶    shop\n"
+        "\n"
+        "3 edges · 3 nodes\n"
+    )
 
 
 def test_a_node_no_file_names_exits_1(capsys, monkeypatch):
@@ -1129,3 +1128,114 @@ def test_a_directory_named_system_is_refused_naming_the_collision(
 
     assert run(["know", "--root", str(root)]) == 1
     assert "a directory named system has no store" in capsys.readouterr().err
+
+
+# --- what the four records claimed, pinned ------------------------------------ #
+
+
+def test_a_declared_knowledge_dir_is_where_the_store_is_actually_read_from(
+    acme, capsys, monkeypatch
+):
+    """The machine's value being ignored is pinned above; this is the other half —
+    `flw_dir(root) / "knowledge"` in place of the declared-or-default expression
+    reads a directory the project put nothing in."""
+    canned(monkeypatch, {"diff": (0, "")})
+    shop = acme / "shop"
+    (shop / ".flw" / "config.toml").write_text('[knowledge]\ndir = "docs/arch"\n')
+    (shop / "docs" / "arch").mkdir(parents=True)
+    shutil.copy(store_of(shop) / "shop.md", shop / "docs" / "arch" / "shop.md")
+    shutil.rmtree(store_of(shop))
+
+    assert run(["know", "--root", str(shop)]) == 0
+    out = capsys.readouterr().out
+    assert "docs/arch/shop.md" in out
+    assert "Serves the storefront" in out
+
+
+def test_a_module_file_mirrors_the_file_it_describes_and_orphans_with_it(
+    acme, capsys, monkeypatch
+):
+    """The toy holds no `<path>.md`, so `mirror`'s with_suffix("") was unpinned —
+    and a real `flw know src/engine.py` said `current` for a changed file, which
+    is the one verdict the store must not give."""
+    shop = acme / "shop"
+    store = store_of(shop)
+    path = store / "api" / "orders.py.md"
+    path.write_text(
+        '+++\ntype = "Module"\ndescription = "One order, start to finish."\n'
+        'revision = "8be0117"\n+++\nbody\n'
+    )
+
+    assert knowledge.mirror(store, shop, path) == Path("api/orders.py")
+    assert knowledge.node_of(store, shop, path) == "shop/api/orders.py"
+
+    calls = canned(monkeypatch, {"-- api/orders.py": (0, NUMSTAT), "diff": (0, "")})
+    assert run(["know", "api/orders.py", "--root", str(shop)]) == 0
+    out = capsys.readouterr().out
+    assert "api/orders.py.md           module" in out
+    assert "changed since 8be0117" in out
+    assert ["diff", "--numstat", "8be0117", "--", "api/orders.py"] in [a for a, _ in calls]
+
+    (shop / "api" / "orders.py").rename(shop / "api" / "purchases.py")
+    assert knowledge.orphans(store, shop) == [(path, shop / "api" / "orders.py")]
+
+
+def test_check_prints_a_row_for_a_file_it_could_not_use_and_counts_it_apart(
+    acme, capsys, monkeypatch
+):
+    """The four counted states partition the rows, so anything else a file can be
+    is appended to the footer only when the store actually holds one."""
+    canned(monkeypatch, {"diff": (0, "")})
+    store = store_of(acme / "shop")
+    (store / "shop.md").write_text("+++\nthis is not toml\n+++\nbody\n")
+    (store / "api" / "api.md").write_text(
+        '+++\ntype = "Area"\nrevision = "8be0117"\n+++\nbody\n'
+    )
+
+    assert run(["know", "--check", "--root", str(acme)]) == 0
+    out = capsys.readouterr().out
+    assert "  shop      shop.md                    malformed" in out
+    assert "  shop      api/api.md                 missing description" in out
+    assert out.rstrip().endswith("· 1 malformed · 1 missing description")
+
+
+def test_orientation_counts_what_changed_and_says_why_a_member_is_absent(
+    acme, capsys, monkeypatch
+):
+    canned(monkeypatch, {"diff": (0, NUMSTAT)})
+    worker = store_of(acme / "worker") / "worker.md"
+    worker.write_text(
+        worker.read_text().replace(
+            "description = ", "revision = \"3c81d90\"\nnot_a_description = ", 1
+        )
+    )
+
+    assert run(["know", "--root", str(acme)]) == 0
+    out = capsys.readouterr().out
+    assert "1 changed" in out
+    assert "worker    (missing description)" in out
+
+
+def test_a_binary_file_counts_as_a_file_and_adds_no_lines(monkeypatch):
+    """`-\t-\tpath` is a real change with no line counts, and int() on it raises."""
+    canned(monkeypatch, {"diff": (0, NUMSTAT + "-\t-\tapi/logo.png\n")})
+    diff = knowledge.numstat("8be0117", ACME / "shop", Path("api"))
+    assert (diff.files, diff.insertions, diff.deletions) == (4, 41, 12)
+
+
+def test_a_system_stamp_moves_every_declared_member_through_the_command(
+    acme, capsys, monkeypatch
+):
+    """system.md carries one revision per member, each read in that member's own
+    repository — `{}` in place of the members reaches none of them."""
+    def fake(args: list[str], cwd: Path) -> tuple[int, str]:
+        if "rev-parse" in " ".join(args):
+            return 0, ("aaa1111\n" if cwd.name == "shop" else "bbb2222\n")
+        return 0, ""
+
+    monkeypatch.setattr(knowledge, "git", fake)
+    path = store_of(acme) / "system.md"
+
+    assert run(["know", "--stamp", str(path), "--root", str(acme)]) == 0
+    concept = knowledge.load(path, store_of(acme), acme)
+    assert concept.revision == {"shop": "aaa1111", "worker": "bbb2222"}

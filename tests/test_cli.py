@@ -22,10 +22,12 @@ from types import SimpleNamespace
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-_spec = importlib.util.spec_from_file_location("flw_cli", REPO / "cli" / "flw.py")
-flw = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = flw
-_spec.loader.exec_module(flw)
+flw = sys.modules.get("flw_cli")
+if flw is None:
+    _spec = importlib.util.spec_from_file_location("flw_cli", REPO / "cli" / "flw.py")
+    flw = importlib.util.module_from_spec(_spec)
+    sys.modules[_spec.name] = flw
+    _spec.loader.exec_module(flw)
 
 
 SKILL = "---\nname: {name}\ndescription: {name}, for a test.\n---\n\nDo the thing.\n"
@@ -2316,7 +2318,7 @@ def test_doctor_never_prints_a_blank_directory_name(tmp_path, monkeypatch, capsy
     monkeypatch.setenv("FLW_DIR", "")
 
     with pytest.raises(SystemExit):
-        flw.doctor(argparse.Namespace(root=None))
+        flw.doctor(argparse.Namespace(root=None, verbose=False))
     assert "flw dir:" not in capsys.readouterr().out
 
 
@@ -3285,6 +3287,74 @@ def test_the_three_messages_that_name_the_flw_directory_use_its_real_name(
     )
     assert flw.test(args) == 2
     assert f"{empty}/.cache/flw/config.toml" in capsys.readouterr().err
+
+
+def test_every_read_of_the_flw_directory_goes_through_the_resolved_name(
+    tmp_path, capsys, monkeypatch
+):
+    """Eight in-process read sites, and reverting any one of them to the literal
+    `.flw` passes a suite whose every fixture writes `.flw/`. One project under a
+    relocated name, read by the four commands that reach all eight."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
+    monkeypatch.setenv("FLW_DIR", ".cache/flw")
+
+    root = tmp_path / "acme"
+    here = root / ".cache" / "flw"
+    (here / "extensions").mkdir(parents=True)
+    (here / "reviews").mkdir()
+    (here / "knowledge").mkdir()
+    member = root / "shop"
+    (member / ".cache" / "flw").mkdir(parents=True)
+    (here / "config.toml").write_text(
+        '[kb]\ncategory = "acme"\n'
+        '[project.roots]\nshop = "shop"\n'
+        '[knowledge]\ndir = ".cache/flw/knowledge"\n'
+    )
+    (here / "extensions" / "shared.md").write_text("RELOCATED-SHARED\n")
+    (here / "reviews" / "eng.toml").write_text(
+        'name = "eng"\ndescription = "the engineering review"\n'
+        '[[reviewer]]\nrole = "correctness"\nperspective = "what is wrong"\n'
+    )
+    (here / "knowledge" / "acme.md").write_text(
+        '+++\ntype = "Repository"\ndescription = "the whole shop"\n'
+        'revision = "abc1234"\n+++\nbody\n'
+    )
+    (root / "specs" / "versions").mkdir(parents=True)
+    (root / "specs" / "current.toml").write_text(
+        'schema_version = 4\nspec_version = "0.0.1"\napplied = ["first"]\n'
+        'assumptions = ["the fixture is enough contract to work against"]\n'
+        '[[final_state.components]]\nname = "the engine"\npaths = ["src/"]\n'
+        'provides = ["a user can engine"]\n'
+        '[success_criteria]\ntests = [{ command = "true" }]\n'
+        'criteria = "The fixture behaves."\n'
+    )
+    (root / "specs" / "versions" / "first-minor.toml").write_text(
+        'name = "first"\nsummary = "the first contract"\n'
+        '[[dag]]\ngroup = 1\nphase = "build"\n'
+        'tasks = [{ id = "build-it", desc = "build the fixture" }]\n'
+    )
+
+    # _section_config, _context_extensions and knowledge_dir's default.
+    assert flw.context(argparse.Namespace(skill="flw-spec", root=str(root))) == 0
+    body = _body(capsys.readouterr().out)
+    assert "RELOCATED-SHARED" in body
+    assert "notes: category acme" in body
+
+    # project_roots and report_members.
+    monkeypatch.chdir(root)
+    flw.doctor(argparse.Namespace(root=None, verbose=False))
+    out = capsys.readouterr().out
+    assert "flw dir: .cache/flw (from $FLW_DIR)" in out
+    assert "shop" in out.split("members:", 1)[1]
+
+    # validate's reviews glob.
+    assert flw.validate(argparse.Namespace(path=None)) == 0
+    assert ".cache/flw/reviews/eng.toml" in capsys.readouterr().out
+
+    # ledger()'s export, read back by run_tests-style subprocesses.
+    assert flw.ledger(argparse.Namespace(show=None, term=[], full=False)) == 0
+    assert os.environ["FLW_DIR"] == ".cache/flw"
 
 
 def test_flw_test_all_refuses_a_directory_with_no_contract(tmp_path, capsys, monkeypatch):
