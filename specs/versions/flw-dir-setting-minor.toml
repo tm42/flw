@@ -1,0 +1,110 @@
+base    = "project-roots"
+name    = "flw-dir-setting"
+summary = "the per-project directory flw reads and writes is .flw/ by default and any relative name by one machine-wide setting, so it can sit inside a directory a repository already ignores"
+
+approach = """
+The request. At work the per-project directory must not be committed, and most repositories
+there already ignore one directory — `.cache/`, `.local/`, whatever the convention is.
+Putting flw's directory inside it means nothing new appears in `git status` and nothing has
+to be added to a `.gitignore` someone else owns. Today the name is the literal `.flw` at
+eight sites in `cli/flw.py` and two in the scripts.
+
+Why the setting is machine-wide and never per project. The project's own config lives
+inside the directory being named, so a per-project value would have to be read from the
+place it locates. The name therefore comes from the machine: `$FLW_DIR`, else `[paths] flw`
+in `~/.flw/config.toml`, else `.flw`. `[paths]` already holds `specs` and `reports`, so this
+is a third key in the section that already answers where things are. A project that wants
+a different name from its neighbours sets the env var in its shell; that is the whole
+escape hatch and it is enough.
+
+Why one name at a time and no probe list. Probing `.flw/`, then `.cache/flw/`, then
+`.local/flw/` makes every walk three times the stats and makes it possible for two
+directories to both claim a root, with nothing to say which wins. One name is in force; a
+directory under a previous name is not a project until it is moved, and `flw doctor`
+prints the name so the reason is visible.
+
+Why relative only. An absolute name would put every project's directory in one place,
+which is `$FLW_HOME`'s job and not this setting's. Refused, naming the value.
+
+How the scripts learn the name. `run_tests.py` and `ledger.py` run as subprocesses of the
+CLI and already read `$FLW_HOME` from the environment; the CLI exports `$FLW_DIR` with the
+resolved name when it invokes them and they read it the same way, defaulting to `.flw`, so
+each script stays stdlib-only and runnable on its own.
+
+What the prose says. `.flw/` stays the name in every document, because it is the default
+and the common case. The four places that tell a reader where to look — `context.md`
+§The project, `flw-review` §1, `flw-research` §4, `docs/layout.md` — gain one clause: or
+the directory `flw doctor` names. Nothing else changes; a document that says `.flw/` is
+not wrong.
+
+Coverage of what was read: `nearest_project`, `project_chain`, `_section_config`,
+`_specs_dir`, `report_extensions`, `_context_extensions`, the reviews glob in `context`,
+`doctor`, and every subprocess call into `core/scripts/`; `run_tests.py:126-128`;
+`ledger.py:78`; `store.py`, which reads no per-project flw directory and is untouched.
+"""
+
+contract_edit = """
+In `final_state.components`, component **the flw CLI**:
+
+`provides` — append:
+  "A user can put flw's per-project directory under any relative name — an already-ignored
+  directory the repository has — with one machine-wide setting, and flw doctor says which
+  name is in force and where it came from."
+
+`properties` — append:
+  "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in
+  ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside
+  the directory it would name. One name is in force at a time: a directory under another
+  name is not a project, and a walk probes exactly one name per level."
+
+`surfaces` — replace:
+  "~/.flw/config.toml and <project root>/.flw/config.toml — merged in that order, project
+  wins key by key. Sections and keys: [paths] specs, reports; [interview] mode; [tests]
+  setup, checks, yours; [kb] category. [project] roots — a table of member name to path —
+  is read from the project file only: a machine-wide roots map is wrong for every project
+  but one."
+with:
+  "~/.flw/config.toml and <project root>/<flw dir>/config.toml — merged in that order,
+  project wins key by key. Sections and keys: [paths] specs, reports; [interview] mode;
+  [tests] setup, checks, yours; [kb] category. [project] roots — a table of member name to
+  path — is read from the project file only: a machine-wide roots map is wrong for every
+  project but one. [paths] flw — the per-project directory's name, relative, default .flw
+  — is read from the machine's file only, or $FLW_DIR, because the project's file lives
+  inside the directory it names."
+
+`surfaces` — replace:
+  "<project root>/.flw/extensions/<skill name>.md and <project root>/.flw/extensions/shared.md
+  — prose read at a skill's opening, from every project root at or above the resolved one
+  and below $HOME, outermost first so the nearest overrides; within a level shared.md is
+  read before the skill's own file, so a nearer level beats a farther one and, within one
+  level, a skill's own file beats shared. shared.md is read by every skill; a file named
+  for anything else is read by nobody, and flw doctor says so."
+with:
+  "<project root>/<flw dir>/extensions/<skill name>.md and <project root>/<flw dir>/extensions/shared.md
+  — prose read at a skill's opening, from every project root at or above the resolved one
+  and below $HOME, outermost first so the nearest overrides; within a level shared.md is
+  read before the skill's own file, so a nearer level beats a farther one and, within one
+  level, a skill's own file beats shared. shared.md is read by every skill; a file named
+  for anything else is read by nobody, and flw doctor says so."
+"""
+
+[[decisions]]
+topic     = "where the name comes from"
+options   = ["the machine only — $FLW_DIR, else ~/.flw/config.toml [paths] flw", "a marker file at the project root pointing at the directory, as git does for worktrees", "a probe list of common names"]
+chosen    = "the machine only — $FLW_DIR, else ~/.flw/config.toml [paths] flw"
+rationale = "The project's config lives inside the directory being named, so it cannot say where that is. A marker file is one more file in a repository whose whole point is that nothing new appears. A probe list triples the stats per level and lets two directories claim one root."
+
+[[decisions]]
+topic     = "whether a directory under a previous name still counts as a project"
+options   = ["no — one name is in force, doctor prints it", "yes — probe the default as a fallback"]
+chosen    = "no — one name is in force, doctor prints it"
+rationale = "A fallback is a two-entry probe list with the same ambiguity. The failure it would paper over — switching the name with old directories still in place — is visible in one doctor line and fixed by one move."
+
+[[dag]]
+group = 1
+phase = "one name"
+tasks = [
+  { id = "flw-dir", desc = "cli/flw.py: flw_dir_name() -> str reads $FLW_DIR, else [paths] flw from the machine's config file only, else '.flw'; an absolute value is exit 1 naming it. flw_dir(root) -> Path is root / that name. Every `root / \".flw\"` becomes flw_dir(root): project_chain probes specs/ or flw_dir(candidate); _section_config, _specs_dir, report_extensions, _context_extensions, the reviews glob in context, doctor. Every subprocess into core/scripts/ runs with FLW_DIR set to the resolved name. Tests: the default; the env var; the config key; env beats config; an absolute value refused; a walk finds a root by a relocated directory and does not find one by a stale .flw/ when another name is in force; the env var reaches a script." },
+  { id = "scripts-dir", desc = "core/scripts/run_tests.py:128 and core/scripts/ledger.py:78 read the per-project directory's name from $FLW_DIR, default '.flw', the way run_tests.py already reads $FLW_HOME. Tests: each script with the variable set finds a relocated config and reviews directory.", depends_on = ["flw-dir"] },
+  { id = "doctor-and-prose", desc = "cli/flw.py doctor(): a first line `flw dir: <name> (from $FLW_DIR | ~/.flw/config.toml | default)`. core/shared/context.md §The project, core/skills/flw-review/SKILL.md §1, core/skills/flw-research/SKILL.md §4, docs/layout.md: where each tells a reader to look in .flw/, one clause — or the directory flw doctor names. No other document changes; .flw/ stays the name of the default. Tests: the doctor line in each of the three provenance forms.", depends_on = ["flw-dir"] },
+]
