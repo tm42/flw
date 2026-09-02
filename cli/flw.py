@@ -2752,14 +2752,12 @@ def _context_contract(root: Path | None) -> None:
         print(f"  {component.get('name', '?')}: {paths}")
 
 
-def _context_notes(root: Path | None, skill: str | None) -> None:
+def _context_notes(root: Path | None) -> None:
     """The note store listing a skill's opening would read.
 
-    The listing is omitted for flw-review, matching that skill's own opening: it
-    orchestrates and reviews nothing, so a read here is paid by the one context
-    that produces no findings and reaches none of the ones that do. The category
-    header still prints, because which store a reviewer would be pointed at is
-    part of what the opening reports.
+    flw-review used to skip this, back when it only orchestrated: the read was paid
+    by the one context that produces no findings. It reviews by default now, so the
+    same context that opens the skill is the one that needs the store.
     """
     if root is None:
         # Without a root there is no category, and the unfiltered walk printed the
@@ -2769,9 +2767,6 @@ def _context_notes(root: Path | None, skill: str | None) -> None:
         return
     category = _kb_category(root)
     print(f"\nnotes: category {category}")
-    if skill == "flw-review":
-        print("  listing omitted: flw-review's own opening does not read the store")
-        return
 
     scripts = checkout() / "core" / "scripts"
     sys.path.insert(0, str(scripts))
@@ -2843,7 +2838,7 @@ def context(args: argparse.Namespace) -> int:
 
     _context_members(root)
     _context_extensions(project_chain(start), skill)
-    _context_notes(root, skill)
+    _context_notes(root)
     _context_contract(root)
     return 0
 

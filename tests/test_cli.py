@@ -184,6 +184,23 @@ def test_install_links_every_skill_and_records_it(home, capsys):
     assert {link["skill"] for link in flw.read_links()} == set(expected)
 
 
+def test_install_reaches_a_skills_references_subdirectory(home, capsys):
+    """flw-review keeps its team-dispatch machinery in references/, the way
+    flw-spec already keeps spec-critic.md and good-contract.md there. Install
+    symlinks the whole skill directory, so a file added under references/ needs
+    nothing from install or doctor to become reachable — this pins that no
+    per-skill list of what to link exists for either skill to fall out of."""
+    assert install() == 0
+    capsys.readouterr()
+
+    installed = home / ".claude" / "skills" / "flw-review"
+    assert installed.is_symlink()
+    assert (installed / "references" / "team-dispatch.md").is_file()
+
+    assert doctor() == 0
+    assert "orphan" not in capsys.readouterr().out
+
+
 def test_a_dry_run_writes_nothing(home, capsys):
     assert install(dry=True) == 0
     capsys.readouterr()
@@ -2563,32 +2580,22 @@ def test_context_prints_extensions_outermost_first_and_shared_before_the_skills_
     assert order == sorted(order), out
 
 
-def test_context_for_flw_review_keeps_the_header_and_drops_the_listing(
+def test_context_for_flw_review_prints_the_listing_like_any_other_skill(
     tmp_path, capsys, monkeypatch
 ):
-    """flw-review's own opening skips the store: it orchestrates and reviews
-    nothing, so that read is paid by the one context producing no findings. The
-    category header stays — which store its reviewers would be pointed at is part
-    of what the opening reports, and printing nothing at all hid it."""
+    """flw-review reviews by default now, in the same context its opening runs
+    in, so it needs the store exactly when flw-execute does — no special case."""
     home = tmp_path / "flw-home"
     (home / "kb" / "work").mkdir(parents=True)
     (home / "kb" / "work" / "one.md").write_text("# LISTED-NOTE\n\nbody\n")
     root = tmp_path / "work"
     (root / ".flw").mkdir(parents=True)
 
-    # Search below the root line only: everything above it is context.md, which
-    # this test does not control, and one plausible sentence added there turned
-    # both assertions red with no behaviour changed.
-    assert _context(tmp_path, monkeypatch, skill="flw-review", root=str(root)) == 0
-    body = _body(capsys.readouterr().out)
-    assert "notes: category work" in body
-    assert "listing omitted" in body
-    assert "LISTED-NOTE" not in body
-
-    assert _context(tmp_path, monkeypatch, skill="flw-execute", root=str(root)) == 0
-    body = _body(capsys.readouterr().out)
-    assert "notes: category work" in body
-    assert "LISTED-NOTE" in body
+    for skill in ("flw-review", "flw-execute"):
+        assert _context(tmp_path, monkeypatch, skill=skill, root=str(root)) == 0
+        body = _body(capsys.readouterr().out)
+        assert "notes: category work" in body
+        assert "LISTED-NOTE" in body
 
 
 def test_context_with_no_project_root_does_not_search_the_store(
