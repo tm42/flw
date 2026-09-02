@@ -6,8 +6,9 @@ members `shop` and `worker`, the seam declared from both sides. It is the fixtur
 and the documentation at once, so a change that breaks the shape a first survey
 imitates breaks this suite too.
 
-No test runs git. Every git call in the module goes through one function, and the
-tests that need a diff replace it with canned numstat output or a failure.
+Every git call in the module goes through one function, and almost every test that
+needs a diff replaces it with canned numstat output or a failure. One test is the
+exception, and runs `git()` itself — see it for why.
 """
 
 from __future__ import annotations
@@ -71,6 +72,23 @@ def canned(monkeypatch, answers):
 
     monkeypatch.setattr(knowledge, "git", fake)
     return calls
+
+
+# --- the one test that runs git ---------------------------------------------- #
+
+
+def test_git_itself_picks_stderr_on_failure(tmp_path):
+    """Every other test in this file replaces `git()` with `canned` or a direct
+    `setattr`, so nothing ever ran its body: the choice between stdout and
+    stderr on a failing call was held only by a docstring, and a mutation
+    swapping it back to stdout left the rest of the suite green. This is the
+    one exception to "no test runs git" — against a directory that is not a
+    repository, where a present git exits non-zero with `fatal:` on stderr."""
+    if shutil.which("git") is None:
+        pytest.skip("git is not on PATH")
+    code, out = knowledge.git(["rev-parse", "--short", "HEAD"], tmp_path)
+    assert code != 0
+    assert "fatal:" in out
 
 
 # --- reading one file ------------------------------------------------------- #
@@ -914,6 +932,23 @@ def test_a_stamp_on_a_dirty_mirror_is_written_and_says_which_path(
     assert knowledge.load(path, store_of(shop), shop).revision == "abc1234"
 
 
+def test_a_dirty_repository_file_names_the_repository_and_not_a_dot(
+    acme, capsys, monkeypatch
+):
+    """The Area case above mirrors `api/`, where `rel == Path(".")` is
+    unreachable. A repository file mirrors the whole tree, so this is the case
+    `_dirty_subject`'s `rel == Path(".")` branch actually exists for."""
+    shop = acme / "shop"
+    canned(monkeypatch, {"rev-parse": (0, "abc1234\n"),
+                         "status": (0, " M api/orders.py\n")})
+    path = store_of(shop) / "shop.md"
+
+    assert run(["know", "--stamp", str(path), "--root", str(acme)]) == 0
+    out = capsys.readouterr().out
+    assert "shop has uncommitted changes" in out
+    assert ". has uncommitted changes" not in out
+
+
 def test_a_stamp_on_a_clean_mirror_carries_no_warning(acme, capsys, monkeypatch):
     canned(monkeypatch, {"rev-parse": (0, "abc1234\n"), "status": (0, "")})
     path = store_of(acme / "shop") / "shop.md"
@@ -1327,6 +1362,30 @@ def test_orientation_counts_what_changed_and_says_why_a_member_is_absent(
     out = capsys.readouterr().out
     assert "1 changed" in out
     assert "worker    (missing description)" in out
+
+
+def test_a_type_that_disagrees_with_position_hides_the_file_like_a_missing_one(
+    acme, capsys, monkeypatch
+):
+    """`Concept.listable` excludes every problem but `unstamped`, and a
+    disagreeing `type` is one more of those — the whole reason the field is
+    declared as well as derived. Nothing at the command level held it before."""
+    canned(monkeypatch, {"diff": (0, "")})
+    shop = acme / "shop"
+    store = store_of(shop)
+    path = store / "shop.md"
+    path.write_text(path.read_text().replace('type = "Repository"', 'type = "Area"'))
+
+    assert run(["know", "--check", "--root", str(acme)]) == 0
+    out = capsys.readouterr().out
+    assert "  shop      shop.md                    type disagrees with position" in out
+    assert out.rstrip().endswith("1 type disagrees with position")
+
+    assert run(["know", "--root", str(acme)]) == 0
+    assert "shop      (type disagrees with position)" in capsys.readouterr().out
+
+    knowledge.reindex(store, shop)
+    assert "shop.md" not in (store / "index.md").read_text()
 
 
 def test_a_binary_file_counts_as_a_file_and_adds_no_lines(monkeypatch):
