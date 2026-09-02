@@ -66,12 +66,17 @@ length mirroring each other. They sound clever and they are hard to get informat
 - Bad: "Minimal is not partial."
 - Good: "Doing the minimum does not mean doing only part of the job."
 
-**No teasers.** Do not announce that something is surprising or wrong and then explain it three
-sentences later. Say it where you first mention it.
+**Give the finding before any comment on it.** A rating, who found it, or how it compares with
+what you said earlier is a comment, and the reader cannot weigh a comment against a claim they
+have not read. "The CRITICAL was mine and it was real", "better than I said", and "the obvious
+answer is wrong" all lead with the comment. State the finding where you first mention it, then
+keep the comment only if it changes what the reader does.
 
-- Bad: "The obvious answer is wrong." (followed by a paragraph, then the actual answer)
-- Good: "Assigning the number at merge time does not work, because it rewrites a file that was
-  already reviewed."
+- Bad: "The `index.md` finding was the sharp one, and it caught me contradicting myself: I
+  dropped Part C's authored map because a fold materialised to disk drifts, then added a fold
+  materialised to disk."
+- Good: "`index.md` contradicts a decision already in the document: I dropped Part C's authored
+  map because a fold materialised to disk drifts, and `index.md` is one."
 
 **Read it out loud as a last check.** Once the rules above pass, read the sentence as though you
 were saying it to a colleague. If it sounds like nothing a person would say, something is still
