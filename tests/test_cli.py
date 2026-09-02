@@ -2442,6 +2442,80 @@ def test_context_reads_the_contract_where_paths_specs_says_it_is(
     assert "9.9.9" in body
 
 
+def test_context_prints_the_shared_context_only_when_a_skill_is_named(
+    tmp_path, capsys, monkeypatch
+):
+    """context.md opens "Read once per run, by every flw skill", and it was 1,467
+    of the bare call's 1,626 tokens — in the one call no skill makes. The bare call
+    is a session that invokes none and wants the tail."""
+    first_line = (flw.checkout() / "core" / "shared" / "context.md").read_text()
+    first_line = first_line.splitlines()[0]
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    bare = capsys.readouterr().out
+    assert first_line not in bare
+    assert bare.startswith("\nroot: ")
+
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(root)) == 0
+    assert first_line in capsys.readouterr().out
+
+
+def test_context_says_the_root_came_from_pwd_and_what_to_do_about_it(
+    tmp_path, capsys, monkeypatch
+):
+    """A --root that does not exist is loud; a wrong root that exists is silent.
+    From a sibling checkout the component names are identical to this one's and
+    only the path and spec_version differ."""
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    assert "(from --root)" in capsys.readouterr().out
+
+    monkeypatch.chdir(root)
+    assert _context(tmp_path, monkeypatch) == 0
+    assert (
+        "(from $PWD — if the request named a different repository, re-run "
+        "with --root)"
+    ) in capsys.readouterr().out
+
+
+def test_doctor_and_context_refuse_a_bad_root_the_same_way(tmp_path, capsys):
+    """Twelve lines duplicated in both, and a reader of either copy could not tell
+    whether the other still agreed."""
+    for command in (flw.doctor, flw.context):
+        args = argparse.Namespace(verbose=False, skill=None, root=str(tmp_path / "typo"))
+        assert command(args) == 1
+        assert "error: --root: no such path:" in capsys.readouterr().err
+
+        args = argparse.Namespace(verbose=False, skill=None, root="")
+        assert command(args) == 1
+        assert "error: --root was given an empty path" in capsys.readouterr().err
+
+
+def test_nearest_project_is_the_innermost_of_the_chain(tmp_path, monkeypatch):
+    """The same walk was written twice with the same $HOME guard for the same
+    reason, and the two could drift apart with nothing to say so."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    parent = tmp_path / "work"
+    (parent / ".flw").mkdir(parents=True)
+    inner = parent / "ds"
+    (inner / "specs").mkdir(parents=True)
+    deeper = inner / "src" / "engine"
+    deeper.mkdir(parents=True)
+    outside = tmp_path / "nothing" / "here"
+    outside.mkdir(parents=True)
+
+    for start in (parent, inner, deeper, outside):
+        chain = flw.project_chain(start)
+        assert flw.nearest_project(start) == (chain[-1] if chain else None)
+
+    assert flw.nearest_project(deeper) == inner
+    assert flw.nearest_project(outside) is None
+
+
 def test_context_names_a_contract_with_no_components_for_what_it_is(
     tmp_path, capsys, monkeypatch
 ):

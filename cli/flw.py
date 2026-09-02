@@ -1379,19 +1379,32 @@ def refresh_style(
 # --------------------------------------------------------------------------- #
 
 
+def _refuse_a_bad_root(given: str | None) -> int | None:
+    """1 and a message for a --root that cannot be used, None to carry on.
+
+    `Path(given).resolve()` is non-strict, so a mistyped relative path resolves
+    under $PWD and the walk answers with whatever project contains the current
+    directory — the exact failure this flag exists to prevent. And `--root ""` is
+    falsy, so a truthiness test drops it before Path() ever sees it.
+
+    One helper because doctor and context refuse identically and a reader of
+    either copy could not tell whether the other still agreed.
+    """
+    if given is None:
+        return None
+    if not given.strip():
+        print("error: --root was given an empty path", file=sys.stderr)
+        return 1
+    if not Path(given).exists():
+        print(f"error: --root: no such path: {given}", file=sys.stderr)
+        return 1
+    return None
+
+
 def doctor(args: argparse.Namespace) -> int:
-    if args.root is not None:
-        # `Path(args.root).resolve()` is non-strict, so a mistyped relative path
-        # resolves under $PWD and the walk answers with whatever project contains
-        # the current directory — the exact failure this flag exists to prevent,
-        # reported as `(from --root)` so the provenance line confirms it. And
-        # `--root ""` is falsy, so a truthiness test drops it before Path() sees it.
-        if not args.root.strip():
-            print("error: --root was given an empty path", file=sys.stderr)
-            return 1
-        if not Path(args.root).exists():
-            print(f"error: --root: no such path: {args.root}", file=sys.stderr)
-            return 1
+    refused = _refuse_a_bad_root(args.root)
+    if refused is not None:
+        return refused
 
     problems = 0
     root = checkout()
@@ -2021,32 +2034,30 @@ def nearest_project(start: Path | None = None) -> Path | None:
 
     Deliberately not a VCS command: flw makes no assumption about which version
     control a project uses, or that it uses one.
+
+    The innermost of `project_chain`, because it was the same walk written twice
+    with the same $HOME guard for the same reason. Answering "which project is
+    this" is still a separate question from "which roots carry conventions here",
+    which is why the name stays.
     """
-    here = (start or Path.cwd()).resolve()
-    home = Path.home().resolve()
-    for candidate in (here, *here.parents):
-        # `flw install` writes ~/.flw, so without this every home directory looks
-        # like a project and every command outside a real one resolves to $HOME.
-        # Observed: `flw scout` walked all of $HOME into a network mount and hung.
-        if candidate == home:
-            break
-        if (candidate / "specs").is_dir() or (candidate / ".flw").is_dir():
-            return candidate
-    return None
+    chain = project_chain(start)
+    return chain[-1] if chain else None
 
 
 def project_chain(start: Path | None = None) -> list[Path]:
     """Every project root from the outermost down to the nearest, outermost first.
 
-    `nearest_project` answers "which project is this" and stops at the first hit,
+    `nearest_project` answers "which project is this" and takes the last of these,
     because one project is one root — the contract, the config and the checks all
     resolve that way. Extensions want the other question: a directory holding
     several checkouts can carry conventions every one of them obeys, and a skill
     working inside one of them should read those as well as its own.
 
-    Bounded above by $HOME for the same reason `nearest_project` breaks there —
-    `flw install` writes ~/.flw, so an unbounded walk would put the home directory
-    at the head of every chain for every project underneath it.
+    Bounded above by $HOME: `flw install` writes ~/.flw, so an unbounded walk would
+    put the home directory at the head of every chain for every project underneath
+    it, and every command run outside a real project would resolve to $HOME.
+    Observed before the guard: `flw scout` walked all of $HOME into a network mount
+    and hung.
     """
     here = (start or Path.cwd()).resolve()
     home = Path.home().resolve()
@@ -2622,19 +2633,15 @@ def context(args: argparse.Namespace) -> int:
     Prints rather than refuses outside a project: a directory with no contract and
     no configuration is a state, not a fault, which is the reading `flw validate`
     already takes.
+
+    With no skill named the shared context is omitted. That call is the ambient
+    line's case — a session in a flw project that invokes no skill — and it wants
+    the root, the chain, the notes and the contract, not the file whose first line
+    says every skill reads it.
     """
-    if args.root is not None:
-        # `Path(args.root).resolve()` is non-strict, so a mistyped relative path
-        # resolves under $PWD and the walk answers with whatever project contains
-        # the current directory — the exact failure this flag exists to prevent,
-        # reported as `(from --root)` so the provenance line confirms it. And
-        # `--root ""` is falsy, so a truthiness test drops it before Path() sees it.
-        if not args.root.strip():
-            print("error: --root was given an empty path", file=sys.stderr)
-            return 1
-        if not Path(args.root).exists():
-            print(f"error: --root: no such path: {args.root}", file=sys.stderr)
-            return 1
+    refused = _refuse_a_bad_root(args.root)
+    if refused is not None:
+        return refused
 
     skills, _ = discover()
     known = sorted(skill.name for skill in skills)
@@ -2650,9 +2657,21 @@ def context(args: argparse.Namespace) -> int:
     start = Path(args.root).resolve() if args.root else None
     root = nearest_project(start)
 
-    print(read_flw_text(checkout() / "core" / "shared" / "context.md").rstrip("\n"))
+    if skill is not None:
+        # context.md opens "Read once per run, by every flw skill", and every
+        # SKILL.md names itself here. The bare call is the other case — a session
+        # in a project that invokes no skill — and wants the tail, not the file
+        # that was 90.2% of it.
+        print(read_flw_text(checkout() / "core" / "shared" / "context.md").rstrip("\n"))
 
-    came_from = "--root" if args.root else "$PWD"
+    # A --root that does not exist is loud. A wrong root that exists is silent: from
+    # a sibling checkout the component names can be identical and only the path and
+    # spec_version differ, so the $PWD case says what to do about it.
+    came_from = (
+        "--root"
+        if args.root
+        else "$PWD — if the request named a different repository, re-run with --root"
+    )
     if root is None:
         print(f"\nroot: none at or above {tilde(start or Path.cwd())} (from {came_from})")
     else:
