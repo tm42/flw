@@ -8,3 +8,4 @@ node_modules/
 package-lock.json
 .flw/reports/
 .flw/reviews/publish*.toml
+.flw/knowledge/

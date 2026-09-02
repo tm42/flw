@@ -3,3 +3,7 @@
 # guard makes it instant once the venv is there; flw itself still installs nothing.
 [tests]
 setup = "test -x .venv/bin/pytest || { python3 -m venv .venv && .venv/bin/pip install -q pytest ruff; }"
+
+# No `checks` key on purpose. The contract's three checks run here in about eight
+# seconds together, so a narrower branch set would make plain `flw test` weaker than
+# `flw test -A` and save nothing. Nothing goes in `yours` either: all three run.
