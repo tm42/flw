@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.12.3"
+spec_version = "0.13.0"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -30,6 +30,7 @@ applied = [
   "a-solo-review-fills-the-store",
   "quiet-wrongness",
   "pay-the-opening-once",
+  "a-rule-nothing-breaks",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -48,6 +49,7 @@ assumptions = [
   "The user's project may use any version control system, or none; flw proposes commits but does not make them, and reads no VCS state except to locate a project root when nothing nearer is found.",
   "Not every tracked path belongs to a component. specs/, .flw/ and pyproject.toml are read by flw and by hosts and delivered by no component; a path claimed by none is a state, not a gap, and flw validate does not check for it.",
   "A repository or parent whose directory is named `system` has no store: its repository file and the system file share a name, and flw know refuses it naming the collision rather than pick a reading.",
+  "A host writes each session's transcript to disk as the session runs, so a session can read its own recent replies. flw style check depends on it and degrades to reporting nothing if a host stops doing it, or names a different session's file where several run against one project at once.",
 ]
 
 open_questions = [
@@ -101,6 +103,8 @@ provides = [
   "flw install --ambient writes its block between markers and replaces it whole on reinstall. Nothing between installs is tracked or verified, and text outside the markers is never touched. The style is verified by digest and the ambient block deliberately is not: every skill carries its own opening, so the block serves only the session that invokes none, and a stale one costs that session a line it would have run anyway.",
   "A user can declare the repositories a project spans in its config, and flw context and flw doctor list them with whether each exists, so a session rooted at the parent of several checkouts knows what it is standing above.",
   "A user can put flw's per-project directory under any relative name — an already-ignored directory the repository has — with one machine-wide setting, and flw doctor says which name is in force and where it came from.",
+  "A user can check any prose in the repository against the mechanical rules of the writing style flw ships, and is told the path, the line and the rule for each violation rather than a count.",
+  "A user can ask what the agent's own recent replies broke in that style, and gets the rule and an example rather than the rule restated, because a model that can recite a constraint it is breaking is not helped by hearing it again.",
 ]
 properties = [
   "Every subcommand and flag the CLI accepts is declared in surfaces, and every declared one exists: the parser and the contract cannot drift apart unnoticed.",
@@ -184,12 +188,14 @@ provides = [
   "A user's spec, execute and review runs read the store from where they are working: orientation across the declared roots at spec time, the walk from the record's paths at execute time, the walk from the diff at review time. An execute run that changes code re-reads and re-stamps the files describing what it changed, at the phase boundary, and its report lists them.",
   "Any skill that finds a knowledge file wrong may rewrite that one file and re-stamp it. That permission is one sentence in each skill and not a rule in the shared context, because a permission granted there reads as permission to write anything.",
   "A user can run flw-research on a repository that has no flw directory yet, which is the ordinary case for a repo nobody set up: the skill says which directory it is about to create and gets a yes before writing, the same gate flw-spec already applies to specs/, and proposes the ignore lines alongside the config it writes.",
+  "A user can invoke that self-check as a skill, which reports what drifted and repairs it forward without restating the style.",
 ]
 
 [[final_state.components]]
 name  = "validation and checks"
 paths = ["core/scripts/validate_spec.py", "core/scripts/run_tests.py", "core/scripts/scout.py", "core/scripts/scout.mjs", "core/scripts/ledger.py",
-  "core/scripts/store.py", "core/scripts/budget.py", "tests/"]
+  "core/scripts/store.py", "core/scripts/budget.py", "core/scripts/style_lint.py",
+  "tests/"]
 provides = [
   "A malformed contract or version file fails at authoring time with the offending field named, rather than quietly at execution time.",
   "A break in the record set — a name the contract says was applied with no file to match, a record whose name disagrees with its filename, a dag that cannot be walked — is named rather than found later.",
@@ -292,6 +298,7 @@ tests = [
   { command = ".venv/bin/pytest -q" },
   { command = ".venv/bin/ruff check ." },
   { command = ".venv/bin/python core/scripts/budget.py" },
+  { command = ".venv/bin/python core/scripts/style_lint.py core/ docs/ README.md" },
 ]
 criteria = """
 The behaviour above is proven by flw's own test suite plus one end-to-end exercise that
