@@ -66,6 +66,9 @@ specific files does not extend to a sibling — a new `core/scripts/render.py` i
 covered by a component listing `core/scripts/run_tests.py`. When it is genuinely borderline,
 ask rather than taking the reading that lets you continue.
 
+**A test or a plan for work the contract does cover needs no path of its own.** Neither is
+a capability, and this rule is about the product growing a part nobody agreed to.
+
 ## Posture
 
 The general engineering posture — read before writing, smallest change that satisfies the
@@ -82,9 +85,13 @@ into your top-level instructions. What is specific to working from a version fil
 
 ## 1. Find the work
 
-The version files are in `specs/versions/`, one per version, each addressed by the name it
-was given when it was specced. Use the one the user named. Failing that, the one the
-contract's `applied` list does not name — a record that has been written and not yet run.
+The version files are in `<specs>/versions/`, one per version, each addressed by the name
+it was given when it was specced — `<specs>` being the directory `flw context` printed,
+never a hardcoded `specs/`. Use the one the user named. Failing that, the one the
+contract's `applied` list does not name — written and not yet run.
+
+**Nothing unapplied → say so and stop**, the state every finished run leaves behind.
+Nothing to execute until `flw-spec` writes a record.
 
 **If more than one record is unapplied, ask which.** There is no newest: names do not
 order, deliberately, because two people speccing in parallel both branch from the same
@@ -140,7 +147,7 @@ a gap in the contract will still stop the run.
 
 ## 3. Per phase
 
-```
+```text
 ── Phase <n>: <phase> (<k> tasks) ──
 ```
 
@@ -148,6 +155,15 @@ Work the tasks in dependency order, honouring `depends_on` across groups as well
 within them. One line per task: `  ✓ <id> — <files touched>` or `  ✗ <id> — <reason>`.
 
 A failure aborts the phase. There are no half-phase commits.
+
+**No `dag` → the whole run is one phase**: no banner, one commit proposal at the end, and
+`Phases: —` in step 6 rather than a number nothing counted.
+
+**The checks run at least as often as a commit is proposed, never less often** — in
+practice `flw test --no-stream` at each boundary, before the proposal, and `--yolo` skips
+these as it skips step 4's. `commits.md` requires every commit to pass every declared
+check on its own, so a run whose checks ran once at the end proposed every commit but the
+last with nothing having run. Step 4 is the full run over finished work, not the first.
 
 At the phase boundary, **propose a commit** — the files touched and a message — and let
 the user or their agent make it, in whatever VCS the repo uses. flw does not commit or
@@ -250,8 +266,8 @@ earlier run or by hand. Do none of them on a run that stopped, and do none of th
 proposal, not a licence — the wording was reviewed at spec time and improving it here puts
 words in the contract the user never saw.
 
-**Print `git diff specs/current.toml` on its own, before the run's overall staged diff in
-step 6, and paste it into the reply.** This is the diff to read line by line: it should
+**Print `git diff <specs>/current.toml` on its own, before the run's overall staged diff
+in step 6, and paste it into the reply.** This is the diff to read line by line: it should
 show exactly the agreement above and nothing else. Commit `cd4aca9` both added the rule in
 the paragraph above and violated it, repunctuating two clauses the edit never mentioned —
 the contract was one file of eleven in a single staged diff, and a diff that size is
@@ -303,9 +319,9 @@ user's terminal — so a diff you merely ran is a diff they never saw. Drop `| c
 end so no pager or colour escape mangles it, and put the result in the message, above the
 report block.
 
-```
+```text
 flw-execute — <version>
-  Phases: <n> of <m>
+  Phases: <n> of <m>, or — when the record carried no dag
   Checks: <p> passed · <q> failed · <r> for you
   Knowledge: <files re-stamped · files awaiting the commit, or none>
   Left to do: <what stopped, or nothing>

@@ -45,9 +45,16 @@ and runs no tests — that is `flw-execute`.
 
 ## Two modes
 
+**`<specs>` is the directory `flw context` printed**, from `[paths] specs`, and it is
+`specs/` in almost every project. Write the contract there and not at a hardcoded
+`specs/`: against a project that moved it, a record written to `specs/` is one
+`flw validate` reports as "no version files" and `flw ledger` cannot find, neither of them
+saying a file was ignored — and the table below then selects first-contract mode and
+writes a second contract over a project that already has one.
+
 | | when |
 |---|---|
-| **first contract** | `specs/current.toml` does not exist |
+| **first contract** | `<specs>/current.toml` does not exist |
 | **amend** | it does |
 
 If the request is "set up flw", ask which they mean before doing either — installing the
@@ -96,11 +103,18 @@ validation.
 4. **Write two files and get an explicit lock on them** — never paste the contract into
    the reply first and write it after. The write is shown once by the host; a second copy
    in chat is the one the user reads instead of the file they will actually edit, and the
-   two drift the moment they touch either. The files are `specs/current.toml` and
-   `specs/versions/<name>-minor.toml`, named by the same rule
+   two drift the moment they touch either. The files are `<specs>/current.toml` and
+   `<specs>/versions/<name>-minor.toml`, named by the same rule
    step 5 states below — never `v1.0.toml`, which is a legacy number carrying no
    classification, so nothing downstream can move `spec_version` by it. The first version
    file has no `base` — there is no predecessor.
+
+   **`spec_version = "0.0.0"`, and no `applied` key.** The number folds from the records
+   that have landed, and none has: this record lands when `flw-execute` runs it. `0.1.0`
+   reads at least as naturally and fails validation — and the error names `applied`, so
+   the repair an agent reaches for is to add this record's name to it, which validates
+   while claiming a run that never happened and leaves the first real run nothing to
+   record.
 5. **`flw validate`.** Fix and re-run.
 
 ---
@@ -153,14 +167,14 @@ validation.
    the thing they want changed lives somewhere else — say so and stop. Write no edit and
    no version file. A version whose diff is empty is worse than no version.
 
-   **What this skill may edit is `specs/`.** Not `.flw/config.toml`, not
+   **What this skill may edit is `<specs>/`.** Not `.flw/config.toml`, not
    a Makefile. If the thing that is wrong is a local test invocation or a project
    principle, name the file and hand it back.
 4. **Draft the exact contract edit** — the sentences the contract gains, loses or
-   replaces, and where each goes. Do not edit `specs/current.toml`: the edit goes into the
+   replaces, and where each goes. Do not edit `<specs>/current.toml`: the edit goes into the
    version file's `contract_edit`, applied by `flw-execute` when the run it describes
    finishes, not now.
-5. **Write `specs/versions/<name>-minor.toml` or `specs/versions/<name>-major.toml`.**
+5. **Write `<specs>/versions/<name>-minor.toml` or `<specs>/versions/<name>-major.toml`.**
    Read `$FLW/core/schemas/version.schema.json` for the shape.
    - `name` is the record's identity and matches the filename without the suffix. `base`
      is the record the contract had last applied when you started, and `contract_edit`
@@ -255,8 +269,12 @@ plan. Skip it for small ones; do not manufacture ceremony.
 ## Rules
 
 1. **No silent inference.** If the user has not said it, ask or mark it.
-2. **Edit the contract, do not rewrite it.** The diff is the review surface.
+2. **Edit the contract, do not rewrite it.** The diff is the review surface. Which
+   document you edit is the mode's: in place in `<specs>/current.toml` when writing the
+   first contract, and as the version file's `contract_edit` when amending, which never
+   writes `current.toml` at all.
 3. **Open questions go in `open_questions`, not into assumed answers** — and an amend
-   that settles one removes it. A question the contract still asks after the answer
-   shipped reads as live and is not.
+   that settles one removes it, in its `contract_edit` like every other change it makes,
+   because `open_questions` lives only in the contract. A question the contract still asks
+   after the answer shipped reads as live and is not.
 4. **Validate before declaring done.**

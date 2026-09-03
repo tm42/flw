@@ -77,21 +77,26 @@ Give every reviewer the same eight things:
 - **its `perspective`, verbatim**
 - **the scope** — the exact files or diff, and what is out of bounds
 - **the contract, narrowed to the scope** — not `specs/current.toml` whole, and not
-  intersected against `paths` by hand: run `flw context flw-review --scope <each path in
-  the scope>` and pass its output, plus `assumptions` and `open_questions` read from the
+  intersected against `paths` by hand: run `flw context --scope <each path in the scope>`,
+  with no skill named, and pass its output, plus `assumptions` and `open_questions` read from the
   contract directly, since they belong to no component and the command does not print
   them. Name the components the command matched, so a reviewer reasoning about one it was
   not given can ask for it instead of guessing. A scope covering the whole repository is
   the case where the narrowed output is the whole contract, and that is correct — pass it
   as the command printed it rather than reaching for the raw file instead. The
   instruction is unchanged: flag anything violating a stated principle.
-  **Why this is worth doing.** A reviewer inherits no prompt cache — not from you, not
-  from another reviewer — so every one of them pays the contract cold. Measured
-  2026-09-02, with `cl100k_base` as a proxy for the real tokenizer: flw's own contract is
-  9,787 tokens, and a four-lens run spends ~39,100 tokens of contract alone before reading
-  a line of the code under review — ~57,000 once each reviewer's copy of
-  `terse_prose.md` (2,140 tokens) and the orchestrator's own opening (6,880 tokens) are
-  counted.
+  **Naming a skill is what makes `flw context` print `core/shared/context.md`**, which
+  opens "Read once per run, by every flw skill" — and a dispatched reviewer runs no flw
+  skill. The orchestrator resolved the root already and passes the result. The reviewer
+  still needs the project's own conventions, so hand it
+  `<project>/.flw/extensions/flw-review.md` separately.
+
+  **Why narrowing is worth doing.** A reviewer inherits no prompt cache — not from you,
+  not from another reviewer — so every one of them pays the contract cold. Measure it
+  rather than quoting a number from here: `flw context --scope <the paths> | wc -c`, over
+  the eight things above, times the number of reviewers. A figure written down drifts —
+  flw's own contract grew 3.1% in one day — and a measured number that has drifted is
+  worse than no number, because it is quoted rather than re-measured.
 - **the discipline below, verbatim**
 - **the writing style** at `$FLW/core/styles/terse_prose.md` — the absolute path, to
   read and write by. A reviewer inherits nothing from your context, so a style installed
@@ -138,17 +143,11 @@ to every dispatched reviewer.
 Wait for all of them. Then write one file to `<reports>/<stamp>-<team>.md`, by the same
 style you gave the reviewers:
 
-- `<reports>` is `[paths] reports` from `.flw/config.toml`, defaulting to `.flw/reports/`.
-  Not `.flw/reviews/` — that holds team configs, and mixing a team's definition with its
-  output makes both harder to list.
-- `<stamp>` is `YYYY-MM-DDThhmm`, no seconds and no colons, so the name is sortable and
-  legal on every filesystem.
+- `<reports>` and `<stamp>` are defined in `SKILL.md` §3, which every run reads and a
+  solo run reads instead of this file.
 - `<team>` is the team name alone. A lens selection goes in the body, not the filename.
 
-Create the directory if needed.
-
-**Do not touch `.gitignore` and do not ask whether to commit.** Whether that directory is
-tracked is already the user's answer.
+Create the directory if needed, and leave `.gitignore` alone, as §3 there says.
 
 ```markdown
 # flw-review — <config>

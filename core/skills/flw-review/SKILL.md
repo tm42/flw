@@ -59,8 +59,11 @@ requires one, and pretending otherwise leaves you unable to answer "review the l
 commit". If the project has no VCS and they asked in those terms, say so and ask for
 paths.
 
-**Be specific, and say what you chose.** "The repo" is not a scope; a run given no
-boundary picks its own and a later round cannot tell what this one covered.
+**Be specific, and say what you chose.** Name the boundary rather than a word for it: "the
+whole tree at 999b329" is a scope and "the repo" is not. The whole repository is a
+legitimate boundary — `references/team-dispatch.md` treats it as the ordinary case for a
+team — and what fails is leaving it unnamed, because a run given no boundary picks its own
+and a later round cannot tell what this one covered.
 
 ## 2. Pick the lens
 
@@ -114,19 +117,32 @@ five steps below address both:
 5. **End with what you did not check.** Coverage, not conclusions, is where a solo read
    fails hardest. The gaps are as useful as a finding.
 
-You already have two of the eight things `references/team-dispatch.md` §2 has to hand a
+You already have two of the things `references/team-dispatch.md` §2 has to hand a
 dispatched reviewer explicitly: the writing style, from your own opening, and the note
 store, printed there too. Line up the rest yourself: the scope from §1; the contract
-narrowed to it, by running `flw context flw-review --scope <the paths in scope>` rather
-than reading the whole file; and the knowledge store narrowed to it — `flw know <path>`
-for each path in scope, heads not bodies. Compute your target file before you start:
-`<reports>/<stamp>-<config>-<role>.md`, the same naming a dispatched reviewer's own file
-uses, with `<reports>` and `<stamp>` named the way `references/team-dispatch.md` §3
-states and `<config>` the file §2 resolved the perspective from.
+narrowed to it, by running `flw context flw-review --scope <the paths in scope>` rather than reading
+the whole file; and the knowledge store narrowed to it — `flw know <path>` for each path
+in scope, heads not bodies.
+
+**Compute your target file before you start**: `<reports>/<stamp>-<config>-<role>.md`,
+the same naming a dispatched reviewer's own file uses, with `<config>` the file §2
+resolved the perspective from.
+
+- `<reports>` is `[paths] reports` from `.flw/config.toml`, defaulting to `.flw/reports/`.
+  Not `.flw/reviews/` — that holds team configs, and mixing a team's definition with its
+  output makes both harder to list.
+- `<stamp>` is `YYYY-MM-DDThhmm`, no seconds and no colons, so the name is sortable and
+  legal on every filesystem.
+
+Create the directory if needed. **Do not touch `.gitignore` and do not ask whether to
+commit.** Whether that directory is tracked is already the user's answer.
 
 ### The discipline, followed even reviewing alone
 
-> Read and probe only. Change nothing in the repo.
+> Read and probe only. Change nothing in the repo — with one exception, and it is not a
+> fix for anything you report: a knowledge file `flw know` returned that the code has
+> already falsified is yours to correct. Rewrite that one file and `flw know --stamp` it.
+> The store records what is, and what is has already changed.
 >
 > Report findings in this shape, most severe first:
 >

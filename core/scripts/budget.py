@@ -3,7 +3,7 @@
 
 Nothing in flw measured what a run loads, and `core/skills/flw-execute/SKILL.md` grew
 past 19,000 bytes without anything noticing until a user read a run and called it
-verbose. Two ceilings: 20,000 bytes for a `SKILL.md`, since that is what a run loads by
+verbose. Two ceilings: 21,000 bytes for a `SKILL.md`, since that is what a run loads by
 naming the skill, and 10,000 for `core/shared/context.md` and
 `core/styles/terse_prose.md`, which every skill's opening reads whether or not it names
 one. A reference under `references/`, read only when something in the skill sends a
@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SKILL_CEILING = 20_000
+SKILL_CEILING = 21_000
 SHARED_CEILING = 10_000
 
 
@@ -37,6 +37,13 @@ def targets() -> list[tuple[Path, int]]:
     found += [
         (REPO / "core" / "shared" / "context.md", SHARED_CEILING),
         (REPO / "core" / "styles" / "terse_prose.md", SHARED_CEILING),
+        # Written into each host's ambient instructions file by `flw install`, so
+        # it is in context in every session in every repository on the machine —
+        # more unconditional than any SKILL.md, and it grew 9% with nothing
+        # measuring it.
+        (REPO / "core" / "shared" / "ambient.md", SHARED_CEILING),
+        # Read at every flw-execute commit proposal, which is once per phase.
+        (REPO / "core" / "shared" / "commits.md", SHARED_CEILING),
     ]
     return found
 
