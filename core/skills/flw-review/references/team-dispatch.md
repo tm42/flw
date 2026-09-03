@@ -122,7 +122,7 @@ Give every reviewer the same eight things:
 
 **The delivery contract, because a reply is not durable.** On 2026-08-23 three of four
 reviewers had their replies dropped by the session mailbox; the work was done and the
-reports were written, but they only surfaced after being chased. Every reviewer writes its
+reports were written, but they only appeared after being chased. Every reviewer writes its
 full report to its target file and replies with **one line — the path and the finding
 counts**. Not the report again: on 2026-09-02 every dispatched agent was told to reply
 with the identical text, each report was emitted twice, and the replies arrived truncated,

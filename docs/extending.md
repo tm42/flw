@@ -37,7 +37,7 @@ says so.
 
 Because the name is derivable, `flw doctor` can check it:
 
-```
+```text
 extensions: ~/work/.flw/extensions
   ✓ shared.md — read by every skill (61 B)
 
@@ -64,7 +64,7 @@ tracked extension is a shared convention; an ignored one is your local setup.
 
 A directory with `skills/` in it, each skill a folder containing `SKILL.md`:
 
-```
+```text
 my-bundle/
   skills/
     my-skill/
@@ -125,11 +125,11 @@ that shadows a core one is powerful and a debugging nightmare when implicit, so 
 install` and `flw doctor` both name it — in different words, because install has the
 shadowed path to hand and doctor is reporting a state:
 
-```
+```text
   override: flw-spec from [my-bundle] shadows [core] (/path/to/flw/core/skills/flw-spec)
 ```
 
-```
+```text
   ! flw-spec: [my-bundle] shadows [core]
 ```
 

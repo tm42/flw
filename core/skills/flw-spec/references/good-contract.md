@@ -37,7 +37,7 @@ The first can turn out false in a way you would notice. The second cannot.
 
 An assumption is worth recording when its being wrong would force a redesign. "Doesn't
 matter here" is a legitimate answer to an interview question — record it as an assumption
-so it surfaces if it later does matter.
+so it comes up if it later does matter.
 
 ## Tests are commands that actually run in this repo
 

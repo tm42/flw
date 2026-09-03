@@ -69,7 +69,7 @@ an extension is conventions, which is what a file read at every opening should h
 
 ## 1. Orient
 
-```
+```sh
 flw scout
 ```
 
@@ -170,8 +170,8 @@ prefixes, feature-flag keys, and status values crossing the wire as strings.
 **Then trace one transaction end to end**, every repo, one hop at a time: a user changes a
 setting, a request goes out, something is written, another service reads it, a result comes
 back. This is the step that produces understanding, and a summary per repo does not
-substitute for it — each side gets described in its own vocabulary and the mismatch never
-surfaces. A trace forces every hop to resolve to a named function receiving a named
+substitute for it — each side gets described in its own vocabulary and the mismatch never comes
+to light. A trace forces every hop to resolve to a named function receiving a named
 payload, and it fails loudly at exactly the hop that was got wrong, which is the hop worth
 knowing about. **Record where you lost it.** That is the finding, not a failure of the
 method.
@@ -316,7 +316,7 @@ offer the run declines by doing nothing.
 
 ## 5. Report
 
-```
+```text
 flw-research — <repo>
   Scouted:     <n> files · <what it is, in one line>
   Wrote:       <files>

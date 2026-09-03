@@ -86,7 +86,7 @@ validation.
    true when the work is done" can mean the code as it stands, or the code once the
    planned work lands. Those are different documents. Ask; do not pick.
 2. **Look before declaring.** For each component you are about to propose, search the repo
-   for the names and symbols it would introduce, and surface every hit. A component that
+   for the names and symbols it would introduce, and show every hit. A component that
    already exists under another name is the failure being prevented.
 3. **Interview**, section by section, confirming each before the next. Read
    `$FLW/core/schemas/spec-v4.schema.json` for what each field means, and
@@ -94,7 +94,7 @@ validation.
    like. Drive out what the user
    has not said: scale, encoding, concurrency, failure model, deployment, runtime floor,
    edge cases, security, re-runability. "Doesn't matter here" is a valid answer — record it
-   as an assumption so it surfaces if it later does.
+   as an assumption so it comes up if it later does.
 
    Ask, per component, what about it would still be true if it were rewritten by someone
    who never saw the code, and what would break someone else if it changed — the same
@@ -128,7 +128,7 @@ validation.
 2. **Interview the change, not the contract.** Answer *what* and *why* at the level of
    requirements, architecture and design. Lean on the language already there; do not
    re-interview what still holds. If a surviving part no longer fits a new decision,
-   surface it — an unreconciled conflict there breeds the next round.
+   raise it — an unreconciled conflict there breeds the next round.
 
    For a touched component, ask what about it would still be true if it were rewritten by
    someone who never saw the code, and what would break someone else if it changed. The

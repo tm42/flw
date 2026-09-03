@@ -1,7 +1,7 @@
 ## flw — spec-driven workflow
 
 A contract states what exists when the work is done. Work runs against it, and gaps
-surface as proposals rather than as quiet improvisation. Host-agnostic and
+are raised as proposals rather than as quiet improvisation. Host-agnostic and
 language-agnostic: flw assumes no toolchain, no test runner and no manifest — a
 project declares its own commands and flw runs them.
 

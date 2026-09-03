@@ -190,7 +190,7 @@ Never present this as a dispatched review. It is a structured, disclosed read.
 
 ## 4. Print the summary
 
-```
+```text
 flw-review — <config>
   Scope:     <what>
   Reviewers: <n>

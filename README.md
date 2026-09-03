@@ -185,7 +185,7 @@ as its `[tests] setup`. It is one project's own line and nothing inherits it.
 
 ## Layout
 
-```
+```text
 cli/flw.py           install, uninstall, doctor, add/list/remove, update, version
 core/skills/         the skills, as standard SKILL.md folders
 core/reviews/        reviewer teams, as data

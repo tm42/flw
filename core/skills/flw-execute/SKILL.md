@@ -47,7 +47,7 @@ agreed.
 
 **No silent spec drift.** If you need anything the contract does not cover — a component
 that has to exist, a capability nobody agreed to, a check that should have been declared —
-**stop and surface a proposal**: what is missing, why you need it, and the specific change
+**stop and raise a proposal**: what is missing, why you need it, and the specific change
 you would make. The user approves, edits or rejects, the change goes through `flw-spec`,
 and only then does the code get written.
 
@@ -79,7 +79,7 @@ into your top-level instructions. What is specific to working from a version fil
   code before touching it. "Move X into Y" is not a statement that Y is empty.
 - **`approach` outranks `dag`.** The tasks say what; the approach says why, and often what
   the work is *not*. If they seem to disagree, the approach is the one that was thought
-  about — surface the conflict rather than picking.
+  about — raise the conflict rather than picking.
 - **Deleting counts as doing.** If a task is satisfied by removing code, remove it.
 - **Minimal narration.** Phase headers, one line per task, proposals. Nothing else.
 
@@ -298,7 +298,7 @@ that could tell you it fails.
 **Show what the run changed**, from the commit recorded in step 1. Stage the files this
 run touched — **by name, the ones from your own task lines** — then diff the index:
 
-```
+```sh
 git add <the files this run touched>
 git diff --stat --staged <baseline>
 ```
@@ -330,7 +330,7 @@ flw-execute — <version>
 When you stopped on a proposal rather than reaching the end, use this instead — the shape
 above implies a run that finished:
 
-```
+```text
 flw-execute — <version> — STOPPED, awaiting a decision
   Done:        <phases and tasks that completed>
   Stopped at:  <task id> — <what the contract does not cover>
@@ -345,7 +345,7 @@ done — the checks you could not run are the user's to run, and the judgment is
 **A `--yolo` run gets neither block above.** Both read as verified, and this run is not.
 Use a shape that cannot be mistaken for either at a glance:
 
-```
+```text
 flw-execute — <version> — BUILT, NOT VERIFIED (--yolo)
   Phases:   <n> of <m>
   Checks:   skipped by --yolo, not run

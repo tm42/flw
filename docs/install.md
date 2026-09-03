@@ -42,7 +42,7 @@ Skills are linked into each present host's discovery path — again symlinks, so
 **Only hosts that are actually here.** flw checks for the host's own binary or its config
 directory. A host that is not installed is named and skipped:
 
-```
+```text
   codex: not on this machine — skipping
   opencode: not on this machine — skipping
   claude-code: ~/.claude/skills
@@ -70,7 +70,7 @@ directories as well as its own, so installing all three usually creates two.
 flw doctor
 ```
 
-```
+```text
 flw: /path/to/flw
   ✓ ~/.flw/root -> /path/to/flw
 

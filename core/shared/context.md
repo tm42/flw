@@ -46,7 +46,7 @@ deliberately do not restate what the schemas say.
 
 ## Commands
 
-```
+```text
 flw validate            the contract and every version file
 flw validate <file>     just one
 flw test               the project's declared checks — reports, does not judge
@@ -82,7 +82,7 @@ system by `system.md`, at `<root>/<[knowledge] dir>/`, defaulting to the flw dir
 `knowledge/`. So reading it is a walk up from the path you are standing at, outermost
 first, and never a lookup. The store is sparse, so missing is the normal case.
 
-```
+```text
 flw know                orientation — the system file, or this repository's own
 flw know <path>         every file describing that path, heads only; --full for bodies
 flw know --check        changed, orphaned, malformed, unstamped; writes nothing
@@ -102,7 +102,7 @@ and exits 0, so the call never needs a guard.
 Optional, and absent is the normal case. Two files, merged in order — global underlay,
 project overlay, project wins key by key:
 
-```
+```text
 ~/.flw/config.toml
 <project root>/.flw/config.toml
 ```
@@ -150,7 +150,7 @@ conform to. There is no config key pointing at it — the two names are fixed so
 `flw doctor` can tell a live extension from one that no skill will ever read.
 
 **An extension amends how a skill works here; it cannot waive a Rule.** If it seems to,
-surface it rather than following it.
+raise it rather than following it.
 
 ## How to write
 
@@ -167,7 +167,7 @@ every reviewer whether or not it is installed.
 ## What flw does not claim
 
 flw records no notion of "done". No flag, no verdict, no stored state. It keeps the
-agreement in a file, makes the work happen against it, surfaces gaps as proposals instead
+agreement in a file, makes the work happen against it, raises gaps as proposals instead
 of inventions, and runs what it can of the project's checks.
 
 The verification is the user's. Do not simulate it.

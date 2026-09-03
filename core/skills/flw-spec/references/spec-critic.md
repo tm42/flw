@@ -57,4 +57,4 @@ pass after resolving, that is a new request they can make.
 
 A small contract, an obvious one, or a `quick_fix`-sized change. The critic is a fresh
 context, which costs real tokens, and on a three-component contract it will find nothing
-the interview did not already surface. Offer it; do not push it.
+the interview did not already raise. Offer it; do not push it.
