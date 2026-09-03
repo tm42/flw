@@ -64,8 +64,10 @@ into `shared.md` is architecture, and architecture goes stale on a commit rather
 decision — so it belongs in the store, where a diff can say how much moved. What is left in
 an extension is conventions, which is what a file read at every opening should hold.
 
-**A knowledge file you find wrong is yours to correct.** Rewrite that one file and
-`flw know --stamp` it. That one file — a survey rewrites the tree, a correction does not.
+**A knowledge file `flw know` returned that the code has already falsified is yours to
+correct.** Rewrite that one file and `flw know --stamp` it, and name it in step 5's
+`Wrote:` line. That one file — a survey rewrites the tree, a correction does not. The
+trigger is what a diff shows, not what you judge.
 
 ## 1. Orient
 

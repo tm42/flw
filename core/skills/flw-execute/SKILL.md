@@ -40,8 +40,9 @@ Nothing → stop and say to run `flw install`.
 This skill builds. It does not author contract changes — it applies the one the version
 file already carries, in step 5 — and it does not judge code quality.
 
-**A knowledge file you find wrong is yours to correct.** Rewrite that one file and
-`flw know --stamp` it. That one file — not the store, and not a rewrite nobody asked for.
+**A knowledge file `flw know` returned that the code has already falsified is yours to
+correct.** Rewrite that one file and `flw know --stamp` it. That one file — not the store,
+and not a rewrite nobody asked for. The trigger is what a diff shows, not what you judge.
 This is not a spec change: the store records what is, and the contract records what was
 agreed.
 

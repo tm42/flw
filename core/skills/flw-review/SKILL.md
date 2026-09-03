@@ -42,9 +42,11 @@ nothing. By default you are the reviewer yourself — read §3 below. Naming a t
 this: you orchestrate, the dispatched reviewers judge, and you add no findings of your
 own — they were given a fresh context precisely so they are not carrying yours.
 
-**A knowledge file you find wrong is yours to correct.** Rewrite that one file and
-`flw know --stamp` it. That one file — the single exception to reporting and never fixing,
-because the store records what is, and what is has already changed.
+**A knowledge file `flw know` returned that the code has already falsified is yours to
+correct.** Rewrite that one file and `flw know --stamp` it, and name it in step 4's block.
+That one file — the single exception to reporting and never fixing, because the store
+records what is, and what is has already changed. The trigger is what a diff shows, not
+what you judge: a file you merely disagree with is a finding to report like any other.
 
 ## 1. Decide what is under review
 
@@ -195,11 +197,16 @@ flw-review — <config>
   Scope:     <what>
   Reviewers: <n>
   Findings:  CRITICAL <n> · MAJOR <n> · MINOR <n>
+  Knowledge: <files corrected under the carve-out, or none>
   Report:    <path>
 ```
 
 Do not summarise the findings inline as well. The findings are already in the report;
 repeating them here doubles the reading.
+
+**The `Knowledge:` line is there because the store is gitignored in most projects**, so a
+file this run rewrote appears in no diff and in nothing else the run prints. A lane whose
+promise is that it fixes nothing has to say the one thing it changed.
 
 ## 5. Offer a note
 

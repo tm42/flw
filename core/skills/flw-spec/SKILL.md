@@ -40,8 +40,10 @@ Nothing → stop and say to run `flw install`.
 This skill decides **what to build** and writes it down. It writes no implementation code
 and runs no tests — that is `flw-execute`.
 
-**A knowledge file you find wrong is yours to correct.** Rewrite that one file and
-`flw know --stamp` it. That one file — not the store, and not a tree nobody asked for.
+**A knowledge file `flw know` returned that the code has already falsified is yours to
+correct.** Rewrite that one file and `flw know --stamp` it, and name it when you close.
+That one file — not the store, and not a tree nobody asked for. The trigger is what a diff
+shows, not what you judge.
 
 ## Two modes
 
@@ -239,6 +241,10 @@ validation.
    accepted as drafted is how a re-spec becomes a demolition nobody sanctioned; a plan
    pasted into chat is one they read there and never open.
 7. **`flw validate`.**
+8. **Say what else this run changed**, in one line: any knowledge file corrected under the
+   carve-out, and the report this record was specced from if you marked one. Both are
+   invisible otherwise — the store is gitignored in most projects and a report is not the
+   record. A run that changed nothing but the version file says so and stops.
 
 ---
 
