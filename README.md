@@ -86,7 +86,7 @@ own checkout will do.
 `AGENTS.md`, describing the workflow and the posture. It asks first, and
 `flw uninstall` strips it exactly.
 
-## The four skills
+## The four workflow skills
 
 The commands above are the plumbing. The workflow itself is four skills, which your host
 loads after `flw install` and you invoke by name — `/flw-spec` in Claude Code, the

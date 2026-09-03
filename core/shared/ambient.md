@@ -11,6 +11,7 @@ project declares its own commands and flw runs them.
 | `/flw-execute` | Walk the pending version record's phases, run the project's declared checks, propose the commits. |
 | `/flw-review` | Review at any stage — one reader by default, a team of lenses when you name one. Reports; fixes nothing. |
 | `/flw-research` | Bring flw to a repo you did not set up: learn how it is tested and built, write that into its own config. |
+| `/flw-style` | Report what the writing style has drifted from in this session's own replies. Outside the workflow; nothing depends on it. |
 
 **Before working in a repository that has a `specs/` or a `.flw/`, run `flw context`** —
 it prints what that repository records: its extensions from the outermost project root
