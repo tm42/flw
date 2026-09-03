@@ -385,6 +385,11 @@ def install(args: argparse.Namespace) -> int:
     link_into, covered = plan_roots(hosts)
     dry = args.dry_run
     created: list[dict] = []
+    # The contract's exit surface is "0 success, 1 something failed or was
+    # refused". A refusal never stops the rest of the run — the other hosts and
+    # skills still install — but a run that left something uninstalled did not
+    # succeed, and only the exit code says so to a script.
+    refused = False
     recorded = {link["path"] for link in read_links()}
     roots_touched: set[Path] = set()
 
@@ -414,6 +419,7 @@ def install(args: argparse.Namespace) -> int:
                     "flw will not replace it",
                     file=sys.stderr,
                 )
+                refused = True
                 continue
             if link.is_symlink() and str(link) not in recorded:
                 # Someone else's link at the name flw wants. Replacing it and then
@@ -423,6 +429,7 @@ def install(args: argparse.Namespace) -> int:
                     "there; flw will not replace it",
                     file=sys.stderr,
                 )
+                refused = True
                 continue
             print(f"    + {skill.name}{note}")
             created.append(entry_for(link, skill))
@@ -459,7 +466,7 @@ def install(args: argparse.Namespace) -> int:
         )
 
     print("\nRun `flw doctor` to verify.")
-    return 0
+    return 1 if refused else 0
 
 
 def uninstall(args: argparse.Namespace) -> int:
@@ -1233,7 +1240,14 @@ def style_state(entry: dict) -> tuple[str, str | None, str | None]:
         return "source-gone", None, None
     if not path.exists():
         return "path-missing", None, None
-    text = path.read_text()
+    try:
+        text = path.read_text()
+    except UnicodeDecodeError:
+        # A ValueError, so main()'s deliberate OSError catch does not hold it,
+        # and one bad byte in a host's copy was a traceback out of `flw doctor`
+        # — the command a user runs precisely when an install is broken. The
+        # state already exists for three other unreadable entries.
+        return "unreadable", None, None
     held = (
         style_body(text)
         if BY_NAME[host].styles
@@ -1699,6 +1713,10 @@ def sync(args: argparse.Namespace) -> int:
 
     surviving: list[dict] = []
     wrote = False
+    # sync's job is repair, so a run that repaired nothing it was asked to
+    # repair reported success for work it refused to do. Same exit surface as
+    # install: refusing does not stop the rest of the run, it just is not a 0.
+    refused = False
 
     if not recorded:
         print("  links: nothing recorded — `flw install` first")
@@ -1739,6 +1757,7 @@ def sync(args: argparse.Namespace) -> int:
                     # linked, and removing their own file and running sync again is
                     # the recovery a user would expect.
                     actions.append(f"    ! {name} — {refusal}; not replacing it")
+                    refused = True
                     keep.append(link)
                     continue
 
@@ -1777,6 +1796,7 @@ def sync(args: argparse.Namespace) -> int:
                 refusal = blocked_by(link_path, recorded_paths)
                 if refusal:
                     actions.append(f"    ! {name} — {refusal}; not replacing it")
+                    refused = True
                     continue
                 actions.append(f"    + {name} — linked")
                 if not dry:
@@ -1839,7 +1859,7 @@ def sync(args: argparse.Namespace) -> int:
     if changed and not dry:
         write_style(updated)
 
-    return 0
+    return 1 if refused else 0
 
 
 # --------------------------------------------------------------------------- #
@@ -3133,6 +3153,25 @@ def kb_write(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ledger_skipped(unreadable: list) -> None:
+    """One line when a version record could not be read, to stderr.
+
+    The shape `_kb_skipped` uses, for the same reason: `load_records` returns
+    the error and nothing read it, so a record that does not parse was dropped
+    from the corpus and a search for a decision it holds answered "nothing
+    written down here matches" at exit 0.
+    """
+    if not unreadable:
+        return
+    count = len(unreadable)
+    noun = "record" if count == 1 else "records"
+    print(
+        f"  {count} version {noun} could not be read; first: {unreadable[0].path}"
+        "  ·  flw validate names them all",
+        file=sys.stderr,
+    )
+
+
 def ledger(args: argparse.Namespace) -> int:
     """Search what the project wrote down about itself, or read one part whole.
 
@@ -3148,6 +3187,7 @@ def ledger(args: argparse.Namespace) -> int:
     root = project_root()
     os.environ["FLW_DIR"] = flw_dir_name()
     found = engine.corpus(root, _specs_dir(root))
+    _ledger_skipped([r for r in found.records if r.error])
 
     # project_root walks upward, so a command issued from a subdirectory is
     # answered by an ancestor with nothing saying which. flw test prints this for

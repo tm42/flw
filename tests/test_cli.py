@@ -546,7 +546,7 @@ def test_sync_leaves_a_foreign_symlink_alone(home, bundle, capsys):
     flw.write_links([lk for lk in flw.read_links() if lk["skill"] != "flw-spec"])
     capsys.readouterr()
 
-    assert sync() == 0
+    assert sync() == 1, "a refusal is not a success"
     out = capsys.readouterr().out
     assert "flw-spec — adopted" not in out
     assert "flw-spec — a symlink flw did not create is already there" in out
@@ -905,6 +905,18 @@ def install_mine(home, body: str = "## Mine\n\nWrite briefly.\n") -> Path:
     source.write_text(body)
     style_install("mine", "claude-code")
     return source
+
+
+def test_a_style_copy_that_is_not_utf8_is_unreadable_rather_than_a_traceback(home, capsys):
+    """UnicodeDecodeError is a ValueError, and main() catches OSError on purpose,
+    so one bad byte in a host's copy was a traceback out of `flw doctor` — the
+    command a user runs precisely when an install is broken."""
+    install_mine(home)
+    (home / ".claude" / "output-styles" / "mine.md").write_bytes(b"## Mine\n\xff\xfe\n")
+    capsys.readouterr()
+
+    doctor()
+    assert "claude-code: unreadable" in capsys.readouterr().out
 
 
 def test_a_source_that_moved_on_reports_the_copy_untouched(home, capsys, monkeypatch):
@@ -2696,20 +2708,107 @@ def test_context_names_each_component_and_its_paths_and_no_more(
     assert "click a button" not in body
 
 
-def _scoped_contract(root: Path) -> None:
+SCOPED_CONTRACT = (
+    'schema_version = 4\n'
+    'spec_version = "2.1.0"\n'
+    '[[final_state.components]]\n'
+    'name = "the engine"\n'
+    'paths = ["app/src/"]\n'
+    'provides = ["A user can render a page."]\n'
+    '[[final_state.components]]\n'
+    'name = "the surface"\n'
+    'paths = ["app/web/"]\n'
+    'provides = ["A user can click a button."]\n'
+    # A directory component holding a file neither of the other two covers, so a
+    # file scope has something to land inside.
+    '[[final_state.components]]\n'
+    'name = "the notes"\n'
+    'paths = ["app/docs/"]\n'
+    'provides = ["A reader can find the decision log."]\n'
+)
+
+
+def _scoped_contract(root: Path, specs: str = "specs") -> None:
+    (root / specs).mkdir(parents=True)
+    (root / specs / "current.toml").write_text(SCOPED_CONTRACT)
+
+
+def test_context_scope_is_a_file_inside_a_directory_component(
+    tmp_path, capsys, monkeypatch
+):
+    """The match is symmetric: a directory scope finds a component whose path is
+    one file inside it, and a file scope finds the directory component covering
+    it. Only the first direction was pinned, so the second matched nothing."""
+    root = tmp_path / "work"
+    _scoped_contract(root)
+
+    assert _context(
+        tmp_path, monkeypatch, root=str(root), scope=["app/docs/log.md"]
+    ) == 0
+    body = _body(capsys.readouterr().out)
+    assert "find the decision log" in body
+    assert "render a page" not in body
+
+
+def test_context_uses_every_scope_path_it_was_given(tmp_path, capsys, monkeypatch):
+    """Two paths, two different components. Using only the first passed every
+    test in the suite and silently handed a reviewer half its contract."""
+    root = tmp_path / "work"
+    _scoped_contract(root)
+
+    assert _context(
+        tmp_path, monkeypatch, root=str(root), scope=["app/web", "app/docs"]
+    ) == 0
+    body = _body(capsys.readouterr().out)
+    assert "click a button" in body
+    assert "find the decision log" in body
+    assert "render a page" not in body
+
+
+def test_context_scope_reads_the_contract_its_own_line_names(
+    tmp_path, capsys, monkeypatch
+):
+    """With [paths] specs set, the narrowing has to read the same file the
+    `contract:` line above it printed — otherwise the output contradicts itself,
+    naming one contract and quoting another."""
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+    (root / ".flw" / "config.toml").write_text('[paths]\nspecs = "contracts"\n')
+    _scoped_contract(root, specs="contracts")
+
+    assert _context(tmp_path, monkeypatch, root=str(root), scope=["app/web"]) == 0
+    body = _body(capsys.readouterr().out)
+    assert "contracts/current.toml" in body
+    assert "click a button" in body
+    assert "render a page" not in body
+
+
+def test_context_scope_over_a_contract_that_does_not_parse_reports_and_survives(
+    tmp_path, capsys, monkeypatch
+):
+    """The opening command crashing on a contract it has just reported as broken
+    is the worst shape this can take: the report is right there in the output."""
+    root = tmp_path / "work"
     (root / "specs").mkdir(parents=True)
-    (root / "specs" / "current.toml").write_text(
-        'schema_version = 4\n'
-        'spec_version = "2.1.0"\n'
-        '[[final_state.components]]\n'
-        'name = "the engine"\n'
-        'paths = ["app/src/"]\n'
-        'provides = ["A user can render a page."]\n'
-        '[[final_state.components]]\n'
-        'name = "the surface"\n'
-        'paths = ["app/web/"]\n'
-        'provides = ["A user can click a button."]\n'
-    )
+    (root / "specs" / "current.toml").write_text("this is not toml\n")
+
+    assert _context(tmp_path, monkeypatch, root=str(root), scope=["app/web"]) == 0
+    assert "does not parse" in _body(capsys.readouterr().out)
+
+
+def test_kb_category_falls_back_when_the_key_is_empty_or_not_a_string(tmp_path):
+    """`[kb] category = ""` sorts nothing first and filters nothing, so without
+    .strip() `flw context` prints every project's notes into every skill's
+    opening — the failure _context_notes exists to prevent. A non-string is the
+    same fallback rather than a traceback."""
+    (tmp_path / ".flw").mkdir()
+    config = tmp_path / ".flw" / "config.toml"
+
+    config.write_text('[kb]\ncategory = "   "\n')
+    assert flw._kb_category(tmp_path) == tmp_path.name
+
+    config.write_text("[kb]\ncategory = 3\n")
+    assert flw._kb_category(tmp_path) == tmp_path.name
 
 
 def test_context_scope_selects_the_one_component_it_meets(
@@ -3139,6 +3238,22 @@ def test_the_cli_surface_matches_the_parser_in_both_directions():
 # remove and style install each had a path around it.
 
 
+def test_install_that_refused_a_path_does_not_report_success(home, capsys):
+    """The contract's exit surface is "0 success, 1 something failed or was
+    refused". Both refusals printed to stderr and returned 0, so a script
+    installing flw could not tell a skill had not been installed."""
+    directory = home / ".claude" / "skills" / "flw-spec"
+    directory.mkdir(parents=True)
+    (directory / "SKILL.md").write_text("mine")
+    capsys.readouterr()
+
+    assert install("claude-code") == 1
+    assert "a real directory is already there" in capsys.readouterr().err
+    # The refusal does not stop the run: every other skill still installs.
+    assert (home / ".claude" / "skills" / "flw-execute").is_symlink()
+    assert (directory / "SKILL.md").read_text() == "mine"
+
+
 def test_sync_will_not_write_over_a_file_it_did_not_create(home, bundle, capsys):
     """The path install refuses three ways. sync used to unlink and symlink over
     it, so a file that existed nowhere else was gone with nothing reporting it."""
@@ -3150,7 +3265,7 @@ def test_sync_will_not_write_over_a_file_it_did_not_create(home, bundle, capsys)
     link.write_text("IRREPLACEABLE")
     capsys.readouterr()
 
-    assert sync() == 0
+    assert sync() == 1, "a refusal is not a success"
     assert link.read_text() == "IRREPLACEABLE"
     assert "not replacing it" in capsys.readouterr().out
 
@@ -3166,7 +3281,7 @@ def test_sync_will_not_replace_a_symlink_it_did_not_create(home, bundle, tmp_pat
     link.symlink_to(mine, target_is_directory=True)
     capsys.readouterr()
 
-    assert sync() == 0
+    assert sync() == 1, "a refusal is not a success"
     assert link.resolve() == mine.resolve()
     assert "not replacing it" in capsys.readouterr().out
 
@@ -3245,7 +3360,7 @@ def test_sync_will_not_relink_over_a_file_the_user_put_at_a_recorded_path(home, 
     link.write_text("MINE NOW")
     capsys.readouterr()
 
-    assert sync() == 0
+    assert sync() == 1, "a refusal is not a success"
     assert link.read_text() == "MINE NOW"
     assert "not replacing it" in capsys.readouterr().out
     assert any(e["skill"] == "flw-spec" for e in flw.read_links()), "the record was dropped"
@@ -3262,7 +3377,7 @@ def test_sync_will_not_remove_a_file_the_user_put_at_an_orphaned_path(home, bund
     link.write_text("MINE NOW")
     capsys.readouterr()
 
-    assert sync() == 0
+    assert sync() == 1, "a refusal is not a success"
     assert link.read_text() == "MINE NOW"
     assert "not replacing it" in capsys.readouterr().out
 

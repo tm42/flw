@@ -261,8 +261,10 @@ def test_a_project_declaring_nothing_is_a_usage_error(tmp_path, capsys):
             '  { statement = "the old thing", check = "test ! -e old_thing" },\n', ""
         )
     )
-    assert run_cli(tmp_path, full=True) == 2
-    assert "Nothing to run" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as caught:
+        run_cli(tmp_path, full=True)
+    assert caught.value.code == 2
+    assert "declares no success_criteria.tests" in capsys.readouterr().err
 
 
 def test_checks_the_agent_cannot_run_are_handed_back(project, capsys, monkeypatch):
@@ -388,7 +390,7 @@ def test_a_multiline_check_is_refused_by_name(tmp_path):
     (tmp_path / "specs" / "current.toml").write_text(
         '[success_criteria]\ntests = [{ command = "false\\necho x" }]\ncriteria = "x"\n'
     )
-    with pytest.raises(SystemExit, match="more than one line"):
+    with pytest.raises(SystemExit, match="holds a newline"):
         engine.collect(tmp_path, tmp_path / "specs", full=True)
 
 
@@ -404,7 +406,87 @@ def test_a_setup_spanning_more_than_one_line_is_refused(project):
     )
     with pytest.raises(SystemExit) as caught:
         engine._local_config(project)
-    assert "more than one line" in str(caught.value)
+    assert "holding a newline" in str(caught.value)
+
+
+def test_a_semicolon_is_refused_the_way_a_newline_is(tmp_path):
+    """`;` makes a list bash scores by its last command, exactly what the newline
+    refusal exists for — so `checks = ["false; true"]` reported a pass."""
+    (tmp_path / ".flw").mkdir()
+    (tmp_path / ".flw" / "config.toml").write_text('[tests]\nchecks = ["false; true"]\n')
+    with pytest.raises(SystemExit, match="holds a ';'"):
+        engine.collect(tmp_path, tmp_path / "specs", full=False)
+
+    (tmp_path / ".flw" / "config.toml").write_text(
+        '[tests]\nsetup = "source .venv/bin/activate; cd src"\nchecks = ["true"]\n'
+    )
+    with pytest.raises(SystemExit, match="holding a ';'"):
+        engine._local_config(tmp_path)
+
+
+def test_the_semicolon_a_brace_group_requires_is_left_alone(tmp_path):
+    """flw's own setup line is `test -x … || { … ; }`. That `;` terminates a
+    group rather than extending a list, and the group is one command in the `||`
+    — so refusing it would refuse correct bash and break the repo it ships in."""
+    (tmp_path / ".flw").mkdir()
+    setup = "test -x .venv/bin/pytest || { python3 -m venv .venv && .venv/bin/pip install -q pytest; }"
+    (tmp_path / ".flw" / "config.toml").write_text(
+        f'[tests]\nsetup = "{setup}"\nchecks = ["true"]\n'
+    )
+    assert engine._local_config(tmp_path)["setup"] == setup
+
+
+def test_a_semicolon_inside_a_quoted_argument_is_not_a_separator(tmp_path):
+    """Two of flw's own removal checks are `python3 -c "import …; sys.exit(…)"`.
+    That `;` is python's, inside one argument, and separates no command."""
+    (tmp_path / "specs").mkdir()
+    check = """python3 -c \"import sys; sys.exit(0)\""""
+    (tmp_path / "specs" / "current.toml").write_text(
+        "[success_criteria]\ncriteria = \"x\"\ntests = []\n"
+        "[[final_state.removed]]\nstatement = \"a thing\"\n"
+        f"check = '{check}'\n"
+    )
+    found = engine.collect(tmp_path, tmp_path / "specs", full=False)
+    assert [c.command for c in found] == [check]
+
+
+def test_and_and_or_are_left_alone(tmp_path):
+    """They carry the earlier command's failure forward, and they are what a user
+    writes deliberately — refusing them would refuse the documented repair."""
+    (tmp_path / ".flw").mkdir()
+    (tmp_path / ".flw" / "config.toml").write_text(
+        '[tests]\nchecks = ["make fmt && make test", "test -e x || exit 1"]\n'
+    )
+    found = engine.collect(tmp_path, tmp_path / "specs", full=False)
+    assert [c.command for c in found] == ["make fmt && make test", "test -e x || exit 1"]
+
+
+def test_a_checks_key_that_is_not_a_list_is_refused_by_file_and_key(tmp_path):
+    """A bare string is iterable: `checks = "make test"` ran nine one-character
+    shells, and `checks = "  "` printed `2 passed` at exit 0 having run nothing."""
+    (tmp_path / ".flw").mkdir()
+    config = tmp_path / ".flw" / "config.toml"
+    config.write_text('[tests]\nchecks = "make test"\n')
+    with pytest.raises(SystemExit) as caught:
+        engine._local_config(tmp_path)
+    assert str(config) in str(caught.value)
+    assert "[tests] checks" in str(caught.value)
+
+    config.write_text('[tests]\nyours = ["make verify", 3]\n')
+    with pytest.raises(SystemExit, match=r"\[tests\] yours"):
+        engine._local_config(tmp_path)
+
+
+def test_a_declared_test_that_is_not_a_table_names_the_contract_and_the_entry(tmp_path):
+    """It raised KeyError out of a comprehension, naming neither."""
+    (tmp_path / "specs").mkdir()
+    (tmp_path / "specs" / "current.toml").write_text(
+        '[success_criteria]\ntests = [{ command = "true" }, "make test"]\ncriteria = "x"\n'
+    )
+    with pytest.raises(SystemExit) as caught:
+        engine.collect(tmp_path, tmp_path / "specs", full=True)
+    assert "success_criteria.tests[1]" in str(caught.value)
+    assert "current.toml" in str(caught.value)
 
 
 # --- what a run reports, and what it calls done ----------------------------- #
@@ -418,7 +500,7 @@ def test_a_failure_shows_its_whole_output(project, capsys):
     # assertions from the echo alone and pin nothing.
     (project / ".flw").mkdir()
     (project / ".flw" / "config.toml").write_text(
-        '[tests]\nchecks = ["seq -f \'line-%02g\' 12 ; false"]\n'
+        '[tests]\nchecks = ["seq -f \'line-%02g\' 12 && false"]\n'
     )
     run_cli(project)
     out = capsys.readouterr().out

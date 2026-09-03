@@ -24,8 +24,10 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import signal
 import subprocess
+import sys
 import time
 import tomllib
 from dataclasses import dataclass
@@ -66,16 +68,63 @@ def _parse_toml(path: Path) -> dict:
         raise SystemExit(f"error: {path} does not parse: {exc}") from None
 
 
-def _check(source: str, command: str) -> Check:
-    # bash reports only the last line's exit status, so a multi-line command
-    # would let an earlier failing line pass silently — the version's own
-    # defect class, in the one place a user writes the command by hand.
+# bash scores a list of commands by its last one, so a separator that makes a
+# list would let an earlier failing command pass silently — the tool's own defect
+# class, in the one place a user writes the command by hand. `&&` and `||` are
+# not separators here: they are what a user writes deliberately, and both carry
+# the earlier command's failure forward.
+#
+# Which is why the `;` is found by tokenising and never by scanning bytes. Two
+# of flw's own removal checks are `python3 -c "import …; sys.exit(…)"`, where the
+# `;` is inside a quoted argument and separates nothing, and `; }` is the
+# terminator bash requires on a brace group — flw's own setup line is
+# `test -x … || { … ; }`. Both are correct bash, and a byte scan refuses both.
+
+
+def _separator(command: str) -> str:
+    """Which list-making separator this command holds, named, or empty."""
     if "\n" in command:
+        return "a newline"
+    lexer = shlex.shlex(command, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        # Unbalanced quotes. bash will fail on it too, loudly and at the site,
+        # and refusing here would be a verdict on a reading we cannot stand
+        # behind.
+        return ""
+    for index, token in enumerate(tokens):
+        # A `;` closing a brace group, not extending a list.
+        if token == ";" and tokens[index + 1 : index + 2] != ["}"]:
+            return "a ';'"
+    return ""
+
+
+def _check(source: str, command: str) -> Check:
+    found = _separator(command)
+    if found:
         raise SystemExit(
-            f"error: a {source!r} check spans more than one line, which bash would "
-            f"report only the last line's exit status for: {command!r}"
+            f"error: a {source!r} check holds {found}, which makes it a list bash "
+            f"would report only the last command's exit status for: {command!r}"
         )
     return Check(source, command)
+
+
+def _commands(path: Path, declared: list) -> list[str]:
+    """Every success_criteria.tests command, or the entry that is not one, named.
+
+    An entry that is not a table with a string command used to raise KeyError
+    out of a comprehension, naming neither the contract nor the entry."""
+    commands = []
+    for index, entry in enumerate(declared):
+        if not isinstance(entry, dict) or not isinstance(entry.get("command"), str):
+            raise SystemExit(
+                f"error: {path} success_criteria.tests[{index}] is not a table "
+                f"with a string command: {entry!r}"
+            )
+        commands.append(entry["command"])
+    return commands
 
 
 def collect(root: Path, specs: Path, full: bool) -> list[Check]:
@@ -91,12 +140,22 @@ def collect(root: Path, specs: Path, full: bool) -> list[Check]:
     declared = contract.get("success_criteria", {}).get("tests", [])
     branch = local.get("checks", [])
 
-    # -A means the contract's full definition of done. With no contract there is
-    # no such thing, so it falls back to the branch set rather than to silence —
-    # returning nothing here would turn a crash into an empty run that reports
-    # "nothing to do" for a project that had just declared what to do.
-    if (full or not branch) and declared:
-        checks += [_check("contract", d["command"]) for d in declared]
+    # -A means the contract's full definition of done, so a contract declaring
+    # none has nothing to answer with and says so rather than quietly running the
+    # branch set instead. With no contract at all there is no such definition to
+    # ask for — that call falls back, as the plain call does, and the CLI refuses
+    # -A there before reaching here. The fall-through below is the plain call's,
+    # where the branch set is what was asked for and an absent one is answered by
+    # the contract rather than by silence.
+    if full and path.exists() and not declared:
+        print(
+            f"error: {path} declares no success_criteria.tests, so there is no "
+            "full definition of done to run here.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    if declared and (full or not branch):
+        checks += [_check("contract", c) for c in _commands(path, declared)]
     else:
         checks += [_check("branch", c) for c in branch]
 
@@ -116,7 +175,20 @@ def _tests_section(path: Path) -> dict:
     # this tool already shipped once, so say it instead.
     if "gates" in config and "tests" not in config:
         raise SystemExit(f"error: {path} still says [gates] — rename it to [tests]")
-    return config.get("tests", {})
+    section = config.get("tests", {})
+    # A bare string is iterable, so `checks = "make test"` ran nine one-character
+    # shells and `checks = "  "` printed `2 passed` at exit 0 having run nothing —
+    # the same empty-run-reads-as-a-pass failure this file refuses twice already.
+    for key in ("checks", "yours"):
+        value = section.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, list) or not all(isinstance(c, str) for c in value):
+            raise SystemExit(
+                f"error: {path} declares [tests] {key} as "
+                f"{type(value).__name__}, not a list of strings"
+            )
+    return section
 
 
 def _local_config(root: Path) -> dict:
@@ -127,13 +199,14 @@ def _local_config(root: Path) -> dict:
     merged = dict(_tests_section(global_path))
     flw_dir = os.environ.get("FLW_DIR", ".flw")
     merged.update(_tests_section(root / flw_dir / "config.toml"))
-    # Same reason _check refuses a multi-line command: `|| exit` attaches to the
-    # last line only, so a setup whose first line failed would let every check run
-    # in the wrong environment and report a pass.
-    if "\n" in str(merged.get("setup", "")):
+    # Same reason _check refuses a separator: `|| exit` attaches to the last
+    # command only, so a setup whose first command failed would let every check
+    # run in the wrong environment and report a pass.
+    found = _separator(str(merged.get("setup", "")))
+    if found:
         raise SystemExit(
-            "error: a 'setup' spanning more than one line would let an earlier "
-            "failing line pass silently — join the lines with && , or call a script"
+            f"error: a 'setup' holding {found} would let an earlier failing "
+            "command pass silently — join them with && , or call a script"
         )
     return merged
 
