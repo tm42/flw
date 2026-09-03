@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.12.1"
+spec_version = "0.12.2"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -28,6 +28,7 @@ applied = [
   "an-added-file-is-a-change",
   "review-opens-solo",
   "a-solo-review-fills-the-store",
+  "quiet-wrongness",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -179,6 +180,7 @@ provides = [
   "A user who runs flw-research on a repository gets its architecture written into that repo's knowledge store — the repo file, area files where reading one removes reading several, and with [project.roots] declared, system.md at the parent from a pass that reads the topology before any member — reviewed per level rather than in one block, and shaped like a shipped toy example rather than invented.",
   "A user's spec, execute and review runs read the store from where they are working: orientation across the declared roots at spec time, the walk from the record's paths at execute time, the walk from the diff at review time. An execute run that changes code re-reads and re-stamps the files describing what it changed, at the phase boundary, and its report lists them.",
   "Any skill that finds a knowledge file wrong may rewrite that one file and re-stamp it. That permission is one sentence in each skill and not a rule in the shared context, because a permission granted there reads as permission to write anything.",
+  "A user can run flw-research on a repository that has no flw directory yet, which is the ordinary case for a repo nobody set up: the skill says which directory it is about to create and gets a yes before writing, the same gate flw-spec already applies to specs/, and proposes the ignore lines alongside the config it writes.",
 ]
 
 [[final_state.components]]
@@ -213,7 +215,7 @@ provides = [
 properties = [
   "A contract whose applied list names only records that exist validates clean; a record no applied list names is a version in flight rather than an error.",
   "A check reported as one this session could not run is one the project named in [tests] yours. A failing [tests] setup fails every check in the run instead, with the setup's own error text attached.",
-  "A command that could not be run to completion is never reported as passing: a check whose text spans more than one line is refused at collection time rather than reported by its last line's exit code.",
+  "A command that could not be run to completion is never reported as passing: a check or a setup line holding a command separator bash would score by its last command — a newline or a `;` — is refused at collection time naming the separator found, while `&&` and `||` are left alone because they are what a user writes deliberately. A `checks` or `yours` that is not a list of strings is refused naming the file and the key, rather than iterated into one check per character.",
   "Every subcommand that takes -n is checked by a test that fails if that command writes anything under -n. The promise is one sentence covering six commands, so a check covering one of them reads as a check covering the sentence.",
   "A definition reached through files that are themselves depended on outranks one imported by the same number of files that nothing depends on; with damping at zero the two tie exactly, because what separates them is transitivity and not how many importers each has.",
   "An importer's rank divides evenly across what it imports, and an import that resolves to nothing in the repository does not divide it at all: a file importing one local name and twenty from elsewhere gives that name the same score as a file importing nothing else.",
@@ -238,6 +240,8 @@ properties = [
   "A note's identity survives its title's script. A slug keeps unicode word characters, so a title in any script produces a stem that carries it.",
   "A filter given before the verb and a filter given after it compose rather than replace, and two filters that contradict each other are refused rather than silently answered with nothing.",
   "A listing that is empty because a filter matched nothing says so differently from a store that holds no notes.",
+  "`flw test -A` means the contract's definition of done, so a contract declaring no tests is exit 2 naming success_criteria.tests rather than a silent fall through to the branch set. The fall through stays for the plain call, where the branch set is what was asked for.",
+  "A version record flw ledger cannot parse is named on stderr with the count and the first path, the way the note store names a note it could not read, rather than dropped from the corpus at exit 0; --show on such a record reports the error and exits 1.",
 ]
 implementation = "Stdlib only at runtime, and nothing is installed to run a check. flw's own suite declares one test-time dependency it does not ship — the TypeScript compiler, in package.json — because the TypeScript scout cannot be exercised without a parser; those tests skip by name when it does not resolve. That scout needs the 5.x or 6.x compiler API: typescript 7 replaced it with an entry point its own package marks unstable, and is refused by version rather than failed against. Checks run through bash explicitly, because /bin/sh is dash on some systems and a venv activation is the common case. No runner allow-list: restricting the runner cannot restrict what the runner does. The scout ranks by PageRank over the import graph, iterated until the ranking stops moving. Every edge weighs the same: an edge runs from the importing file to the file that defines the imported name, or for a plain module import to the module's own file. Damping is the only constant, and it belongs to PageRank rather than to any repository — the weighting heuristics that stood here were measured changing at most one top-20 entry in twenty on a real project tree, and were deleted. One walk reads specs/versions/ for both callers: it opens each file once and returns the name, the classification off the filename, and the parsed document. check_chain keeps the first two and the ledger keeps all three, so validation and search cannot disagree about what the record set contains. The note store parses both roots on every query and holds no index on disk, which is linear and measured flat to 4,000 notes; the one pass that compares notes against each other reaches its pairs through an inverted index over each note's whole words rather than by running every title's patterns over every other note, so its cost is bounded by how many duplicate pairs the store actually contains rather than by the square of its note count. A store whose titles all draw on one small vocabulary genuinely holds n²/2 pairs and is quadratic to enumerate, which is a property of that store and not of the algorithm."
 
@@ -269,7 +273,7 @@ provides = [
 properties = [
   "A knowledge file's path is the code path it describes, under its own repo's store: a directory D at path P is <store>/P/D.md, a file is <store>/<path>.md, the repo itself is <store>/<basename>.md, and the parent of a multi-repo system holds system.md. Nothing is indexed, registered or named with a slug.",
   "The store is read from the root it belongs to, resolved as flw context resolves one. A parent with [project.roots] orients across system.md and every member's repo file, and a path under a declared member walks that member's store and ends at system.md; a member standing inside itself sees its own store alone. Nothing walks upward from a member looking for a parent that claims it.",
-  "Staleness is a git diff and never a judgment, taken from the recorded revision to the working tree: an uncommitted edit counts, and so does a file the tree has gained and the VCS does not ignore, as one changed file with no lines. Nothing moved is current; anything is changed, with files, insertions and deletions; a diff that cannot run is unverifiable and the file is read normally. Orientation checks each root's repository file, a walk checks the files it prints, and --check checks all — so orientation costs one whole-tree diff per declared root. system.md carries one revision per member, keyed by the member's directory basename, and is checked in each member's repo.",
+  "Staleness is a git diff and never a judgment, taken from the recorded revision to the working tree: an uncommitted edit counts, and so does a file the tree has gained and the VCS does not ignore, as one changed file with no lines. Nothing moved is current; anything is changed, with files, insertions and deletions; a diff that cannot run is unverifiable and the file is read normally. Orientation checks each root's repository file, a walk checks the files it prints, and --check checks all — so orientation costs one whole-tree diff per declared root. system.md carries one revision per member, keyed by the member's directory basename, and is checked in each member's repo. A recorded revision reaches git as a revision and never as an option, so a frontmatter value beginning with `-` fails the diff rather than steering it.",
   "A stamp writes HEAD into revision and changes nothing else — not line endings, not a comment on the line, not any other key — and refuses, leaving the file as it was, rather than write a block that no longer parses or whose top-level revision is not the value written. Every HEAD a batch needs is read before its first write, so a stamp that fails has written nothing. A stamp taken while the described path has uncommitted changes is written and says so on the file's line, because HEAD is then not the revision the file was read against.",
   "Frontmatter is +++ TOML read by the note store's reader. A block tomllib rejects reads as a file with no frontmatter and is reported by --check, never raised. Missing type or description is reported and the file left out of listings and orientation, and so is a type that disagrees with the file's position, which is the whole reason the field is declared as well as derived; missing revision is unstamped and the file is read normally; a file that is not UTF-8 is unreadable and skipped.",
   "index.md is written only by flw know --reindex and nothing may trust it: a reader that doubts one reads the directory. It is a convenience for readers with no tooling and never a source of truth.",
@@ -294,7 +298,7 @@ necessity — it depends on three third-party tools this project does not contro
 unrecorded: no document in this repository reports the result of running it.
 
 The files every run loads unconditionally have a size ceiling, checked by
-core/scripts/budget.py: 20,000 bytes for each core/skills/*/SKILL.md, and 10,000 for
+core/scripts/budget.py: 21,000 bytes for each core/skills/*/SKILL.md, and 10,000 for
 core/shared/context.md and core/styles/terse_prose.md. Bytes rather than tokens, because
 the ratio measured across these files is 4.10-4.33 bytes per token and a token count would
 mean a tokenizer dependency this project does not otherwise have.

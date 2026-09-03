@@ -1,0 +1,638 @@
+name         = "quiet-wrongness"
+base         = "a-solo-review-fills-the-store"
+spec_version = "0.12.1"
+
+summary = """
+Fix what two review rounds found: a stored revision that steers git instead of naming a \
+commit, checks that report a pass having run nothing, commands that traceback where they \
+should name a file, and eleven places where two sentences of the shipped tree instruct \
+opposite things.
+"""
+
+approach = """
+Two rounds ran over the whole tree at 999b329. An `eng` team of four code lenses filed 1
+CRITICAL, 11 MAJOR and 9 MINOR (.flw/reports/2026-09-02T2347-eng.md). A `craft` team of
+five prose lenses filed 1 CRITICAL, 24 MAJOR and 25 MINOR
+(.flw/reports/2026-09-03T0715-craft.md). This record carries the corrections from both.
+
+**What this is not.** It adds no capability. Three findings that would add one are
+deliberately held for the next record, which will be major: a `flw style lint` command
+over the mechanical rules; a mechanism that derives one copy of a duplicated fact from
+another at check time; and pricing a run rather than a file in budget.py. Two more are
+outside flw entirely and are the user's: a UserPromptSubmit or Stop hook, and whether
+`.flw/reviews/craft.toml` is tracked.
+
+**Also deliberately held: the terse_prose.md restructure.** voice measured that 21% of
+that file (27 lines, 1,934 bytes) is script-checkable, that all 32 of its bolded rules
+are in the other 79%, and that 1,039 of the checkable bytes sit in its last section. The
+reorder-and-bold fix waits for research into how the three hosts deliver style at all,
+because that research can change what the file should say and rewriting it twice is the
+churn a record exists to prevent. What this record does fix is the four rules whose text
+is measurably wrong, which is true whatever the delivery turns out to be.
+
+**Measurements to carry, because they cannot be re-derived by reading.** 226 mechanical
+style violations exist in the tree today: 18 of 45 untagged fences and 12 two-column
+tables and 8 over-long lines in 21 authored files, 97 of 174 untagged fences and 41
+headings deeper than ### and 46 over-long lines in 55 reports. The four skill openings
+cost about 157,000 bytes and 39,000 tokens before the first line of work. A four-lens
+dispatch is 94,276 tokens before reading any code, against the ~57,000 team-dispatch.md
+claims. The contract was 9,787 tokens at f1a2f60 and 10,095 at 999b329, 3.1% in one day.
+212 mutations across eight engines left 8 survivors, all in flw context --scope and
+budget.py, the two newest files.
+
+**What the rounds did not cover, so the next round starts here.** No skill was executed
+in a host — the-run followed each SKILL.md as text, which is one agent's reading and not
+a host's loading. flw install, uninstall, sync and update were left alone by every lens
+because attacking them writes into host configuration. docs/index.html, plans/ and the
+46 records as prose are unread. No mutation was applied to a test file. Every token
+number is cl100k_base and reads 5-8% below the real tokenizer.
+
+**Order matters in one place only.** Phase 6's budget.py change adds two files to a
+declared check, and one of them, core/shared/commits.md, is edited in phase 4. Running
+phase 6 first would hold a file to a ceiling before its final size exists.
+"""
+
+contract_edit = """
+Six changes, all in final_state.components.
+
+1. **the flw CLI, properties.** No change. install and sync returning 1 on a refusal is
+   already what the exit-code surface claims — "0 success, 1 something failed or was
+   refused" — so that task brings the code to the contract rather than the reverse.
+
+2. **validation and checks, properties.** REPLACE:
+
+     "A command that could not be run to completion is never reported as passing: a
+     check whose text spans more than one line is refused at collection time rather than
+     reported by its last line's exit code."
+
+   with:
+
+     "A command that could not be run to completion is never reported as passing: a
+     check or a setup line holding a command separator bash would score by its last
+     command — a newline or a `;` — is refused at collection time naming the separator
+     found, while `&&` and `||` are left alone because they are what a user writes
+     deliberately. A `checks` or `yours` that is not a list of strings is refused naming
+     the file and the key, rather than iterated into one check per character."
+
+3. **validation and checks, properties.** APPEND a new property:
+
+     "`flw test -A` means the contract's definition of done, so a contract declaring no
+     tests is exit 2 naming success_criteria.tests rather than a silent fall through to
+     the branch set. The fall through stays for the plain call, where the branch set is
+     what was asked for."
+
+4. **validation and checks, properties.** APPEND a new property:
+
+     "A version record flw ledger cannot parse is named on stderr with the count and the
+     first path, the way the note store names a note it could not read, rather than
+     dropped from the corpus at exit 0; --show on such a record reports the error and
+     exits 1."
+
+5. **the knowledge store, properties.** APPEND to the staleness property, after
+   "...and is checked in each member's repo.":
+
+     "A recorded revision reaches git as a revision and never as an option, so a
+     frontmatter value beginning with `-` fails the diff rather than steering it."
+
+6. **the skills, provides.** APPEND a new sentence:
+
+     "A user can run flw-research on a repository that has no flw directory yet, which is
+     the ordinary case for a repo nobody set up: the skill says which directory it is
+     about to create and gets a yes before writing, the same gate flw-spec already
+     applies to specs/, and proposes the ignore lines alongside the config it writes."
+
+7. **validation and checks, implementation.** REPLACE, in the paragraph stating the
+   ceilings:
+
+     "20,000 bytes for each core/skills/*/SKILL.md"
+
+   with:
+
+     "21,000 bytes for each core/skills/*/SKILL.md"
+
+   The rest of that paragraph is unchanged, including the 10,000 for
+   core/shared/context.md and core/styles/terse_prose.md and the bytes-rather-than-tokens
+   sentence.
+
+Nothing else moves. The style file's four rule fixes, the eleven skill-prose fixes and
+the three test additions are all changes to documents the contract does not quote, so
+they carry no contract edit.
+"""
+# --------------------------------------------------------------------------- #
+
+[[decisions]]
+topic     = "Where the SKILL.md ceiling sits, now that this record needs the file to grow"
+options   = [
+  "21,000 bytes",
+  "22,000 bytes",
+  "hold 20,000 and move flw-execute sections 5 and 6 into a reference",
+]
+chosen    = "21,000 bytes"
+rationale = """
+review-opens-solo set 20,000 with flw-execute at 19,461 and said so deliberately: "a
+ceiling that does not bite is not a ceiling. A record that needs the file to grow argues
+for raising the number, which is the conversation the check exists to force." This is
+that conversation, arriving as designed. The five additions this record makes to
+flw-execute are 1,023 bytes, already compressed from 1,625, and each closes a gap a
+reviewer hit while running the skill; getting under the remaining 539 means dropping the
+failure mechanism from each rule, which is the one thing this record argues makes a rule
+stick. 21,000 leaves flw-execute 516 bytes and flw-research 1,304, so the next paragraph
+added still fails and the property that made 20,000 right survives. 22,000 was already
+rejected as "giving every file room", and current-maximum-plus-10% as the same. Moving
+flw-execute sections 5 and 6 into a reference is the better long answer and is a
+restructure, so it belongs in the major record that follows this one.
+"""
+
+[[decisions]]
+topic     = "Where the phase-boundary check requirement lands"
+options   = [
+  "the checks run at least as often as a commit is proposed, never less often",
+  "commits.md's requirement is scoped to whoever makes the commit, not the run that proposes it",
+  "leave the contradiction and note it",
+]
+chosen    = "the checks run at least as often as a commit is proposed, never less often"
+rationale = """
+commits.md test 2 is "Every declared check passes at this commit. A red commit poisons
+git bisect for everything after it", and flw-execute proposes a commit at every phase
+boundary while running the checks only after the last phase. On a four-phase version
+that is three commits proposed with nothing having run. Scoping the requirement to the
+committer was the cheaper fix and it fails: the user commits what the run proposed, so
+the requirement lands on someone who was never told to run anything. The cost is real
+and is the reason this was a fork — a four-phase run now pays four check runs, which is
+32 seconds in flw and could be minutes elsewhere. Recorded rather than hidden: a project
+whose suite is too slow for this should say so in its own extension.
+"""
+
+[[decisions]]
+topic     = "How a dispatched reviewer gets the contract narrowed to its scope"
+options   = [
+  "change the instruction to flw context --scope, with no skill named",
+  "make --scope suppress the shared context in cli/flw.py",
+  "leave it, and pay context.md per reviewer",
+]
+chosen    = "change the instruction to flw context --scope, with no skill named"
+rationale = """
+Naming a skill is what makes flw context print core/shared/context.md, and a dispatched
+reviewer runs no flw skill: the orchestrator resolved the root and passes the result.
+Measured, `flw context --scope .` is 9,108 tokens against 11,341 for
+`flw context flw-review --scope .`, so the difference is 2,233 per reviewer — 8,060 on a
+four-lens run and 10,075 on the five-lens round that found it. Changing the code so
+--scope suppresses the section would fix it for everyone but changes a documented
+behaviour of a command, which is a major change, and this record is minor. The
+instruction is prose and the fix is one word. The reviewer still needs the project's
+extension file, so team-dispatch.md says to hand it over separately.
+"""
+
+[[decisions]]
+topic     = "Whether numstat should validate the revision or pass it end-of-options"
+options   = [
+  "git diff --numstat --end-of-options <rev> -- <path>",
+  "refuse a frontmatter revision matching ^-",
+  "both",
+]
+chosen    = "git diff --numstat --end-of-options <rev> -- <path>"
+rationale = """
+--end-of-options is git's own answer to this, needs git 2.24 or later, and makes the
+injected value fail as `fatal: bad revision` while a real revision behaves unchanged —
+verified against git 2.50.1 in both directions. A regex refusal would be a second,
+weaker copy of the same rule that git already implements correctly, and it would have to
+guess which shapes are dangerous. The three tests that assert the exact argv move with
+the change, which is what makes the fix reviewable rather than silent.
+"""
+
+[[decisions]]
+topic     = "Which style-file findings this record fixes"
+options   = [
+  "the four rules whose text is wrong",
+  "all five, including the reorder-and-bold restructure",
+  "none, hold the whole lens for the styling research",
+]
+chosen    = "the four rules whose text is wrong"
+rationale = """
+The fence-tag rule, the width rule's scope, the two-column table wording and the
+heading-depth exception are wrong regardless of how a host delivers the file, so fixing
+them cannot be invalidated by the research that follows. The restructure — moving the 27
+checkable lines to the top and bolding them — is a bet about what makes a rule stick,
+and the evidence for it is n=1: the trailing-spaces rule is the only one stated with its
+failure mechanism and the only one with zero violations in 757,732 bytes. That is a
+hypothesis worth acting on after the research, not before it.
+"""
+
+# --------------------------------------------------------------------------- #
+
+[[dag]]
+group = 1
+phase = "a stored revision cannot steer git, and research can open a repo that has no flw directory"
+
+  [[dag.tasks]]
+  id   = "end-of-options"
+  desc = """
+  core/scripts/knowledge.py numstat: pass --end-of-options before the revision, so
+  `git diff --numstat --end-of-options <rev> -- <path>`. Today a frontmatter revision of
+  `--output=/tmp/x` makes flw know --check exit 0, print `current` for a file whose
+  subject lost nine of ten lines, and write /tmp/x from the command whose contract
+  property is "writes nothing"; -U0 and --stat return wrong-but-plausible counts. Update
+  the three tests that assert the exact argv:
+  test_the_diff_runs_against_the_mirrored_path_in_the_file_s_own_repo,
+  test_system_md_is_checked_once_per_member_in_that_member_s_own_directory,
+  test_a_module_file_mirrors_the_file_it_describes_and_orphans_with_it.
+  """
+
+  [[dag.tasks]]
+  id   = "research-can-start"
+  desc = """
+  core/skills/flw-research/SKILL.md, at the top of section 4: add the paragraph
+  flw-spec already carries at its lines 56-59, with `.flw/` for `specs/`. A repo nobody
+  set up has neither specs/ nor .flw/, which is the only kind of repo this skill exists
+  for, so its own opening resolves no root and step 4 tells it to read a file that
+  cannot exist. Say which directory is about to be created, get a yes, then write. No
+  new subcommand — the skill creates the directory, the same way flw-spec creates specs/.
+  """
+
+  [[dag.tasks]]
+  id   = "research-proposes-the-ignore"
+  desc = """
+  core/skills/flw-research/SKILL.md section 4: propose the .gitignore lines for the flw
+  directory alongside the config, in the same block shown to the user. Three places
+  assume the store and the reports directory are ignored and no skill creates the
+  ignore, so a fixture left ` M .flw/knowledge/tallyup.md` and `?? .flw/reports/` after
+  a review that was told to change nothing.
+  """
+  depends_on = ["research-can-start"]
+
+[[dag]]
+group = 2
+phase = "a check that ran nothing cannot report a pass"
+
+  [[dag.tasks]]
+  id   = "separator-guard"
+  desc = """
+  core/scripts/run_tests.py: _check and _local_config both refuse on "\\n" for the stated
+  reason that bash scores a list by its last command. `;` has exactly that property and
+  is not refused, so `checks = ["false; true"]` reports a pass. Refuse on [\\n;] in both,
+  keeping each message's own text and naming the separator found. && and || stay allowed;
+  they are what a user writes deliberately.
+  """
+
+  [[dag.tasks]]
+  id   = "checks-must-be-a-list"
+  desc = """
+  core/scripts/run_tests.py _local_config: refuse a `checks` or `yours` that is not a
+  list of strings, naming the file and the key. Today a string is iterated per character
+  — `checks = "make test"` runs nine shells, and `checks = "  "` prints `2 passed` at
+  exit 0 having run nothing, which is the empty-run-reads-as-a-pass failure this file's
+  comments name twice. In collect, refuse a success_criteria.tests entry that is not a
+  table with a string command, naming the contract path, rather than raising KeyError.
+  """
+
+  [[dag.tasks]]
+  id   = "full-run-needs-declared-tests"
+  desc = """
+  core/scripts/run_tests.py collect: `if (full or not branch) and declared` falls through
+  to the branch set when the contract declares no tests, and success_criteria.tests is
+  optional in the schema. Split the conditions so full takes declared alone, and exit 2
+  naming success_criteria.tests when full is set and declared is empty. The fall through
+  stays for the plain call. The comment above the line describes only the no-contract
+  case, so update it to say which case it now covers.
+  """
+
+  [[dag.tasks]]
+  id   = "refusal-is-exit-one"
+  desc = """
+  cli/flw.py install and sync: return 1 when a refusal was printed. install's two
+  branches print to stderr and continue, sync appends a line beginning "    ! ", and
+  both return 0 unconditionally — against the contract's own exit surface, "0 success, 1
+  something failed or was refused". Neither refusal should stop the rest of the run,
+  which both already get right. sync is the worse of the two: its job is repair and it
+  reported success having repaired nothing.
+  """
+
+[[dag]]
+group = 3
+phase = "a command that cannot read something says which file"
+
+  [[dag.tasks]]
+  id   = "validate-names-the-contract"
+  desc = """
+  core/scripts/validate_spec.py check_chain: catch UnicodeDecodeError beside
+  tomllib.TOMLDecodeError and return a message naming the contract, rather than pass.
+  Today a non-UTF-8 current.toml tracebacks out of the command whose whole job is naming
+  a document it cannot read, printing OK: for the file the user asked about and then a
+  traceback naming no path. Two applied records, silent-misses and report-the-real-state,
+  already chose to close this bug class; the fix landed in validate_file, read_flw_text
+  and read_host_text and missed this reader.
+  """
+
+  [[dag.tasks]]
+  id   = "doctor-survives-a-bad-style-file"
+  desc = """
+  cli/flw.py style_state: the installed copy is read with a bare path.read_text(), and
+  UnicodeDecodeError is a ValueError while main() catches OSError deliberately. One bad
+  byte in a host's flw-terse.md is a traceback from flw doctor, the command a user runs
+  when an install is broken. style_state already declares "unreadable" as a state and
+  returns it for three other conditions; return it here too. flw sync -n and flw update's
+  refresh reach the same function.
+  """
+
+  [[dag.tasks]]
+  id   = "reindex-survives-a-bad-listing"
+  desc = """
+  core/scripts/knowledge.py reindex: the comparison read of an existing index.md is
+  outside any guard, so a non-UTF-8 one tracebacks and no listing in any store is
+  rewritten. The contract says index.md "is written only by flw know --reindex and
+  nothing may trust it", so a corrupt one is overwritten rather than read. Catch
+  UnicodeDecodeError and rewrite. Add encoding="utf-8" to the write beside it, the only
+  write in the module without one.
+  """
+
+  [[dag.tasks]]
+  id   = "ledger-names-what-it-could-not-parse"
+  desc = """
+  cli/flw.py ledger: after building the corpus, print one stderr line for records
+  carrying an error, in the shape _kb_skipped already uses — the count, the first path,
+  and that flw validate names them all. load_records returns the error and nothing in
+  ledger.py reads it, so a record that does not parse is dropped silently and a search
+  for a decision it holds returns "nothing written down here matches" at exit 0. show()
+  on such a record prints the error and returns 1.
+  """
+
+[[dag]]
+group = 4
+phase = "the skills stop instructing opposite things"
+
+  [[dag.tasks]]
+  id   = "spec-rules-name-their-mode"
+  desc = """
+  core/skills/flw-spec/SKILL.md: Rule 2 says "Edit the contract, do not rewrite it" and
+  Amending step 4 says "Do not edit specs/current.toml". Rule 3 compounds it by
+  instructing a deletion from open_questions, which lives only in that file. Scope both
+  Rules to the mode they hold in — in place when writing the first contract, as a
+  contract_edit when amending. The Rules block is the last thing an agent reads.
+  """
+
+  [[dag.tasks]]
+  id   = "review-exception-where-the-reader-stands"
+  desc = """
+  core/skills/flw-review/SKILL.md: the Lane grants the knowledge-file correction as "the
+  single exception to reporting and never fixing" and the discipline block opens "Read
+  and probe only. Change nothing in the repo" with no exception. team-dispatch.md sends
+  the block verbatim to every dispatched reviewer and sends no Lane, so a dispatched
+  reviewer holds the prohibition and never the permission. Add the exception to the
+  discipline block itself.
+  """
+
+  [[dag.tasks]]
+  id   = "checks-before-the-commit-proposal"
+  desc = """
+  core/skills/flw-execute/SKILL.md section 3: state the invariant — the checks run at
+  least as often as a commit is proposed, and never less often. In practice that is
+  flw test --no-stream at each phase boundary before the proposal, and a run may check
+  more often than that within a phase if it wants to. Say that section 4 is the full run
+  rather than the first one. Today section 3 carries no check at all: it proposes the
+  commit, re-reads what the phase falsified and stamps, while section 4 runs the checks
+  once after the loop over every phase. commits.md requires every commit to pass every
+  declared check on its own, so a four-phase version proposes three commits with nothing
+  having run. See the decision on this record for the cost.
+  """
+
+  [[dag.tasks]]
+  id   = "a-scope-is-a-boundary"
+  desc = """
+  core/skills/flw-review/SKILL.md section 1: "'The repo' is not a scope" reads as a ban
+  on the whole-repository scope that team-dispatch.md calls correct. Replace the clause
+  with what it means — name the boundary rather than a word for it, so "the whole tree at
+  <commit>" is a scope and "the repo" is not.
+  """
+
+  [[dag.tasks]]
+  id   = "a-test-needs-no-path-of-its-own"
+  desc = """
+  core/skills/flw-execute/SKILL.md: the drift rule in the Lane section says a path naming
+  specific files does not extend to a sibling, so writing tests/test_cli.py against a
+  contract whose components name three .py files is a proposal and the run stops. The
+  unnumbered sentence below Rule 4 says the opposite. Say in the Lane section which wins:
+  a test or a plan for work the contract does cover needs no path of its own. flw's own
+  contract never hits this because it gives tests/ to a component.
+  """
+
+  [[dag.tasks]]
+  id   = "one-stamp-ordering"
+  desc = """
+  core/skills/flw-research/SKILL.md section 4: the stamp follows the commit, as
+  flw-execute already says. Today research says to stamp every file it writes with no
+  commit anywhere in the skill, so a fixture stamped by research reported
+  `changed since 587b0d5: 10 files · +169 -0` on the next skill's first read, the diff
+  being the flw setup itself. Research's own output already warns; nothing tells the
+  reader to act on it.
+  """
+
+  [[dag.tasks]]
+  id   = "a-run-without-a-dag"
+  desc = """
+  core/skills/flw-execute/SKILL.md section 3: say what a run with no dag does, since
+  flw-spec says "dag only if the work needs ordering" and the schema calls it optional.
+  Today section 3 is written entirely in phases — the banner, the boundary, the commit
+  trigger, the re-read — with no referent, and section 6 still demands "Phases: <n> of
+  <m>", so a run with no phases writes a number it made up. Without a dag the whole run
+  is one phase: no banner, one commit proposal at the end, and "Phases: —" in the report.
+  """
+
+  [[dag.tasks]]
+  id   = "nothing-left-to-run"
+  desc = """
+  core/skills/flw-execute/SKILL.md section 1: add the branch for zero unapplied records,
+  which is the state every finished run leaves behind and what a user hits on re-invoking
+  after a run completed. Today there are branches for one and for several. Say so and
+  stop; there is nothing to run until flw-spec writes one.
+  """
+
+  [[dag.tasks]]
+  id   = "the-solo-path-owns-its-own-names"
+  desc = """
+  core/skills/flw-review/SKILL.md section 3: move the <reports> and <stamp> definitions
+  in from references/team-dispatch.md section 3 — <reports> is [paths] reports defaulting
+  to .flw/reports/, <stamp> is YYYY-MM-DDThhmm — and have team-dispatch.md cite them
+  instead, the direction commit 5845e1f already took for the discipline block. Section 2
+  declares that file out of bounds for a run that named no team, and section 3 then needs
+  two definitions and a count that exist nowhere else, so the solo path opens 11,937
+  bytes for them. Filed three times by three reviewers across both rounds.
+  """
+
+  [[dag.tasks]]
+  id   = "specs-is-a-setting"
+  desc = """
+  core/skills/flw-spec/SKILL.md and core/skills/flw-execute/SKILL.md: write the six
+  hardcoded specs/ paths against the directory flw context printed. core/shared/context.md
+  already warns that "writing the contract to a hardcoded specs/ puts it where flw
+  validate will not look", and the skills do it anyway at flw-spec lines 50, 99, 100 and
+  163 and flw-execute lines 85 and 253. Against a project with [paths] specs =
+  "contracts", the record lands where step 5 says and flw validate reports "no version
+  files" while flw ledger finds nothing, neither saying a file was ignored — and the mode
+  table selects first-contract mode and writes a second contract.
+  """
+
+  [[dag.tasks]]
+  id   = "a-first-contract-starts-at-zero"
+  desc = """
+  core/skills/flw-spec/SKILL.md, First contract step 4: say spec_version = "0.0.0" with
+  no applied key, because the number folds from the records that have landed and none
+  has. 0.1.0 reads at least as naturally and fails validation; the error names applied,
+  so the repair an agent reaches for is to add the record's name to it, which validates
+  while claiming a run that never happened and stops the first run ever recording itself.
+  """
+
+  [[dag.tasks]]
+  id   = "the-config-has-more-than-three-sections"
+  desc = """
+  core/skills/flw-research/SKILL.md section 4: drop the clause enumerating three sections
+  of the config file. There are five — the contract's config surface names [project]
+  roots and [knowledge] dir as well, and this skill instructs writing one of them. The
+  sentence after it, "Leave every key you did not measure exactly as you found it", is
+  correct, cannot drift, and says everything the enumeration was for. The enumeration has
+  been falsified twice in one day by two separate records.
+  """
+
+[[dag]]
+group = 5
+phase = "four style rules, and the sentences that outlived the records that changed them"
+
+  [[dag.tasks]]
+  id   = "fence-tags"
+  desc = """
+  core/styles/terse_prose.md: the fence-language rule gains "using text when nothing else
+  fits" and the consequence — an untagged fence renders as flat monospace, so a diff
+  loses its colouring. Measured today: 18 of 45 fences untagged in 21 authored files, 97
+  of 174 in 55 reports. text is already in use, so the writer knows what to put and does
+  not.
+  """
+
+  [[dag.tasks]]
+  id   = "a-file-has-a-width"
+  desc = """
+  core/styles/terse_prose.md: the width rule reads "Hard-wrap terminal replies at 120
+  columns" and governs replies only, so files — which are most of what flw writes — have
+  no stated width anywhere. The authored corpus already wraps to a consistent, unwritten
+  ~90. Write it: replies at 120, files at 90, and add frontmatter to the exemption list
+  beside tables, fenced blocks and headings, since a YAML description line cannot be
+  wrapped.
+  """
+
+  [[dag.tasks]]
+  id   = "write-two-columns-as-lines"
+  desc = """
+  core/styles/terse_prose.md: "Two columns are better written as **term** — text lines"
+  states a preference and was read as one — 12 of the corpus's tables have two columns
+  and five put sentences in cells, the longest 202 characters. Make it an obligation and
+  give it the consequence: a two-column table forces the second column into a narrow cell
+  that wraps mid-phrase.
+  """
+
+  [[dag.tasks]]
+  id   = "heading-depth-has-an-exception"
+  desc = """
+  core/styles/terse_prose.md: the maximum-depth rule breaks in exactly the documents that
+  need it — 41 #### headings across 55 reports, all in consolidated multi-lens reports,
+  zero in 21 authored files. A consolidation's natural structure is team, then lens, then
+  finding, which is three levels before a heading names anything. State the exception: a
+  document consolidating other documents may use #### to name the source.
+  """
+
+  [[dag.tasks]]
+  id   = "the-ambient-block-describes-what-runs"
+  desc = """
+  core/shared/ambient.md: the four-row skill table is byte-identical to README.md's and
+  says flw-review runs "a configurable team of reviewers", which review-opens-solo
+  reversed — the contract, the skill frontmatter and docs/index.html all moved and these
+  two did not. Its flw-execute row names a "work order" that exists in no live prose and
+  claims plain flw test runs every declared test. And ambient.md says a bare flw context
+  prints the shared context, which finish-the-opening narrowed for this line's own case.
+  Fix all three, and the same table in README.md. specs/current.toml records that the
+  ambient block is deliberately never re-verified, so nothing else will catch these.
+  """
+
+  [[dag.tasks]]
+  id   = "install-doc-names-every-reviewer"
+  desc = """
+  docs/install.md: "each dispatched flw-review reviewer" is the sentence
+  a-solo-review-fills-the-store replaced two commits ago. The contract now says "every
+  flw-review reviewer — the one that runs by default as much as each one a team
+  dispatches". The First run section currently tells a new user that the reviewer they
+  will actually get is the one not offered a note.
+  """
+
+  [[dag.tasks]]
+  id   = "dispatch-measures-instead-of-quoting"
+  desc = """
+  core/skills/flw-review/references/team-dispatch.md: replace the dispatch token
+  constants with the command that produces them. The stated figures do not sum from their
+  own addends (39,100 + 4x2,140 + 6,880 = 54,540, not ~57,000), price the raw contract
+  rather than the --scope output the same page mandates, and omit seven of the eight
+  things it requires be handed to each reviewer; measured, a four-lens run is 94,276
+  tokens. The contract figure drifted 3.1% in a day. review-opens-solo says why this
+  matters: "A measured number that has drifted 25% is worse than no number, because it is
+  quoted rather than re-measured."
+  """
+
+  [[dag.tasks]]
+  id   = "dispatch-narrows-without-naming-a-skill"
+  desc = """
+  core/skills/flw-review/references/team-dispatch.md section 2: the narrowing call
+  becomes `flw context --scope <each path in the scope>`, with no skill named, and the
+  reviewer is handed <project>/.flw/extensions/<skill>.md separately. Naming a skill is
+  what makes flw context print core/shared/context.md, which opens "Read once per run, by
+  every flw skill" — and a dispatched reviewer runs no flw skill. See the decision on this
+  record for the measurement.
+  """
+
+[[dag]]
+group = 6
+phase = "the tests that were missing, and a ceiling over the right files"
+
+  [[dag.tasks]]
+  id   = "pin-the-category-guards"
+  desc = """
+  tests/test_cli.py: two tests on _kb_category. [kb] category = "" must fall back to the
+  directory name, and [kb] category = 3 must do the same rather than traceback. Both
+  guards pass all 638 tests when mutated away today; dropping .strip() makes flw context
+  print every project's notes into every skill's opening, which is the failure
+  _context_notes' own docstring says it exists to prevent.
+  """
+
+  [[dag.tasks]]
+  id   = "pin-the-scope-rules"
+  desc = """
+  tests/test_cli.py: give _scoped_contract a third component whose paths is a directory
+  holding a file the other two do not cover, then add a file scope inside a directory
+  component, two scope paths selecting two different components, and a test over a
+  project with [paths] specs and a malformed contract. Four mutations survive today, and
+  each turns real output wrong: a file scope matching no component, only the first scope
+  used, the output contradicting its own contract: line, and the opening command crashing
+  on a contract it has just reported as broken.
+  """
+
+  [[dag.tasks]]
+  id   = "raise-the-skill-ceiling"
+  desc = """
+  core/scripts/budget.py: SKILL_CEILING becomes 21_000, and the module docstring's
+  statement of the number moves with it. The five additions this record makes to
+  core/skills/flw-execute/SKILL.md put it at 20,484 against the old 20,000. See the
+  decision on this record: the check was set to bite at exactly this point and the
+  record that set it named this conversation as the reason. 21,000 leaves flw-execute
+  516 bytes of headroom and core/skills/flw-research/SKILL.md 1,304, so the property
+  that made 20,000 right — the next paragraph added fails — still holds.
+  """
+
+  [[dag.tasks]]
+  id   = "budget-measures-what-a-run-loads"
+  desc = """
+  core/scripts/budget.py: add core/shared/ambient.md and core/shared/commits.md to
+  targets() under SHARED_CEILING. ambient.md is written into each host's ambient
+  instructions file by flw install, so it is in context in every session in every
+  repository on the machine, which is more unconditional than a SKILL.md; it has already
+  grown 9% unnoticed. commits.md is read at every flw-execute commit proposal. Then in
+  tests/test_budget.py oversize core/styles/terse_prose.md to SHARED_CEILING + 1 in the
+  existing over-ceiling test and assert both names in stderr, which pins the file list
+  and both ceilings in one assertion — today deleting the shared block passes all 638
+  tests and takes the real command from six rows to four at exit 0 both times.
+  """
+  depends_on = ["checks-before-the-commit-proposal"]
