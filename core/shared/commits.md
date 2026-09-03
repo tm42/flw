@@ -44,9 +44,14 @@ Never its own commit:
 - rewrapping, renaming, reordering
 
 **The consequence: commit at the end of a verified step, not at each discovery inside it.**
-A dirty tree mid-step is fine. `git rebase -i` is unavailable in an agent's shell, so
-folding after the fact costs a rebuild of every commit above it, and that rebuild is where
-the mistakes happen.
+A dirty tree mid-step is fine. Folding after the fact rewrites every commit above the one
+you touch, and that rebuild is where the mistakes happen.
+
+Neither half of that repair needs a terminal. `GIT_SEQUENCE_EDITOR=true git rebase -i
+HEAD~3` runs without one, and a `sed` script in that variable squashes or reorders. One
+file's changes split across two commits with `git diff -U0`, then `git apply --cached
+--unidiff-zero` on the hunks that belong to the first. So a partition you can describe is
+one you can make, and a red commit below the tip can be fixed where it stands.
 
 **Measured, on flw itself.** Two review rounds were executed under rules that covered
 only the message. They produced 44 commits for work that reads as 9 — same tree, every
