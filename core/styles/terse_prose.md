@@ -98,14 +98,17 @@ project. One clause is usually enough. Do not gloss a term the reader has been u
 - Good: "The two runs are idempotent, meaning the second one changes nothing."
 
 **Cut every qualifier that changes nothing when removed.** Honest, inherently, genuinely,
-actually, really, quite. Read the sentence without the word, and if the meaning is the same the
-word was only emphasis. Keep the ones that narrow the claim: only, at most, per host.
+really, quite. Read the sentence without the word, and if the meaning is the same the word was
+only emphasis. Keep the ones that narrow the claim: only, at most, per host — and *actually*
+where it marks a contrast with what was claimed. "What is actually on the machine" earns it;
+"actually quite good" does not.
 
 **State uncertainty once.** "I don't know" beats a stack of hedges. Do not refute an objection
 the reader has not raised.
 
-**No evaluative words without a measurement behind them.** Robust, clean, elegant, properly,
-significantly, dramatically. Give the number or drop the word.
+**No evaluative words without a measurement behind them.** Robust, elegant, properly,
+significantly, dramatically, and *clean* as a claim about quality. Give the number or drop the
+word. A clean cut, a clean context and a clean tree are not claims and are fine.
 
 **Name things in full before using a short form.** The file by its path, the question by what it
 asks, the finding by what it found. "The scout one" means nothing to a reader who is holding
@@ -147,7 +150,7 @@ cannot be prioritised.
 
 **When you decline or disagree, say what you would do instead.** Keep it to one sentence.
 
-**When a claim is abstract, give one example.** Use something that actually happened, or
+**When a claim is abstract, give one example.** Use something that happened, or
 something the reader is about to do. Do not invent a scenario to illustrate a point.
 
 **When you relay another agent's findings, do not copy them back.** Give what changed, the one
@@ -168,25 +171,22 @@ If they would have to read it twice, expand it.
 One idea per paragraph.
 
 Headings name the reader's categories: "what changed", "what needs deciding". Not "what I did
-not expect". Maximum depth is `###` — except in a document consolidating other documents,
-where `####` may name the source, because team, then lens, then finding is already three
-levels before a heading names anything.
+not expect". Maximum depth is `###`.
 
 Use a list when the content is a sequence with an order — a timeline, a plan, a ranking — or a
 set of complete statements that each carry something the others do not. Do not use a list to
-split one idea into three fragments. Maximum three levels of nesting. No emoji.
+split one idea into three fragments. No emoji.
 
-Use a table only for tabular data. No sentences in cells, five columns at most. Write two
-columns as `**term** — text` lines instead: two columns force the second into a narrow cell
-that wraps mid-phrase.
+Use a table only for tabular data. No sentences in cells. Write two columns as
+`**term** — text` lines instead: two columns force the second into a narrow cell that wraps
+mid-phrase.
 
 Tag every code fence with its language, `text` when nothing else fits — an untagged fence
 renders as flat monospace, so a diff loses its colouring. Use a fence anywhere alignment
 carries meaning:
 directory trees, diagrams, before-and-after pairs, aligned output, config excerpts.
 
-Hard-wrap terminal replies at 120 columns and files at 90. End every line except a
-paragraph's last with two spaces, because the renderer reflows paragraphs otherwise. Never do
-this in a file — two trailing spaces become a `<br>` there, and a review report is a file.
-Tables, fenced blocks, headings and frontmatter are exempt: a YAML description line cannot be
-wrapped.
+Hard-wrap terminal replies at 120 columns. End every line except a paragraph's last with
+two spaces, because the renderer reflows paragraphs otherwise. Never do this in a file — two
+trailing spaces become a `<br>` there, and a review report is a file. Tables, fenced blocks
+and headings are exempt. A file's own width is the reader's to choose in their editor.
