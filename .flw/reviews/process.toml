@@ -1,0 +1,173 @@
+name        = "process"
+description = "Five lenses on flw as a method rather than as code: where the loop actually catches defects, whether the lanes hold, what the human sees when a run is unattended, how a measurement travels between records, and whether the multi-repo story is real."
+
+[[reviewer]]
+role   = "where-caught"
+effort = "high"
+probes = true
+perspective = """
+flw's loop is interview, then build, then review. Each stage claims to prevent something.
+Your lens is where defects are caught in practice, and what that says about the stages that
+did not catch them.
+
+The evidence is in this repository. Read `specs/versions/*.toml` -- 51 records -- and the
+reports under `.flw/reports/`. Then read the git log, which carries the same work through
+every stage on one day.
+
+Three cases to work from, all from 2026-09-03:
+
+- The four-lens review at `.flw/reports/2026-09-03T1731-style-checks.md` found 4 CRITICAL
+  and 10 MAJOR in code committed roughly an hour earlier, under a record that had been
+  interviewed and critiqued.
+- The record `specs/versions/checked-and-bounded-major.toml` went through an interview and
+  then a spec critic, which found five semantic gaps -- two of them contradictions between
+  two tasks in the same file.
+- The executor of that record found a claim in it wrong on opening the code: it asserted
+  `core/scripts/scout.mjs` prints the same sections as `scout.py`, and it prints five
+  different ones.
+
+Answer two questions with evidence, not impression:
+
+1. **Does the interview detect anything?** Count what each stage found across the record
+   set. `decisions` in a record is what the interview settled; a review report is what a
+   later stage found; a record whose `approach` corrects an earlier record is a
+   self-correction. If the interview's yield is near zero, say so with the count.
+2. **Is any stage priced wrong?** A stage that costs a long conversation and catches
+   nothing is a stage to shorten. A stage that catches most of it and runs last is a
+   stage to move earlier, or to run twice.
+
+Do not report that flw should have more stages. The finding this lens exists for is the
+opposite one.
+"""
+
+[[reviewer]]
+role   = "the-lanes"
+effort = "high"
+probes = true
+perspective = """
+Every flw skill has a lane and each states it in its own words: `flw-review` reports and
+fixes nothing, `flw-execute` builds and authors no contract change, `flw-spec` decides and
+writes no code, `flw-research` records what is and never what must be. Every lane has
+exactly one carve-out -- a knowledge file the skill may correct.
+
+Your lens is what falls between the lanes, and what the gaps cost.
+
+Read the five `core/skills/*/SKILL.md`, `core/shared/ambient.md`, `core/shared/commits.md`
+and `core/shared/context.md`. Then look for work that no lane owns:
+
+- The 21 findings in `.flw/reports/2026-09-03T1731-style-checks.md` needed a whole new
+  record before anything could be fixed. Is that the design working or a round trip nobody
+  chose?
+- `commits.md` requires every commit to pass every declared check alone. Two executor runs
+  on 2026-09-03 both handed the commit partition back to the user, because splitting one
+  file across two commits needs `git add -p` and an agent's shell has no interactive git.
+  Read `commits.md` against what an agent can actually do and say whether the rule is
+  reachable.
+- The knowledge-file carve-out appears in four skills. Check whether it is stated the same
+  way in each, and whether one of them is broader than the others.
+
+Probe rather than reason where you can: run the commands, read the reports, check the git
+history for work that crossed a lane without a record.
+
+A rule nobody can follow is a finding. So is a lane whose boundary is stated in four files
+and means four things.
+"""
+
+[[reviewer]]
+role   = "what-the-human-saw"
+effort = "high"
+probes = true
+perspective = """
+flw's whole safety story is that a human agrees before the work runs and reads what came
+back. Your lens is what that human actually sees, especially when a run is unattended.
+
+Read `core/skills/flw-execute/SKILL.md` for its approval points and for what `--auto` and
+`--yolo` each remove. Read `core/skills/flw-spec/SKILL.md` for the lock on the version
+file. Then read `core/shared/context.md` on what flw does not claim.
+
+Work through these:
+
+- **`--auto` collapses both approval points.** Both executor runs on 2026-09-03 used it.
+  What was left that the human had to look at? Trace it: what does an `--auto` run print
+  that a human must read before anything is committed?
+- **The contract diff printed alone.** flw-execute step 5 requires `git diff
+  specs/current.toml` on its own, before the run's staged diff, because commit `cd4aca9`
+  repunctuated two clauses inside an eleven-file diff and nobody noticed. Is that rule
+  enough, and is it the only place it is needed? Look for other edits that reach a
+  reviewer only inside a large diff.
+- **What a report claims.** flw-execute has three closing blocks -- finished, STOPPED, and
+  BUILT NOT VERIFIED -- because two of them read as verified. Check whether an agent can
+  print the finished block without having run the checks, and whether anything would catch
+  it.
+- **The version file lock.** flw-spec says to name the path and let the user edit it,
+  never to paste the record into the reply. Check whether that survives in practice by
+  reading how records were actually written in this repository.
+
+The finding worth most here is an approval that looks like a gate and is not.
+"""
+
+[[reviewer]]
+role   = "whose-number"
+effort = "high"
+probes = true
+perspective = """
+flw records carry measurements, and a later record cites an earlier one's number rather
+than taking it again. Your lens is whether a number survives that journey.
+
+Three failures to reproduce, all on 2026-09-03, all in this repository:
+
+- A review report claimed the repository held 156 style findings. Run over the whole tree
+  it finds 18. The 156 does not reproduce because `.flw` is in `SKIP_DIRS` and every path
+  under it is skipped even when named.
+- The same report called the emoji rule 71% false. Re-measured over 276,281 words it was
+  100% false: zero pictographic emoji in either corpus, every hit a dingbat status marker.
+  The record that shipped that rule justified it with a tenfold difference between two
+  corpora, which was measuring check-mark density.
+- The record `checked-and-bounded` twice stated a task count that was wrong, because the
+  first pass matched on a filename stem rather than the record name the ledger derives.
+
+Your job is not to re-audit these three. It is to answer: **what does flw's process say
+about a number, and is that enough?**
+
+Read `core/skills/flw-spec/SKILL.md` on speccing from a review report, `core/skills/flw-
+review/SKILL.md` on evidence, `core/shared/context.md`, and `flw kb write --help`, which
+states the store's rule about recording what was measured rather than what was concluded.
+Search `specs/versions/*.toml` for numbers that later records cite, and check a sample of
+them against what the code does now.
+
+Then say whether flw needs a rule about re-measurement, and what the smallest one would be.
+A rule that would have caught any of the three above is worth more than a general
+principle.
+"""
+
+[[reviewer]]
+role   = "across-roots"
+effort = "high"
+probes = true
+perspective = """
+flw claims to work across a system of repositories, not only inside one. Your lens is
+whether that claim is carried by anything real.
+
+What flw states about it, which you should read first: `[project.roots]` in
+`core/shared/context.md` and in the contract's surfaces; the extension chain read "from
+every project root at or above the resolved one and below $HOME"; `flw-research`'s rule
+that a multi-root survey reads topology before any member and writes `system.md` at the
+parent; `flw-spec`'s rule that a cross-repo change gets one plan at the parent which every
+record cites; the knowledge store's walk; and
+`core/skills/flw-research/references/knowledge-example/`, which is the shipped example.
+
+Then find out what is actually exercised. This repository is a single checkout. Look for:
+
+- Tests that cover a multi-root resolution, an extension chain longer than one level, or a
+  knowledge walk that ends at a parent. Count them.
+- Commands whose behaviour differs across roots and whose difference nothing checks. The
+  `flw ledger` corpus is bounded by the project directory while the extension chain runs
+  above it, which the record `checked-and-bounded` records as a known gap -- start there
+  and look for others of the same shape.
+- Prose that describes multi-root behaviour no code implements, or that no test would
+  catch if it stopped working.
+
+Report what is verified, what is written but unexercised, and what is written and wrong.
+"Unexercised" is the expected answer for much of this and is a finding, not a failure to
+find one -- but say which, per claim, rather than in general.
+"""
