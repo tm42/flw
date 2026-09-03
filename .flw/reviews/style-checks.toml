@@ -1,0 +1,125 @@
+name        = "style-checks"
+description = "Four lenses for the record that split the style rules by corpus: is the split placed correctly, does either rule set still cry wolf, does reading a host's transcript hold up, and does flw still describe itself honestly after gaining a fifth skill."
+
+[[reviewer]]
+role   = "the-split"
+effort = "high"
+probes = true
+perspective = """
+One decision carries this whole change: geometry rules run against files, vocabulary
+rules run against replies, and neither crosses. Your lens is whether every rule is on
+the correct side of that line.
+
+Read `core/scripts/style_lint.py` — `FILE_RULES`, `REPLY_RULES`, `findings()` and
+`reply_findings()` — and `core/styles/terse_prose.md`, which is the rulebook both are
+supposed to enforce.
+
+For each rule, answer two questions and show your work:
+
+1. **Is it on the right side?** A rule belongs in FILE_RULES only if breaking it in a
+   file is unambiguously wrong. It belongs in REPLY_RULES only if breaking it in a
+   reply is unambiguously wrong. Some rules may belong in both, and neither set
+   currently shares one — say so if you find a case.
+2. **Is any rule in the style file enforced nowhere, or enforced by neither set when
+   it plainly could be?** Read terse_prose.md's "Structure and formatting" and "Words"
+   sections against both rule sets and list what is mechanically checkable and
+   unchecked. Do not list the prose rules — "one idea per sentence" and the like are
+   deliberately out of scope and saying so is not a finding.
+
+Probe rather than reason. Write short prose samples that a rule should and should not
+fire on, run the functions directly, and report what actually happened.
+
+The one thing that would be a CRITICAL: a rule whose corpus placement means a real
+violation can never be caught on either surface.
+"""
+
+[[reviewer]]
+role   = "cry-wolf"
+effort = "high"
+probes = true
+perspective = """
+The record exists because one rule set over both corpora produced 33 findings of which
+17 were false — a 52% rate, which is a checker people learn to ignore. Your lens is
+whether the new rate is actually near zero, measured rather than assumed.
+
+Two things to measure, and both need real corpora rather than examples you invent.
+
+**Files.** Run `flw style lint` over every markdown file in the repository, not just
+the three paths the declared check names — include `plans/`, `specs/`, `.flw/`, and
+anything else with prose in it. For every finding, open the line and judge whether it
+is really wrong. Report the count and the false-positive rate.
+
+**Replies.** `core/scripts/style_lint.py` has `session_transcripts()` and
+`recent_replies()`. Use them to pull real agent replies out of this project's
+transcripts, run `reply_findings()` over a few hundred of them, and sample the hits.
+For each rule, judge a handful and report how many are real. Pay particular attention
+to `plain-word`'s "surface" pattern, `evaluative`, and `aphorism`, which have the most
+room to misfire.
+
+Report per rule, with the rate. A rule whose hits are mostly false is a finding even if
+the overall rate looks fine, because that one rule is the one that trains people to
+skim past the output.
+"""
+
+[[reviewer]]
+role   = "foreign-format"
+effort = "high"
+probes = true
+perspective = """
+`flw style check` reads a file format flw does not own and no host documents: Claude
+Code's session transcript, as JSONL under `~/.claude/projects/*/`. Your lens is what
+happens when that assumption bends.
+
+Read `session_transcripts()` and `recent_replies()` in `core/scripts/style_lint.py`,
+and `style_check()` in `cli/flw.py`. Then work through, probing where you can:
+
+- **Size.** One transcript in this project is over 40 MB. Does either function stream
+  or does it build something proportional to the file? Time it and say.
+- **Concurrency.** Several sessions run against one project. The code takes the newest
+  transcript holding prose, which may not be this session's. The contract records this
+  as a known limitation — so the finding is not that it exists, but whether the code
+  behaves sanely when it happens and whether what it prints makes the wrongness
+  visible.
+- **Shape drift.** What breaks if a record gains a field, loses `cwd`, nests content
+  differently, or the directory moves? Build small malformed fixtures and run them.
+- **Other hosts.** flw supports Codex and OpenCode. On those, this command finds
+  nothing. Is that reported honestly, or does it look like a clean result?
+- **The 200-line and 40-file caps** in `session_transcripts()`. What legitimate case do
+  they exclude?
+
+A crash on malformed input is a finding. So is a silent empty answer where the honest
+answer is "I could not read this".
+"""
+
+[[reviewer]]
+role   = "self-description"
+effort = "high"
+probes = true
+perspective = """
+flw is its own subject: this repository builds the skills it runs under, and it now
+ships five where it shipped four. Your lens is whether every place flw describes itself
+still tells the truth.
+
+Check these against the tree, by reading rather than trusting:
+
+- **The skill count.** `README.md`, `docs/index.html` (including its meta description,
+  its skill cards and its numbered workflow map), `.flw/extensions/shared.md`,
+  `cli/flw.py`, and the knowledge store under `.flw/knowledge/`. The decision taken was
+  that the *workflow* stays four and `/flw-style` is a fifth skill outside it — so a
+  place saying "four skills" may be right or wrong depending on which it means. Judge
+  each on that basis and say which reading it takes.
+- **The contract.** `specs/current.toml` at 0.13.0. Do the two new `provides` on the CLI
+  component and the one on the skills component describe what was actually built? Is
+  `flw style lint [paths...]` and `flw style check [--last N]` exactly what the parser
+  accepts?
+- **The style file against the checker.** `terse_prose.md` narrowed "clean" and
+  "actually". Does `style_lint.py` agree, and do the two drift-guard tests in
+  `tests/test_style_lint.py` actually catch a disagreement, or would they pass while
+  the two diverged? Try breaking one and see whether the test notices.
+- **The new skill's own claims.** `core/skills/flw-style/SKILL.md` states what
+  `flw style check` does, including its exit behaviour. Run the command and check every
+  claim in that file against what happens.
+
+A statement about flw that is false is a MAJOR at minimum, because every one of these
+files is read by an agent as instruction.
+"""
