@@ -145,6 +145,7 @@ set up. Neither needs a contract.
 
 `flw kb` needs one even less: it reads `~/.flw/kb/` and, inside a project, that project's
 `plans/notes/`. Both are empty until something writes to them, and an empty store prints
-that rather than failing. The skills fill it — flw-execute, flw-research and each
-dispatched flw-review reviewer are offered a note at the point they have just measured
-something, and decline by doing nothing.
+that rather than failing. The skills fill it — flw-execute, flw-research and every
+flw-review reviewer, the one that runs by default as much as each one a team dispatches,
+are offered a note at the point they have just measured something, and decline by doing
+nothing.

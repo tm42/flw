@@ -96,8 +96,8 @@ rescans; in Claude Code that is `/reload-skills`.
 | Skill | Use |
 |---|---|
 | `/flw-spec` | Author or amend the contract. Interview-driven; nothing inferred silently. |
-| `/flw-execute` | Walk the pending work order phase by phase, run every declared test, record the result. |
-| `/flw-review` | Run a configurable team of reviewers over the work at any stage. Reports; fixes nothing. |
+| `/flw-execute` | Walk the pending version record's phases, run the project's declared checks, propose the commits. |
+| `/flw-review` | Review at any stage — one reader by default, a team of lenses when you name one. Reports; fixes nothing. |
 | `/flw-research` | Bring flw to a repo you did not set up: learn how it is tested and built, write that into its own config. |
 
 Nothing chains. You drive, and each skill stops and hands back — `flw-execute` proposes

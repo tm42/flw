@@ -8,15 +8,16 @@ project declares its own commands and flw runs them.
 | Skill | Use |
 |---|---|
 | `/flw-spec` | Author or amend the contract. Interview-driven; nothing inferred silently. |
-| `/flw-execute` | Walk the pending work order phase by phase, run every declared test, record the result. |
-| `/flw-review` | Run a configurable team of reviewers over the work at any stage. Reports; fixes nothing. |
+| `/flw-execute` | Walk the pending version record's phases, run the project's declared checks, propose the commits. |
+| `/flw-review` | Review at any stage — one reader by default, a team of lenses when you name one. Reports; fixes nothing. |
 | `/flw-research` | Bring flw to a repo you did not set up: learn how it is tested and built, write that into its own config. |
 
 **Before working in a repository that has a `specs/` or a `.flw/`, run `flw context`** —
-it prints that project's shared context, its extensions from the outermost project root
-inward, its note store listing and its contract's components, in one call. Not at session
-start, and not in a repository that has neither: it costs nothing to skip and it is the
-only way work flw has no skill for still starts from what the repository records.
+it prints what that repository records: its extensions from the outermost project root
+inward, its note store listing and its contract's components, in one call. Bare like that
+it omits the shared context every skill reads, which is what makes it right for work flw
+has no skill for; a skill named after it gets that too. Not at session start, and not in a
+repository that has neither: it costs nothing to skip.
 
 `flw scout` ranks a repo by what depends on what — orientation to a codebase nobody has
 read, in about a second, with nothing to install and nothing cached. `flw test` runs the

@@ -168,19 +168,25 @@ If they would have to read it twice, expand it.
 One idea per paragraph.
 
 Headings name the reader's categories: "what changed", "what needs deciding". Not "what I did
-not expect". Maximum depth is `###`.
+not expect". Maximum depth is `###` — except in a document consolidating other documents,
+where `####` may name the source, because team, then lens, then finding is already three
+levels before a heading names anything.
 
 Use a list when the content is a sequence with an order — a timeline, a plan, a ranking — or a
 set of complete statements that each carry something the others do not. Do not use a list to
 split one idea into three fragments. Maximum three levels of nesting. No emoji.
 
-Use a table only for tabular data. No sentences in cells, five columns at most. Two
-columns are better written as `**term** — text` lines.
+Use a table only for tabular data. No sentences in cells, five columns at most. Write two
+columns as `**term** — text` lines instead: two columns force the second into a narrow cell
+that wraps mid-phrase.
 
-Tag every code fence with its language. Use a fence anywhere alignment carries meaning:
+Tag every code fence with its language, `text` when nothing else fits — an untagged fence
+renders as flat monospace, so a diff loses its colouring. Use a fence anywhere alignment
+carries meaning:
 directory trees, diagrams, before-and-after pairs, aligned output, config excerpts.
 
-Hard-wrap terminal replies at 120 columns. End every line except a paragraph's last with two
-spaces, because the renderer reflows paragraphs otherwise. Never do this in a file — two
-trailing spaces become a `<br>` there, and a review report is a file. Tables, fenced blocks and
-headings are exempt.
+Hard-wrap terminal replies at 120 columns and files at 90. End every line except a
+paragraph's last with two spaces, because the renderer reflows paragraphs otherwise. Never do
+this in a file — two trailing spaces become a `<br>` there, and a review report is a file.
+Tables, fenced blocks, headings and frontmatter are exempt: a YAML description line cannot be
+wrapped.
