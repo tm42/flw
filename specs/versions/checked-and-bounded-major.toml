@@ -1,0 +1,326 @@
+name = "checked-and-bounded"
+base = "say-what-it-checks"
+spec_version = "0.13.1"
+
+summary = '''
+Four commands print something they did not check or did not bound: flw ledger reports an
+unrun record's tasks as done, neither ledger nor validate can see an extension that
+contradicts the contract, flw scout's budget bounds one section of six, and every skill
+opening spends 74% of its bytes on a file the reader already holds.
+'''
+
+approach = '''
+All four come from one field session running flw across a multi-repo set of pull requests
+-- planning six and executing the first three. Every one was reproduced or read in the
+code here before this record was written, and two of the four came back narrower than the
+field report stated.
+
+Finding 1, the ledger. `core/scripts/ledger.py:314-322` builds a `Hit("DONE", ...)` for
+every task in every record's `dag`. `applied` is read at :266 and reaches only
+`recency()`, which orders results; nothing classifies by it. Reproduced with a
+two-record fixture, one applied and one not:
+
+    $ flw ledger defrobnicate
+    DONE
+      in-flight · u1   [build it]
+        Write the defrobnicate function.
+
+A search for a function that does not exist answers under the heading DONE. That is worse
+than a miscount -- an agent asking whether something is written gets yes.
+
+Narrower than reported in one place and wider in another. The overview's NEWEST block does
+print `[minor · not yet run]` at :686 and the record count says `1 written and not yet run`
+at :656, so the listing is honest and the field report was wrong to say it is not. But the
+sum at :639-643 takes every record's tasks with no filter and the label at :659 calls them
+built, so that counter is wrong under its own heading.
+
+The count has three buckets, not two. `ledger.py:634-637` splits what the contract has not
+applied into `legacy`, whose name matches `^\d+\.\d+$`, and `flight`, which is everything
+else. Measured through the ledger's own loader: 41 applied records carrying 432 tasks, 9
+legacy carrying 78, and 1 in flight carrying 14, of 524 total. Legacy records are work that
+shipped before the applied list existed, so they count as built -- splitting on applied
+against in-flight alone would drop those 78 from both headings.
+
+Finding 2, extensions. `ledger.py:57-60` states the corpus outright: contract, records,
+review configs, `plans/*.md`, and nothing under the flw directory except `reviews/`.
+`flw validate` walks specs and review configs -- 59 documents in this repository and no
+extension among them. In the field an extension required every memory spec to define a
+stable prompt-model memory identity while an amendment removed prompt-model memory
+entirely; validate passed, and a topic search could not reach the instruction it broke.
+The contract states the four-tier corpus as a property at `specs/current.toml:235`, so
+widening it is an edit to a guarantee rather than an addition.
+
+Finding 3, the scout budget. `budget` is tested at `scout.py:584` and `:589`, both inside
+MOST DEPENDED ON, which is the last of six sections. What runs before it carries caps that
+do not move with `-n`: DEPENDS ON at 20 package edges (:545), a cycle's members at 8
+(:561), a cycle's inner edges at 10 (:569). Two things are bounded by nothing at all --
+PACKAGES iterates every package above 1% of the top score with only a `len(lines) > 18`
+guard (:526-529), and CYCLES iterates every strongly-connected group it found. Field
+measurement: `flw scout -n12` produced 177 lines and 10,000 bytes, one component joining
+more than 88 packages, and the ranking that was asked for pushed to the end.
+
+That number is not reproducible here and this record does not claim it is. flw's own repo
+gives 35 lines and 1,197 bytes at `-n 12`, 18 of them the budgeted section, because it has
+no package structure to speak of. The mechanism is read from the code; the magnitude is
+the field's.
+
+Three sets of extensions are in play and this record names which is which. `flw context
+<skill>` prints `shared.md` plus that skill's own file per level -- `_context_extensions` at
+`cli/flw.py:2804` builds `wanted = [SHARED_EXTENSION] + ([skill] if skill else [])` -- so it
+is not the repository's extensions, and a rule sitting in `flw-execute.md` never reaches a
+spec run that reads only what the opening printed. The reconciliation therefore reads every
+`<flw dir>/extensions/*.md` on the live chain itself. The ledger reads a third set, narrower
+again, and the decision below says why.
+
+One correction to the field report: `flw scout --help` already reads `definitions to show
+(default 20)`, so the description is accurate and only the flag's name reads as a total.
+The rename was considered and dropped -- see the decision. That sentence stops being true
+the moment `-n` bounds the whole output, so the help string changes with the behaviour.
+Nothing would catch it otherwise: `_parser_surface` in `tests/test_cli.py` collects
+`option_strings`, and no test in the suite reads a help string at all.
+
+Finding 4, the openings. Measured here:
+
+    flw-review      225 lines   1,755 words   11,355 bytes
+    flw-spec        226         1,766         11,370
+    flw-execute     226         1,751         11,381
+    flw-research    210         1,632         10,522
+    context.md      173         1,380          8,423   -- 74% of each of the above
+    flw context     37            252          2,099   -- bare, no skill named
+
+A brief mode half exists: bare `flw context` already drops the shared context. It also
+drops the skill's own extension, which is what that call is for, and neither shape names
+the records the contract has not applied. So this is a third output rather than a flag on
+an existing one, and the pending-record line is new data in both.
+
+Major, and for one reason only: `-n` on `flw scout` will bound something different from
+what it bounds today. Everything else here is additive or a correction.
+
+What this record is not. It does not answer the open question about bounding the ledger's
+corpus by directory or by what the VCS tracks -- the corpus stays directory-bounded and
+gains one tier. It does not move the shared context out of `flw context` or into the
+installed skills; the full opening is unchanged and stays the default. It does not touch
+the note store, the knowledge store, or any skill's lane. And it does not make
+`flw validate` read extensions: an extension has no schema, and validating prose is not
+what that command does. The reconciliation happens in the spec run, where a human is
+already reading both.
+'''
+
+contract_edit = '''
+Eight edits.
+
+1. In the "the flw CLI" component's `surfaces`, replace
+
+   "flw context [skill] [--root PATH] [--scope PATH...]"
+
+   with
+
+   "flw context [skill] [--root PATH] [--scope PATH...] [--brief]"
+
+2. In the "the flw CLI" component's `provides`, add after the sentence beginning "A user
+   can print everything a skill reads at its opening":
+
+   "A user can print the same opening without the shared context every skill already
+   carries -- the resolved root, the live extensions, the note store listing, the records
+   the contract has not applied, and the scoped components -- so a second call in one
+   session, or an agent handed a briefing, pays for what this repository records rather
+   than for the rules it is already holding."
+
+3. In the "validation and checks" component's `properties`, replace
+
+   "The corpus `flw ledger` reads is exactly the contract, the version records, the review
+   team configs and plans/*.md. Nothing else under the project is read."
+
+   with
+
+   "The corpus `flw ledger` reads is exactly the contract, the version records, the review
+   team configs, the flw directory's extensions and plans/*.md. Nothing else under the
+   project is read. An extension is binding because a human wrote it rather than because a
+   schema checks it, so it is grouped apart from the contract and the two are never merged
+   into one authority."
+
+4. In the "validation and checks" component's `provides`, replace
+
+   "A user can search everything the project has written down about itself -- the contract,
+   every version record and the design documents beside them -- with `flw ledger`, each hit
+   grouped by what kind of thing it is, so a settled decision is not made again for want of
+   finding it."
+
+   with
+
+   "A user can search everything the project has written down about itself -- the contract,
+   every version record, the conventions its extensions impose and the design documents
+   beside them -- with `flw ledger`, each hit grouped by what kind of thing it is, so a
+   settled decision is not made again for want of finding it, and a live convention that
+   contradicts the contract is visible beside it rather than reachable only by opening the
+   file that holds it."
+
+5. In the "validation and checks" component's `provides`, add:
+
+   "A task from a record the contract has not applied is reported as planned and counted
+   apart from what was built, so asking whether a capability exists answers with whether it
+   was built rather than with whether somebody wrote it down."
+
+6. In the "validation and checks" component's `provides`, add:
+
+   "A scout's budget bounds everything it prints rather than its last section, so a
+   repository large enough to fill the sections above it still shows the ranking that was
+   asked for. No section a repository has content for is reduced to a heading alone: the
+   budget is spent on every section that has something to say before any one of them is
+   given a second line."
+
+7. In the "the skills" component's `provides`, add:
+
+   "A spec run checks the amendment it has just written against the extensions live in that
+   repository and names any the amendment contradicts, so a convention a human made binding
+   is not left standing over a contract that removed what it requires."
+
+8. In the "the flw CLI" component's `provides`, in the sentence beginning "A user can print
+   everything a skill reads at its opening", extend the enumeration so it reads
+
+   "... the note store listing where that skill's own opening reads one, the records the
+   contract has not applied, and the contract's component names and paths ..."
+
+   The rest of that sentence, including the clause about running with no skill named, is
+   unchanged. Without this the pending-record line is output no contract sentence covers,
+   because edit 2 states it only of --brief.
+
+No component gains or loses a path. `flw scout [path] [-n|--budget]` is unchanged: the flag
+keeps its name and its short form, and only what it bounds changes.
+'''
+
+[[decisions]]
+topic = "Whether four findings from one session are one record"
+options = [
+  "Two records: the two truthfulness findings, then the two budget findings",
+  "Three records: the ledger, the scout, and the openings each on their own",
+]
+chosen = "One record, four phases"
+rationale = '''
+All four are the same shape -- a command printing something it did not check or did not
+bound -- and three of the four land in two engines. Splitting them costs two or three
+contract moves and as many execute runs for work found in one sitting, and the second
+record's `base` would be the first, which orders work that has no order between it. The
+cost of one record is that its subject is broader than a commit's; commits.md governs the
+commits inside it and will split them.
+'''
+
+[[decisions]]
+topic = "How far the extension fix goes, given the corpus boundary is a stated property"
+options = [
+  "Reconciliation only: the spec run reads the extensions it already prints and reports contradictions, corpus untouched",
+  "Ledger only: extensions become searchable, nothing checks them at spec time",
+]
+chosen = "Both: the spec run reconciles, and extensions join the corpus as a fifth tier under their own group"
+rationale = '''
+Both halves failed in the field and they fail at different moments. The spec pass catches a
+contradiction while a human is reading both documents, which is when it is cheapest to fix.
+The ledger group catches it months later, when somebody searches the term and needs to see
+that two documents disagree. Reconciliation alone leaves a live instruction unreachable by
+search; the ledger alone finds it only if somebody thinks to look. The property at :235 is
+edited rather than deleted -- the guarantee is that the corpus is an exact list, not that
+the list has four entries, and the new sentence says why the fifth is grouped apart.
+'''
+
+[[decisions]]
+topic = "Where a CONVENTIONS group sits in the ledger's output order"
+options = [
+  "Last, beside PLANS, which is already labelled as not validated and possibly superseded",
+  "Immediately after CONTRACT, which reads as near-contractual authority",
+]
+chosen = "After REMOVED and before DECISION, with the group's own line saying it is not contractual"
+rationale = '''
+GROUPS is ordered binding first, then what settled it, then what happened, then what was
+reasoned. An extension is binding -- a skill reads it and obeys it -- so it belongs in the
+first band, and the failure this fixes is a reader seeing the contract's sentence and
+missing the extension's. Putting it last beside PLANS buries exactly the hit that matters.
+Putting it first implies it outranks the contract, which it does not: the label carries
+that, not the position.
+'''
+
+[[decisions]]
+topic = "The scout's --budget, which bounds one section of six"
+options = [
+  "Rename the flag to say it bounds definitions, and add a second flag for total output",
+  "Make it a total budget and leave the giant-component rendering alone",
+]
+chosen = "Make it a total output budget and cap a strongly-connected component to its size and strongest edges"
+rationale = '''
+Two knobs is worse than one that does what its name says, and the help already reads
+"definitions to show" -- the description was never the problem, the behaviour was. Leaving
+the component alone was tempting because its member list already truncates at 8, but the
+field case is 88 packages in one component: the truncated line says only that the service
+is interconnected, and the section still costs a heading and up to ten edges for that. This
+is what makes the record major -- an existing `-n 20` prints a different shape afterwards.
+'''
+
+[[decisions]]
+topic = "The shape of a cheaper skill opening"
+options = [
+  "Invert the default: brief unless --full is passed",
+  "Move the shared context into each installed SKILL.md and stop the command printing it",
+]
+chosen = "A --brief flag, additive, with the full opening unchanged as the default"
+rationale = '''
+Inverting the default changes what every installed skill's first command returns, including
+in sessions running an older SKILL.md, which is a behaviour change nobody asked for.
+Copying the shared context into five skill files makes five copies to keep in step and
+spends 8,423 bytes against a 21,000-byte cap for a file whose whole point is being written
+once. The flag costs one surface line and leaves discovery exactly as it is.
+'''
+
+[[decisions]]
+topic = "Which extensions the ledger reads, given the live chain runs above the project root"
+options = [
+  "Read the whole live chain, so the ledger sees exactly what a skill obeys",
+  "Read nothing until the corpus boundary question in open_questions is settled",
+]
+chosen = "The project root's own extensions only, with the chain gap left open"
+rationale = """
+The corpus's guarantee is that it is bounded by the project directory, and a parent root is
+not under the project. Reading the chain would make `flw ledger` answer from outside the
+tree it was pointed at, which is a larger change than this record is making and one the
+contract's open question about directory versus VCS bounding already circles. The cost is
+real and stated rather than hidden: a convention at a parent root binds every skill and
+stays invisible to search. The spec run's reconciliation reads the whole chain, so the
+conflict that started this record is caught at the moment it is cheapest to fix, and only
+the later topic search is narrower than the rule it is searching for.
+"""
+
+[[dag]]
+group = 1
+phase = "planned work stops reading as built"
+tasks = [
+  { id = "classify", desc = "In documents(), pass `applied` down to the dag loop and emit PLANNED rather than DONE for a task whose record the contract has not applied. Add PLANNED to GROUPS immediately after DONE. A record predating the applied list -- the legacy numbered ones -- counts as applied, the way recency() already treats it." },
+  { id = "count", desc = "Split the overview's task count -- the sum at ledger.py:639-643, the label at :659 -- into what was built and what is planned. Built is applied plus legacy, planned is in flight. ledger.py:634-637 already splits non-applied records into `legacy` and `flight`, and counting applied against in-flight alone would drop 78 of this repository's 524 task descriptions from both headings. The label must not claim work that has not run." },
+  { id = "ledger-tests", desc = "Test both against a fixture with one applied and one in-flight record: a search for an in-flight task lands under PLANNED, a search for an applied one under DONE, and the two counts are separate. The reproduction that opened this record is the test.", depends_on = ["classify", "count"] },
+]
+
+[[dag]]
+group = 2
+phase = "an extension is visible to search and to the spec run"
+tasks = [
+  { id = "corpus", desc = "Add `<flw dir>/extensions/*.md` under the resolved project root -- that root alone, not the chain above it -- to Corpus as a fifth tier, read the same way plans/*.md is. The ledger is bounded by the project and a parent root is not under it; the decision below says why that gap is left open rather than closed here. Update the corpus docstring at ledger.py:51-60, which states the boundary and its two exclusions and would otherwise be the wrong document.", depends_on = ["classify"] },
+  { id = "group", desc = "Emit a CONVENTIONS hit per extension file, placed in GROUPS after REMOVED and before DECISION. The group's own line says it is prose a human made binding and not a contract sentence, so a reader never reads the two as one authority.", depends_on = ["corpus"] },
+  { id = "reconcile", desc = "Add a step to core/skills/flw-spec/SKILL.md's Amending: before writing the version file, check the drafted contract_edit against every `<flw dir>/extensions/*.md` on the live chain -- each project root at or above the resolved one and below $HOME -- and name any the amendment contradicts. Not the extensions flw context printed: _context_extensions at cli/flw.py:2804 builds `wanted = [SHARED_EXTENSION] + ([skill] if skill else [])`, so a rule in flw-execute.md would never be compared. The step reports; it does not edit an extension, which is the user's file and flw-research's lane." },
+  { id = "corpus-tests", desc = "Test that an extension is reachable by a topic search, that its hit is grouped apart from CONTRACT, and that a project with no extensions searches exactly as before.", depends_on = ["group"] },
+]
+
+[[dag]]
+group = 3
+phase = "the scout prints what it was asked for"
+tasks = [
+  { id = "total", desc = "Make `budget` bound the whole output rather than MOST DEPENDED ON alone. PACKAGES (scout.py:526-529, a 1%-of-top score floor with a len(lines) > 18 guard) and CYCLES (every strongly-connected group) are the two sections bounded by nothing today; DEPENDS ON at 20 and the per-cycle caps at 8 and 10 stay as they are but count against the total. Every section a repository has content for keeps at least one line before any section gets a second, so a small -n cannot answer `what depends on what` with a bare heading -- specs/current.toml:206 promises the packages and the dependency edges alongside the definitions. MOST DEPENDED ON is the section that was asked for and it prints last, so it must be reached at every -n. Change the help string at cli/flw.py:3941 in the same task: `definitions to show (default 20)` describes the behaviour this task removes, and nothing catches it -- _parser_surface in tests/test_cli.py reads option_strings and no test reads a help string." },
+  { id = "component", desc = "A strongly-connected component prints its size and its strongest edges rather than a truncated member list. One component joined more than 88 packages in the field and the member line said only that the service is interconnected." },
+  { id = "scout-tests", desc = "Test that total output stays within the budget across a synthetic repo large enough to fill the earlier sections, and that MOST DEPENDED ON is still reached at a small -n. Both scouts, since scout.mjs prints the same sections.", depends_on = ["total", "component"] },
+]
+
+[[dag]]
+group = 4
+phase = "an opening that does not repeat itself"
+tasks = [
+  { id = "brief", desc = "Add --brief to flw context. It prints the resolved root and where it came from, the live extensions from the outermost project root inward, the note store listing, the records the contract has not applied, and the components -- and omits core/shared/context.md. Naming a skill with --brief still gets that skill's own extension, which is what separates this from the bare call." },
+  { id = "pending", desc = "The pending-record line is new output in both shapes, not only --brief: `flw context` names what the contract has not applied, the way flw ledger's NEWEST does. A session that opens on a repository with work in flight should not have to run a second command to find out. Contract edit 8 is what covers this in the default shape -- edit 2 states it only of --brief, and building it into the default without edit 8 is output no contract sentence describes." },
+  { id = "context-tests", desc = "Test that --brief omits the shared context and keeps everything else, that a skill named with --brief still gets its own extension, and that the pending line is present in both shapes and absent when nothing is in flight.", depends_on = ["brief", "pending"] },
+  { id = "contract", desc = "Apply the seven contract edits above, in order. Print `git diff specs/current.toml` on its own before the run's staged diff.", depends_on = ["ledger-tests", "corpus-tests", "reconcile", "scout-tests", "context-tests"] },
+]

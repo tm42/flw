@@ -2879,6 +2879,50 @@ def _context_contract(root: Path | None) -> None:
         print(f"  {component.get('name', '?')}: {paths}")
 
 
+def _context_pending(root: Path | None) -> None:
+    """The records the contract has not applied: work written and not yet run.
+
+    A session opening on a repository with a version in flight had to run a second
+    command to find out, and mostly did not — so it specced on top of a record
+    nobody had executed, or rebuilt what that record already describes.
+
+    Filenames only. The name and the classification are both readable off the
+    stem, so this costs one directory listing and no TOML parse at a call that
+    runs at every skill opening. `parse_record_filename` is the same reader
+    `flw validate` and `flw ledger` use, so the three cannot disagree about what
+    a record is called.
+    """
+    if root is None:
+        return
+    specs = root / _specs_dir(root)
+    versions = specs / "versions"
+    if not versions.is_dir():
+        return
+    contract = specs / "current.toml"
+    try:
+        applied = set(tomllib.loads(read_flw_text(contract)).get("applied", []))
+    except (OSError, tomllib.TOMLDecodeError):
+        # A contract that does not parse is _context_contract's finding to
+        # report. Guessing that everything is pending would be worse than silence.
+        return
+
+    scripts = checkout() / "core" / "scripts"
+    sys.path.insert(0, str(scripts))
+    from validate_spec import LEGACY_NUMBER, parse_record_filename
+
+    pending = []
+    for path in sorted(versions.glob("*.toml")):
+        name, classification = parse_record_filename(path.name)
+        if name in applied or LEGACY_NUMBER.match(name):
+            continue
+        pending.append(f"  {name}" + (f"  [{classification}]" if classification else ""))
+    if pending:
+        plural = "s" if len(pending) != 1 else ""
+        print(f"\npending: {len(pending)} record{plural} written and not yet run")
+        for line in pending:
+            print(line)
+
+
 def _context_scope(root: Path | None, scopes: list[str] | None) -> int:
     """The full text of every component whose declared paths meet a scope path.
 
@@ -2984,6 +3028,12 @@ def context(args: argparse.Namespace) -> int:
     line's case — a session in a flw project that invokes no skill — and it wants
     the root, the chain, the notes and the contract, not the file whose first line
     says every skill reads it.
+
+    --brief omits it for a named skill too, and keeps that skill's own extension —
+    which is what separates it from the bare call. Measured on this repository the
+    shared context is 8,423 of the 11,370 bytes a skill opening costs, 74%, and a
+    second call in one session pays for it again having changed nothing. The full
+    opening stays the default: it is the one a session reads on first contact.
     """
     refused = _refuse_a_bad_root(args.root)
     if refused is not None:
@@ -3003,7 +3053,7 @@ def context(args: argparse.Namespace) -> int:
     start = Path(args.root).resolve() if args.root else None
     root = nearest_project(start)
 
-    if skill is not None:
+    if skill is not None and not args.brief:
         # context.md opens "Read once per run, by every flw skill", and every
         # SKILL.md names itself here. The bare call is the other case — a session
         # in a project that invokes no skill — and wants the tail, not the file
@@ -3026,6 +3076,7 @@ def context(args: argparse.Namespace) -> int:
     _context_members(root)
     _context_extensions(project_chain(start), skill)
     _context_notes(root)
+    _context_pending(root)
     _context_contract(root)
     return _context_scope(root, args.scope)
 
@@ -3833,6 +3884,11 @@ reading the next session's instead would report someone else's writing as yours.
         nargs="+",
         metavar="PATH",
         help="print every contract component whose paths meet one of these",
+    )
+    p.add_argument(
+        "--brief",
+        action="store_true",
+        help="omit the shared context, which every skill already carries",
     )
     p.set_defaults(handler=context)
 

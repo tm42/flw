@@ -2564,10 +2564,12 @@ def _body(out: str) -> str:
     return out.split("\nroot: ", 1)[1]
 
 
-def _context(tmp_path, monkeypatch, skill=None, root=None, scope=None):
+def _context(tmp_path, monkeypatch, skill=None, root=None, scope=None, brief=False):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(flw, "FLW_HOME", tmp_path / "flw-home")
-    return flw.context(argparse.Namespace(skill=skill, root=root, scope=scope))
+    return flw.context(
+        argparse.Namespace(skill=skill, root=root, scope=scope, brief=brief)
+    )
 
 
 def test_context_prints_extensions_outermost_first_and_shared_before_the_skills_own(
@@ -3012,11 +3014,13 @@ def test_doctor_and_context_refuse_a_bad_root_the_same_way(tmp_path, capsys):
     """Twelve lines duplicated in both, and a reader of either copy could not tell
     whether the other still agreed."""
     for command in (flw.doctor, flw.context):
-        args = argparse.Namespace(verbose=False, skill=None, root=str(tmp_path / "typo"))
+        args = argparse.Namespace(
+            verbose=False, skill=None, root=str(tmp_path / "typo"), brief=False
+        )
         assert command(args) == 1
         assert "error: --root: no such path:" in capsys.readouterr().err
 
-        args = argparse.Namespace(verbose=False, skill=None, root="")
+        args = argparse.Namespace(verbose=False, skill=None, root="", brief=False)
         assert command(args) == 1
         assert "error: --root was given an empty path" in capsys.readouterr().err
 
@@ -3557,7 +3561,9 @@ def test_every_read_of_the_flw_directory_goes_through_the_resolved_name(
     )
 
     # _section_config, _context_extensions and knowledge_dir's default.
-    assert flw.context(argparse.Namespace(skill="flw-spec", root=str(root), scope=None)) == 0
+    assert flw.context(
+        argparse.Namespace(skill="flw-spec", root=str(root), scope=None, brief=False)
+    ) == 0
     body = _body(capsys.readouterr().out)
     assert "RELOCATED-SHARED" in body
     assert "notes: category acme" in body
@@ -3961,3 +3967,106 @@ def test_doctor_separates_a_host_that_is_here_from_one_merely_reachable(
     out = capsys.readouterr().out
     assert "✓ claude-code: via " in out
     assert "✓ opencode: reachable via " in out
+
+
+# --- an opening that does not repeat itself ---------------------------------- #
+
+
+def _spec_project(tmp_path, applied: str, records: dict[str, str]):
+    """A project with a contract and some records, for the pending line."""
+    root = tmp_path / "work"
+    (root / "specs" / "versions").mkdir(parents=True)
+    (root / ".flw" / "extensions").mkdir(parents=True)
+    (root / "specs" / "current.toml").write_text(
+        f'schema_version = 4\nspec_version = "0.1.0"\napplied = [{applied}]\n'
+        '\n[[final_state.components]]\nname = "the thing"\npaths = ["src/"]\n'
+        'provides = ["A user can do the thing."]\n'
+    )
+    for name, body in records.items():
+        (root / "specs" / "versions" / name).write_text(body)
+    return root
+
+
+def test_brief_omits_the_shared_context_and_keeps_the_rest(tmp_path, capsys, monkeypatch):
+    """8,423 of the 11,370 bytes a skill opening costs are one file every skill
+    already carries, and a second call in one session pays for it again."""
+    first_line = (flw.checkout() / "core" / "shared" / "context.md").read_text().splitlines()[0]
+    root = tmp_path / "work"
+    (root / ".flw").mkdir(parents=True)
+
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(root)) == 0
+    full = capsys.readouterr().out
+    assert first_line in full
+
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(root), brief=True) == 0
+    brief = capsys.readouterr().out
+    assert first_line not in brief
+    assert brief.startswith("\nroot: ")
+    assert len(brief) < len(full)
+
+
+def test_brief_still_prints_the_named_skills_own_extension(tmp_path, capsys, monkeypatch):
+    """This is what separates --brief from the bare call, which drops it."""
+    root = tmp_path / "work"
+    (root / ".flw" / "extensions").mkdir(parents=True)
+    (root / ".flw" / "extensions" / "flw-spec.md").write_text("a rule for speccing here\n")
+
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(root), brief=True) == 0
+    assert "a rule for speccing here" in capsys.readouterr().out
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    assert "a rule for speccing here" not in capsys.readouterr().out
+
+
+def test_the_pending_line_names_records_the_contract_has_not_applied(
+    tmp_path, capsys, monkeypatch
+):
+    """A session opening on a repo with work in flight had to run a second command
+    to find out, and mostly did not."""
+    root = _spec_project(
+        tmp_path,
+        '"landed"',
+        {
+            "landed-minor.toml": 'name = "landed"\nsummary = "the first version"\n',
+            "in-flight-major.toml": 'name = "in-flight"\nsummary = "not run yet"\n',
+        },
+    )
+    assert _context(tmp_path, monkeypatch, skill="flw-spec", root=str(root)) == 0
+    out = capsys.readouterr().out
+    assert "pending: 1 record written and not yet run" in out
+    assert "in-flight  [major]" in out
+    assert "landed" not in out.split("pending:", 1)[1].split("\ncontract:", 1)[0]
+
+
+def test_the_pending_line_is_in_both_shapes(tmp_path, capsys, monkeypatch):
+    root = _spec_project(
+        tmp_path,
+        "",
+        {"in-flight-minor.toml": 'name = "in-flight"\nsummary = "not run yet"\n'},
+    )
+    for kwargs in ({"skill": "flw-spec"}, {"skill": "flw-spec", "brief": True}, {}):
+        assert _context(tmp_path, monkeypatch, root=str(root), **kwargs) == 0
+        assert "pending: 1 record" in capsys.readouterr().out, kwargs
+
+
+def test_nothing_in_flight_prints_no_pending_line(tmp_path, capsys, monkeypatch):
+    root = _spec_project(
+        tmp_path,
+        '"landed"',
+        {"landed-minor.toml": 'name = "landed"\nsummary = "the first version"\n'},
+    )
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    assert "pending:" not in capsys.readouterr().out
+
+
+def test_a_legacy_numbered_record_is_not_pending(tmp_path, capsys, monkeypatch):
+    """Legacy records predate the applied list and no list will ever name them."""
+    root = _spec_project(
+        tmp_path, '"landed"',
+        {
+            "landed-minor.toml": 'name = "landed"\nsummary = "the first version"\n',
+            "v1.0.toml": 'name = "1.0"\nsummary = "a legacy version"\n',
+        },
+    )
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    assert "pending:" not in capsys.readouterr().out
