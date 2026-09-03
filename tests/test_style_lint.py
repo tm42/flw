@@ -186,7 +186,8 @@ def _record(text: str, **extra) -> str:
 
 
 def test_recent_replies_skips_subagents(tmp_path):
-    """A subagent never receives the output style, so its prose is not evidence."""
+    """A dispatched agent does not receive the output style, so its prose is not
+    evidence: measured at 6.18 announcements per 10,000 words against 2.29."""
     path = tmp_path / "s.jsonl"
     path.write_text(
         _record("mine")
@@ -195,6 +196,28 @@ def test_recent_replies_skips_subagents(tmp_path):
         + _record("mine too")
     )
     assert style_lint.recent_replies(path, 10) == ["mine", "mine too"]
+
+
+def test_read_replies_counts_what_it_skipped(tmp_path):
+    """A transcript of nothing but dispatched replies and one holding nothing are
+    different answers: the first means flw is about to read someone else's session."""
+    path = tmp_path / "s.jsonl"
+    path.write_text(
+        _record("theirs", agentName="reviewer")
+        + _record("theirs too", agentName="reviewer")
+    )
+    assert style_lint.read_replies(path, 10) == ([], 2)
+
+    empty = tmp_path / "e.jsonl"
+    empty.write_text(json.dumps({"type": "user"}) + "\n")
+    assert style_lint.read_replies(empty, 10) == ([], 0)
+
+
+def test_asking_for_no_replies_returns_none(tmp_path):
+    """replies[-0:] is every reply, so --last 0 used to read the whole transcript."""
+    path = tmp_path / "s.jsonl"
+    path.write_text("".join(_record(str(n)) for n in range(5)))
+    assert style_lint.read_replies(path, 0) == ([], 0)
 
 
 def test_recent_replies_takes_the_last_n(tmp_path):
@@ -224,6 +247,43 @@ def test_transcripts_are_matched_by_their_own_cwd(tmp_path):
     )
     found = style_lint.session_transcripts(project, home=home)
     assert [p.name for p in found] == ["match.jsonl"]
+
+
+def test_a_transcript_naming_the_project_after_another_cwd_still_matches(tmp_path):
+    """A session that started in a parent directory names it first. 31 of 476
+    transcripts hold more than one distinct cwd, so the first is not the answer."""
+    home = tmp_path / "home"
+    project = tmp_path / "work"
+    project.mkdir()
+    directory = home / ".claude" / "projects" / "whatever-mangling"
+    directory.mkdir(parents=True)
+    (directory / "later.jsonl").write_text(
+        json.dumps({"type": "assistant", "cwd": str(tmp_path / "elsewhere")})
+        + "\n"
+        + json.dumps({"type": "assistant", "cwd": str(project)})
+        + "\n"
+    )
+    found = style_lint.session_transcripts(project, home=home)
+    assert [p.name for p in found] == ["later.jsonl"]
+
+
+def test_the_cap_counts_matches_not_candidates(tmp_path):
+    """Capping candidates meant the newest 40 files on the whole machine, so a day
+    in another repository made this project's transcripts unreadable."""
+    home = tmp_path / "home"
+    project = tmp_path / "work"
+    project.mkdir()
+    directory = home / ".claude" / "projects" / "whatever-mangling"
+    directory.mkdir(parents=True)
+    for n in range(style_lint.MATCH_CAP + 5):
+        (directory / f"other{n:03}.jsonl").write_text(
+            json.dumps({"type": "assistant", "cwd": str(tmp_path / "elsewhere")}) + "\n"
+        )
+    (directory / "mine.jsonl").write_text(
+        json.dumps({"type": "assistant", "cwd": str(project)}) + "\n"
+    )
+    found = style_lint.session_transcripts(project, home=home)
+    assert [p.name for p in found] == ["mine.jsonl"]
 
 
 def test_no_transcript_directory_is_not_an_error(tmp_path):

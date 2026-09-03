@@ -42,6 +42,10 @@ SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".flw"}
 SKIP_FILES = {"terse_prose.md"}
 
 WRAP_COLUMNS = 120
+# How many of this project's transcripts to collect, and how far into each to
+# look for the cwd record that identifies it.
+MATCH_CAP = 40
+CWD_SCAN_LINES = 200
 
 FENCE = re.compile(r"^\s*```(.*)$")
 _HEADING = re.compile(r"^#{1,6}\s")
@@ -285,6 +289,11 @@ def session_transcripts(root: Path, home: Path | None = None) -> list[Path]:
     and the newest is often one that has not said anything yet. The caller takes
     the first that actually holds prose.
 
+    The cap counts matches rather than candidates. Capping candidates meant the
+    newest 40 files across every project on the machine, so a day spent in
+    another repository pushed this project's transcripts out of the window and
+    the command reported it as the host keeping none. Reading all of them to
+    find 40 costs about 0.1s over 477 files.
     """
     base = (home or Path.home()) / ".claude" / "projects"
     matched: list[Path] = []
@@ -294,10 +303,10 @@ def session_transcripts(root: Path, home: Path | None = None) -> list[Path]:
         base.glob("*/*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True
     )
     wanted = str(root.resolve())
-    for path in candidates[:40]:
+    for path in candidates:
         try:
             with path.open(encoding="utf-8", errors="replace") as handle:
-                for _ in range(200):
+                for _ in range(CWD_SCAN_LINES):
                     line = handle.readline()
                     if not line:
                         break
@@ -307,26 +316,44 @@ def session_transcripts(root: Path, home: Path | None = None) -> list[Path]:
                         cwd = json.loads(line).get("cwd")
                     except json.JSONDecodeError:
                         continue
+                    # Not `break` on any cwd record: a session that started in a
+                    # parent directory names it first and this project later, and
+                    # 31 of 476 transcripts hold more than one distinct cwd.
                     if cwd and str(Path(cwd).resolve()) == wanted:
                         matched.append(path)
-                    break
+                        break
         except OSError:
             continue
+        if len(matched) >= MATCH_CAP:
+            break
     return matched
 
 
-def recent_replies(path: Path, last: int) -> list[str]:
-    """The last `last` replies the main agent wrote, oldest first.
+def read_replies(path: Path, last: int) -> tuple[list[str], int]:
+    """The last `last` main-agent replies, oldest first, and how many were skipped
+    for being a dispatched agent's.
 
-    Sidechain and named-agent records are a subagent's, and a subagent never
-    receives the host's output style, so counting its prose here would measure
-    something the style never reached.
+    A dispatched agent does not receive the host's output style: measured over
+    this project's transcripts, its prose breaks `announcement` at 6.18 per 10,000
+    words against the main agent's 2.29. So counting it here would measure
+    something the style never reached. `isSidechain` is checked too and fires in
+    none of 298 transcripts, so the name is doing all the work.
+
+    The skipped count is the second return value because a transcript holding
+    nothing but dispatched replies and one holding nothing at all are different
+    answers. The first means flw is reading someone else's session and must say
+    so; the second means a session that has not spoken yet, and moving on is
+    right.
     """
     replies: list[str] = []
+    dispatched = 0
+    if last <= 0:
+        # replies[-0:] is every reply, so asking for none used to return all.
+        return replies, dispatched
     try:
         handle = path.open(encoding="utf-8", errors="replace")
     except OSError:
-        return replies
+        return replies, dispatched
     with handle:
         for line in handle:
             if '"assistant"' not in line:
@@ -338,6 +365,7 @@ def recent_replies(path: Path, last: int) -> list[str]:
             if record.get("type") != "assistant":
                 continue
             if record.get("isSidechain") or record.get("agentName"):
+                dispatched += 1
                 continue
             content = (record.get("message") or {}).get("content")
             if not isinstance(content, list):
@@ -349,7 +377,12 @@ def recent_replies(path: Path, last: int) -> list[str]:
             ).strip()
             if text:
                 replies.append(text)
-    return replies[-last:]
+    return replies[-last:], dispatched
+
+
+def recent_replies(path: Path, last: int) -> list[str]:
+    """The replies alone, for a caller that does not need to know what was skipped."""
+    return read_replies(path, last)[0]
 
 
 def main(argv: list[str]) -> int:

@@ -1251,6 +1251,9 @@ def style_check(args: argparse.Namespace) -> int:
     effect; restating a rule the model can already recite has almost none. So
     this prints counts and examples and never the rules themselves.
     """
+    if args.last < 1:
+        print("style check: --last takes 1 or more", file=sys.stderr)
+        return 1
     scripts = checkout() / "core" / "scripts"
     sys.path.insert(0, str(scripts))
     import style_lint as engine
@@ -1271,10 +1274,29 @@ def style_check(args: argparse.Namespace) -> int:
     # Take the first that actually holds prose rather than reporting nothing.
     transcript, replies = None, []
     for candidate in candidates:
-        found = engine.recent_replies(candidate, args.last)
+        found, dispatched = engine.read_replies(candidate, args.last)
         if found:
             transcript, replies = candidate, found
             break
+        if dispatched:
+            # Not a session that has yet to speak — one whose every reply is a
+            # dispatched agent's, and that prose never received the style. Moving
+            # on would report the next session's replies as this one's.
+            print(
+                f"style check: the newest transcript for {tilde(root)} holds "
+                f"{dispatched} replies and all of them are a dispatched agent's",
+                file=sys.stderr,
+            )
+            print(
+                f"         {tilde(candidate)}",
+                file=sys.stderr,
+            )
+            print(
+                "         run this from the session you want measured, not from "
+                "a dispatched agent",
+                file=sys.stderr,
+            )
+            return 1
     if transcript is None:
         print(
             f"style check: {len(candidates)} transcripts for {tilde(root)}, "
@@ -1288,7 +1310,8 @@ def style_check(args: argparse.Namespace) -> int:
         for rule, examples in engine.reply_findings(reply).items():
             totals.setdefault(rule, []).extend(examples)
 
-    print(f"style check — last {len(replies)} replies · {tilde(transcript)}")
+    among = f" · 1 of {len(candidates)} transcripts" if len(candidates) > 1 else ""
+    print(f"style check — last {len(replies)} replies · {tilde(transcript)}{among}")
     found = False
     for rule, examples in totals.items():
         if not examples:
