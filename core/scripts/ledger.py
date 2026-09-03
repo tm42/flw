@@ -569,6 +569,16 @@ def show(corpus_: Corpus, name: str) -> tuple[str, int]:
         # same route through the record list.
         return _missing(name, corpus_), 1
     records = [r for r in corpus_.records if r.name.lower() == wanted]
+    unreadable = [r for r in records if r.error]
+    if unreadable:
+        # The name matched, so answering "nothing here is called that" would be
+        # false: the record is there and could not be read. `flw validate` is
+        # what reports it in full.
+        return (
+            "\n".join(f"{r.path}: {r.error}" for r in unreadable)
+            + "\n\n`flw validate` reports what is wrong with it.",
+            1,
+        )
     components = [
         c
         for c in corpus_.contract.get("final_state", {}).get("components", [])

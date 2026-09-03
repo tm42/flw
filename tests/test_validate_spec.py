@@ -276,7 +276,7 @@ def test_flw_spec_step_5_names_no_field_the_schema_rejects():
     allowed = set(schema["properties"])
 
     skill = (REPO / "core" / "skills" / "flw-spec" / "SKILL.md").read_text()
-    step_5 = skill.split("5. **Write `specs/versions/", 1)[1].split("\n6. ", 1)[0]
+    step_5 = skill.split("5. **Write `<specs>/versions/", 1)[1].split("\n6. ", 1)[0]
 
     named = set(re.findall(r"`(\w+)` (?:is|carries|only if)\b", step_5))
     assert named, "the extraction pattern found nothing — it is stale, not the skill"
@@ -400,6 +400,16 @@ def test_a_name_beginning_with_v_keeps_its_own_first_letter():
     assert check_version(
         {"name": "version-names", "summary": "s"}, "version-names-major.toml"
     ) == []
+
+
+def test_a_contract_that_is_not_utf8_is_named_rather_than_a_traceback(specs):
+    """The command whose whole job is naming a document it cannot read printed
+    `OK:` for the file asked about and then a traceback naming no path at all.
+    validate_file, read_flw_text and read_host_text already closed this; this
+    reader was missed."""
+    (specs / "current.toml").write_bytes(b'spec_version = "\xff\xfe1.0"\n')
+    errors = check_chain(specs / "versions")
+    assert any("current.toml" in e and "cannot be read" in e for e in errors), errors
 
 
 def test_two_records_sharing_a_name_are_caught(specs):

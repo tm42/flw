@@ -38,6 +38,23 @@ def project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def test_show_on_a_record_that_does_not_parse_reports_the_error(tmp_path):
+    """load_records returns the error and nothing read it, so the record was
+    dropped from the corpus and a search for a decision it holds answered
+    "nothing written down here matches" at exit 0. The name matched — saying
+    nothing is called that would be false."""
+    root = project(tmp_path)
+    (root / "specs" / "versions" / "broken-minor.toml").write_text(
+        'name = "broken"\nsummary = "unterminated\n'
+    )
+    found = ledger.corpus(root)
+    assert [r.name for r in found.records if r.error] == ["broken"]
+
+    text, code = ledger.show(found, "broken")
+    assert code == 1
+    assert "broken-minor.toml" in text and "flw validate" in text
+
+
 def test_the_corpus_reads_the_contract_and_the_records(tmp_path):
     found = ledger.corpus(project(tmp_path))
     assert found.contract["spec_version"] == "0.1.0"

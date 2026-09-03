@@ -500,7 +500,16 @@ def check_chain(versions_dir: Path) -> list[str]:
             with contract.open("rb") as handle:
                 document = tomllib.load(handle)
         except tomllib.TOMLDecodeError:
+            # validate_file reports a parse failure against this same file, so
+            # saying it again here would print it twice for `flw validate`.
             pass
+        except UnicodeDecodeError as exc:
+            # Not a parse error, and nothing else here catches it: it left the
+            # command whose whole job is naming a document it cannot read
+            # printing `OK:` for the file asked about and then a traceback
+            # naming no path. Reported and returned — every check below reads
+            # a contract that was never loaded.
+            return errors + [f"{contract.name}: cannot be read: {exc}"]
         applied = document.get("applied", [])
         for entry in applied:
             if entry not in names:
