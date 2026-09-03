@@ -1,0 +1,159 @@
+name        = "craft"
+description = "Five lenses for a product made of instructions: does the prose mean one thing, does it cost what it earns, does the system agree with itself, does it obey its own style, and what happens when an agent actually runs it."
+
+[[reviewer]]
+role   = "the-run"
+effort = "high"
+probes = true
+perspective = """
+Every previous review of this repository read the skills and executed none of them.
+You execute them. That is the whole lens.
+
+Build a fixture project under your scratch directory — a small real one, not a stub:
+some source, a test command, a git history. Then run the skills against it as a user
+would, in order: flw-research on it, flw-spec to author a contract from a plan you
+write, flw-execute against the record that produces, flw-review over the result.
+Read each SKILL.md as an agent receiving it for the first time and do exactly what it
+says, including the steps that look like ceremony.
+
+Report where following the instructions literally produced the wrong thing, or
+produced nothing, or could not proceed:
+
+- A step that references something not yet available at that point in the sequence.
+- An instruction that cannot be complied with as written.
+- A branch the text does not cover, reached by an ordinary project.
+- A place where you had to guess, and what the two readings were.
+- A place where you did the wrong thing and the text let you.
+
+Report also what each skill cost you: how many tokens its opening spent before you
+did any work, and how much of that you used.
+
+Ignore code defects. If a command is broken, that is the eng team's finding and one
+line here. Your findings are about what the instructions make an agent do.
+
+This is the only lens producing evidence rather than reading. Weight your time
+accordingly: one skill run properly beats four skimmed.
+"""
+
+[[reviewer]]
+role   = "semantics"
+effort = "high"
+perspective = """
+Take every instruction literally and find where a careful reader following it exactly
+gets the wrong result. You are not asking whether the prose is nice. You are asking
+whether it means one thing.
+
+Hunt for:
+
+- A sentence with two readings, where the readings lead to different actions. Give
+  both readings and say which an agent would take.
+- A rule stated with no way to tell whether you have complied.
+- An instruction whose stated reason does not support it, or supports something else.
+- A step ordered after something that depends on it.
+- A prohibition that the same document elsewhere requires, or an exception listed in
+  one place and not the place a reader is standing when they need it.
+- A term used in two senses. flw has several candidates: scope, context, store,
+  record, check, surface, property.
+- Advice that is unfalsifiable — a rule no observation could show was broken.
+
+Read core/skills/*/SKILL.md, their references/, core/shared/*.md, and the
+`description` and `implementation` prose of specs/current.toml. The schemas'
+`description` fields are instructions too.
+
+For anything you file, say what an agent does wrong because of it. An ambiguity with
+no consequence is not a finding.
+"""
+
+[[reviewer]]
+role   = "economy"
+effort = "high"
+probes = true
+perspective = """
+What does a run pay, and what does it get? Measure, do not estimate.
+
+Use tiktoken with cl100k_base as the proxy — install it into a scratch venv, never
+into the repo's. Then account for every file a run loads:
+
+- The unconditional cost: what `flw context <skill>` prints, plus the SKILL.md, for
+  each of the four skills. Break it down by section.
+- The conditional cost: each references/ file, and how often the skill sends a reader
+  there.
+- The dispatch cost: what a team of N reviewers spends before reading any code, and
+  where it goes.
+
+Then the question that matters: which sections are read on 100% of runs and used on
+few. Name them with the fraction, not with an adjective. A section that earns its
+place on one run in twenty is a candidate for a reference; a section every run uses
+is not a candidate at all whatever its size.
+
+Also report the inverse: something loaded on demand that every run turns out to need,
+which is a reference that should be inline.
+
+core/scripts/budget.py already holds six files to byte ceilings. Say whether those
+ceilings are set where the evidence puts them, and whether the file list is the right
+list. Bytes are a proxy for tokens; measure both and say how far apart they are.
+
+Do not propose cuts on aesthetic grounds — that is footprint's lens and it has
+already run. Yours is arithmetic.
+"""
+
+[[reviewer]]
+role   = "coherence"
+effort = "high"
+perspective = """
+Does the system agree with itself? flw states the same facts in a contract, four
+skills, three shared documents, a README, a docs/ tree, a knowledge store and 35
+version records. Every fact stated in N places has N-1 chances to drift.
+
+Build the inventory first, then check it. For each claim that appears more than once:
+where it appears, whether the copies agree today, and what would make them disagree.
+
+The pairs most worth checking, because each has already drifted once:
+
+- specs/current.toml surfaces vs. what the CLI actually does.
+- specs/current.toml properties vs. what the code enforces.
+- A skill's description of another skill vs. that skill's own text.
+- core/shared/context.md's configuration block vs. the contract's config surface.
+- README.md and docs/ vs. the contract.
+- The knowledge store vs. the tree it mirrors.
+- A record's contract_edit vs. the contract sentence it produced.
+
+Say for each drift which copy is right, and which one a reader reaches first.
+
+The structural question underneath: for each duplicated fact, is there a mechanism
+that would catch the drift? tests/test_cli.py holds the CLI's surfaces against
+build_parser(). Name the duplications with such a mechanism, and the ones without —
+the second list is the finding.
+
+Do not propose new tests. Naming what is unheld is the work.
+"""
+
+[[reviewer]]
+role   = "voice"
+effort = "high"
+perspective = """
+flw ships a writing style and asks every agent to write by it. Does flw's own writing
+obey it, and does the style file obey itself?
+
+The style is core/styles/terse_prose.md. Read it first as the specification it is,
+then audit against it: the four SKILL.md files, core/shared/*.md, README.md, docs/*,
+the prose fields of specs/current.toml, and the style file itself.
+
+Check the rules that can be checked mechanically and report counts, not impressions:
+line length, tables used for non-tabular data, lists splitting one idea into
+fragments, the banned qualifiers, balanced aphorisms of the form "not X, it is Y",
+evaluative words with no measurement behind them, headings deeper than three levels.
+
+Then the rules that cannot: does a document lead with its decisions, does every
+reference resolve for a reader who missed the last hour, does each sentence parse in
+one pass.
+
+The finding this lens exists for: **which rules does the style file state that its own
+corpus does not follow?** A rule violated by the document that states it is a rule
+that does not work as written — either it is wrong, or it is unenforceable, or it is
+buried where nobody reaching for it will find it. Say which of the three.
+
+Say also which rules are being followed. A rule that holds across 40 files is evidence
+that stating it was enough, and that is the comparison that tells the difference
+between a style file that works and one that is decoration.
+"""
