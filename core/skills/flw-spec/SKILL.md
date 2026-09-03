@@ -174,6 +174,19 @@ validation.
    replaces, and where each goes. Do not edit `<specs>/current.toml`: the edit goes into the
    version file's `contract_edit`, applied by `flw-execute` when the run it describes
    finishes, not now.
+   **Then read the edit back against what this repository already made binding.**
+   Every `<flw dir>/extensions/*.md` on the live chain — each project root at or above
+   the resolved one and below `$HOME` — not the two files `flw context` printed at your
+   opening. That call reads `shared.md` plus the named skill's own file, so a rule
+   sitting in `flw-execute.md` is live for every execute run here and was never in front
+   of you. Name any extension the drafted edit contradicts, quote both sentences, and let
+   the user settle it before you write the record.
+
+   An extension requiring what an amendment removes is the case this exists for: it
+   passed `flw validate`, because validation reads schemas and an extension has none, and
+   the spec session held both statements without noticing they disagreed. You are not
+   editing the extension — that is the user's file and `flw-research`'s lane — you are
+   refusing to write a record that leaves the two at odds in silence.
 5. **Write `<specs>/versions/<name>-minor.toml` or `<specs>/versions/<name>-major.toml`.**
    Read `$FLW/core/schemas/version.schema.json` for the shape.
    - `name` is the record's identity and matches the filename without the suffix. `base`

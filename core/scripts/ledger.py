@@ -31,7 +31,7 @@ from validate_spec import LEGACY_NUMBER, Record, load_records
 class Corpus:
     """Everything a query may read, and nothing else.
 
-    The boundary is the whole guarantee: these four tiers, and nothing else under
+    The boundary is the whole guarantee: these five tiers, and nothing else under
     the project. It is bounded by directory rather than by what the VCS tracks, so
     an uncommitted file inside one of them is read — the contract carries that as
     an open question. `contract` is empty for a project that has none yet, which
@@ -42,22 +42,29 @@ class Corpus:
     contract: dict
     records: list[Record]
     reviews: dict[Path, dict]
+    extensions: dict[Path, str]
     plans: dict[Path, str]
 
 
 def corpus(root: Path, specs_dir: str = "specs") -> Corpus:
     """Assemble the corpus for one project.
 
-    Four tiers, and the two exclusions matter as much as the inclusions.
+    Five tiers, and the exclusions matter as much as the inclusions.
 
     `plans/` means `plans/*.md`. The rendered `.html` beside the markdown says
     the same thing in markup: `plans/code-graph-report.html` alone holds 73
     whole-word occurrences of `font`, so a query for `font` would print CSS.
 
-    Nothing under `.flw/` is read except `reviews/`. Review *reports* live in
-    `.flw/reports/`, which this repository gitignores. A report's durable half is
-    copied into a version record's `approach` when the version is specced, so what
-    survives is already here.
+    Nothing under `.flw/` is read except `reviews/` and `extensions/`. Review
+    *reports* live in `.flw/reports/`, which this repository gitignores. A report's
+    durable half is copied into a version record's `approach` when the version is
+    specced, so what survives is already here.
+
+    Extensions are read from this root and no higher. The chain a skill obeys runs
+    from every project root at or above the resolved one, but the corpus is bounded
+    by the project directory and a parent root is not under it — so a convention at
+    a parent binds every skill here and stays invisible to this search. The spec
+    run's reconciliation reads the whole chain, which is where that gap is covered.
     """
     specs = root / specs_dir
 
@@ -83,12 +90,24 @@ def corpus(root: Path, specs_dir: str = "specs") -> Corpus:
         except (tomllib.TOMLDecodeError, UnicodeDecodeError):
             continue
 
+    extensions = {
+        path: path.read_text(errors="replace")
+        for path in sorted((root / flw_dir / "extensions").glob("*.md"))
+    }
+
     plans = {
         path: path.read_text(errors="replace")
         for path in sorted((root / "plans").glob("*.md"))
     }
 
-    return Corpus(root=root, contract=contract, records=records, reviews=reviews, plans=plans)
+    return Corpus(
+        root=root,
+        contract=contract,
+        records=records,
+        reviews=reviews,
+        extensions=extensions,
+        plans=plans,
+    )
 
 
 # --- matching --------------------------------------------------------------- #
@@ -174,13 +193,28 @@ GROUPS = (
     # without inventing a score there is no ground truth to tune.
     "CONTRACT",
     "REMOVED",
+    # Binding because a human wrote it, not because a schema checked it. In the
+    # first band because a skill reads an extension and obeys it, and the failure
+    # this group exists for is a reader finding the contract's sentence and
+    # missing the extension that contradicts it.
+    "CONVENTIONS",
     "DECISION",
     "CHANGED",
     "DONE",
+    "PLANNED",
     "WHY",
     "REVIEWS",
     "PLANS",
 )
+
+
+# Printed under the group's heading. Only one group has ever needed one: an
+# extension sits beside the contract in the first band and a reader has to be told
+# that it binds for a different reason, or the two read as one authority.
+GROUP_NOTE = {
+    "CONVENTIONS": "prose a human made binding here. Not a contract sentence, and"
+    " nothing validates it.",
+}
 
 
 def decision_parts(decision: dict) -> tuple[tuple[str, str], ...]:
@@ -261,6 +295,18 @@ def recency(name: str, applied: list[str]) -> tuple[int, tuple]:
     return (3, ())
 
 
+def built(name: str, applied: list[str]) -> bool:
+    """Whether a record's work has landed, over the same three states recency() sorts.
+
+    Applied is the ordinary yes. Legacy is also yes: those records shipped before
+    the applied list existed and no list will ever name them, so testing `in
+    applied` alone drops them — 9 records carrying 78 of this repository's 524
+    task descriptions, which would fall out of both the built and the planned
+    count rather than into one of them.
+    """
+    return name in applied or bool(LEGACY_NUMBER.match(name))
+
+
 def documents(corpus_: Corpus) -> list[Document]:
     """The corpus as things that match, each carrying the units it would print."""
     applied = list(corpus_.contract.get("applied", []))
@@ -311,6 +357,11 @@ def documents(corpus_: Corpus) -> list[Document]:
             hits.append(
                 Hit("CHANGED", record.name, "", document["contract_edit"], record.classification or "")
             )
+        # A task from a record nobody has run describes work that does not exist.
+        # Printed under DONE it answered "is this written?" with yes: a search for
+        # a function named only in an unrun record's dag came back under that
+        # heading with nothing saying the record had not run.
+        task_group = "DONE" if built(record.name, applied) else "PLANNED"
         for group in document.get("dag", []):
             # The phase rides in `note`: it is the last thing a record writes
             # that reached no hit, and printing it says which phase a task
@@ -318,7 +369,7 @@ def documents(corpus_: Corpus) -> list[Document]:
             phase = group.get("phase", "")
             for task in group.get("tasks", []):
                 hits.append(
-                    Hit("DONE", record.name, task.get("id", ""), task.get("desc", ""), phase)
+                    Hit(task_group, record.name, task.get("id", ""), task.get("desc", ""), phase)
                 )
         if document.get("summary"):
             hits.append(Hit("WHY", record.name, "summary", document["summary"]))
@@ -341,6 +392,13 @@ def documents(corpus_: Corpus) -> list[Document]:
         ]
         if hits:
             out.append(Document(_text_of(config), (0, ()), hits))
+
+    for path, text in corpus_.extensions.items():
+        where = str(path.relative_to(corpus_.root))
+        reader = "every skill" if path.stem == "shared" else path.stem
+        out.append(
+            Document(text, (0, ()), [Hit("CONVENTIONS", where, "", text, reader)])
+        )
 
     for path, text in corpus_.plans.items():
         where = str(path.relative_to(corpus_.root))
@@ -445,6 +503,8 @@ def render_search(found: dict[str, list[Hit]], terms: list[str]) -> str:
         if not hits:
             continue
         lines.append(name)
+        if name in GROUP_NOTE:
+            lines.append(f"  ({GROUP_NOTE[name]})")
         for hit in hits[:CAP]:
             head = f"  {hit.source}"
             if hit.label:
@@ -636,11 +696,19 @@ def census(corpus_: Corpus) -> str:
         r for r in corpus_.records if r.name not in applied and not LEGACY_NUMBER.match(r.name)
     ]
     decisions = sum(len(r.document.get("decisions", [])) for r in corpus_.records)
-    tasks = sum(
-        len(group.get("tasks", []))
-        for r in corpus_.records
-        for group in r.document.get("dag", [])
-    )
+
+    def task_count(records: list[Record]) -> int:
+        return sum(
+            len(group.get("tasks", []))
+            for r in records
+            for group in r.document.get("dag", [])
+        )
+
+    # Two counts rather than one, over the same predicate the search classifies
+    # by. One number under "what was built" counted every record's tasks, so a
+    # plan nobody had run was reported as work that existed.
+    done = task_count([r for r in corpus_.records if built(r.name, applied)])
+    planned = task_count([r for r in corpus_.records if not built(r.name, applied)])
 
     release = contract.get("spec_version", "no release number")
     kinds = [
@@ -656,8 +724,20 @@ def census(corpus_: Corpus) -> str:
             + (f", {len(flight)} written and not yet run" if flight else ""),
         ),
         ("what was settled", f"{decisions} decisions, each with what it beat"),
-        ("what was built", f"{tasks} task descriptions"),
+        ("what was built", f"{done} task descriptions"),
     ]
+    if planned:
+        kinds.append(("what is planned", f"{planned} task descriptions, in records nobody has run"))
+    if corpus_.extensions:
+        kinds.append(
+            (
+                "what binds unvalidated",
+                (
+                    f"{len(corpus_.extensions)} extensions — prose this repo made"
+                    " binding, read by the skills and checked by nothing"
+                ),
+            )
+        )
     if corpus_.reviews:
         kinds.append(("how it reviews itself", f"{len(corpus_.reviews)} team configs"))
     if corpus_.plans:

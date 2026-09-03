@@ -324,6 +324,11 @@ def test_a_capped_group_says_how_many_it_did_not_print(tmp_path):
     (root / "specs" / "versions" / "many-minor.toml").write_text(
         f'name = "many"\nsummary = "s"\n[[dag]]\ngroup = 1\ntasks = [{tasks}]\n'
     )
+    # Applied, so the tasks land in DONE: this test is about the cap message and
+    # must not also depend on how a record's tasks are classified.
+    (root / "specs" / "current.toml").write_text(
+        CONTRACT.replace('applied = ["first"]', 'applied = ["first", "many"]')
+    )
     report = ledger.render_search(
         ledger.search(ledger.corpus(root), ["peculiarword"]), ["peculiarword"]
     )
@@ -871,3 +876,139 @@ def test_a_config_that_is_not_utf8_names_the_file_rather_than_raising(tmp_path):
     with pytest.raises(SystemExit) as raised:
         flw._section_config(tmp_path, "paths")
     assert "config.toml" in str(raised.value) and "does not parse" in str(raised.value)
+
+
+# --- built against planned --------------------------------------------------- #
+
+
+PLANNED_RECORD = """name = "in-flight"
+base = "first"
+summary = "defrobnication, so a widget can be returned to its earlier state"
+
+[[dag]]
+group = 1
+phase = "build it"
+tasks = [{ id = "u1", desc = "Write the defrobnicate function." }]
+"""
+
+BUILT_RECORD = """name = "first"
+summary = "the first version"
+approach = "why the thing is built this way"
+
+[[dag]]
+group = 1
+phase = "build it"
+tasks = [{ id = "t1", desc = "Write the frobnicate function." }]
+"""
+
+
+def two_records(tmp_path: Path) -> Path:
+    """One record the contract has applied, one it has not."""
+    root = project(tmp_path)
+    (root / "specs" / "versions" / "first-minor.toml").write_text(BUILT_RECORD)
+    (root / "specs" / "versions" / "in-flight-minor.toml").write_text(PLANNED_RECORD)
+    return root
+
+
+def test_a_task_from_an_unrun_record_is_planned_not_done(tmp_path):
+    """The reproduction this change exists for: a search for a function that does
+    not exist came back under DONE, so an agent asking whether it was written got
+    yes."""
+    found = ledger.search(ledger.corpus(two_records(tmp_path)), ["defrobnicate"])
+    assert "DONE" not in found
+    assert [h.label for h in found["PLANNED"]] == ["u1"]
+
+
+def test_a_task_from_an_applied_record_is_still_done(tmp_path):
+    found = ledger.search(ledger.corpus(two_records(tmp_path)), ["frobnicate"])
+    assert [h.label for h in found["DONE"]] == ["t1"]
+    assert "PLANNED" not in found
+
+
+def test_the_census_counts_built_and_planned_apart(tmp_path):
+    text = ledger.census(ledger.corpus(two_records(tmp_path)))
+    assert "what was built         1 task descriptions" in text
+    assert "what is planned" in text and "1 task descriptions" in text
+
+
+def test_a_project_with_nothing_in_flight_prints_no_planned_line(tmp_path):
+    text = ledger.census(ledger.corpus(project(tmp_path)))
+    assert "what is planned" not in text
+
+
+def test_a_legacy_record_counts_as_built(tmp_path):
+    """Legacy records shipped before the applied list existed and no list will
+    ever name them. Testing `in applied` alone drops them from both counts."""
+    root = two_records(tmp_path)
+    (root / "specs" / "versions" / "v2.0.toml").write_text(
+        'name = "2.0"\nsummary = "a legacy version"\n'
+        "\n[[dag]]\ngroup = 1\ntasks = [{ id = 'old', desc = 'Write the legacy thing.' }]\n"
+    )
+    corpus_ = ledger.corpus(root)
+    applied = list(corpus_.contract["applied"])
+    assert ledger.built("2.0", applied) and not ledger.built("in-flight", applied)
+    found = ledger.search(corpus_, ["legacy"])
+    assert [h.label for h in found["DONE"]] == ["old"]
+
+
+# --- conventions, which bind without being validated ------------------------- #
+
+
+def with_extension(tmp_path: Path, name: str = "shared") -> Path:
+    root = project(tmp_path)
+    directory = root / ".flw" / "extensions"
+    directory.mkdir(parents=True)
+    (directory / f"{name}.md").write_text(
+        "Every memory spec defines a stable peculiarword identity.\n"
+    )
+    return root
+
+
+def test_an_extension_is_reachable_by_a_topic_search(tmp_path):
+    """The field failure: an extension required what an amendment removed, and no
+    command could see both. validate reads schemas and an extension has none."""
+    found = ledger.search(ledger.corpus(with_extension(tmp_path)), ["peculiarword"])
+    assert [h.source for h in found["CONVENTIONS"]] == [".flw/extensions/shared.md"]
+
+
+def test_an_extension_is_grouped_apart_from_the_contract(tmp_path):
+    """Beside the contract in the reading order, never merged with its authority."""
+    root = with_extension(tmp_path)
+    (root / "specs" / "current.toml").write_text(
+        CONTRACT.replace(
+            "A user can do the thing.", "A user can do the thing without a peculiarword."
+        )
+    )
+    report = ledger.render_search(
+        ledger.search(ledger.corpus(root), ["peculiarword"]), ["peculiarword"]
+    )
+    assert report.index("CONTRACT") < report.index("CONVENTIONS")
+    assert "nothing validates it" in report
+
+
+def test_an_extension_names_the_skill_that_reads_it(tmp_path):
+    found = ledger.search(ledger.corpus(with_extension(tmp_path, "flw-execute")), ["peculiarword"])
+    assert [h.note for h in found["CONVENTIONS"]] == ["flw-execute"]
+
+
+def test_shared_md_says_every_skill_reads_it(tmp_path):
+    found = ledger.search(ledger.corpus(with_extension(tmp_path)), ["peculiarword"])
+    assert [h.note for h in found["CONVENTIONS"]] == ["every skill"]
+
+
+def test_a_project_with_no_extensions_searches_exactly_as_before(tmp_path):
+    corpus_ = ledger.corpus(project(tmp_path))
+    assert corpus_.extensions == {}
+    assert "CONVENTIONS" not in ledger.search(corpus_, ["thing"])
+
+
+def test_an_extension_above_the_project_root_is_not_read(tmp_path):
+    """The corpus is bounded by the project directory and a parent root is not
+    under it. The gap is real and recorded: that convention binds every skill here
+    and this search cannot see it."""
+    root = tmp_path / "inner"
+    root.mkdir()
+    (tmp_path / ".flw" / "extensions").mkdir(parents=True)
+    (tmp_path / ".flw" / "extensions" / "shared.md").write_text("a peculiarword rule\n")
+    corpus_ = ledger.corpus(project(root))
+    assert corpus_.extensions == {}
