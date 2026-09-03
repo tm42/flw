@@ -1,6 +1,6 @@
 # flw, for every skill
 
-flw is its own subject: this repo builds the four skills you are running under. `flw` on
+flw is its own subject: this repo builds the skills you are running under. `flw` on
 PATH is a symlink into this checkout, so an edit to `cli/flw.py` changes the command you
 are running now.
 

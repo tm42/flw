@@ -11,7 +11,7 @@ Host-agnostic: flw installs as [Agent Skills](https://agentskills.io) into Claud
 Codex and OpenCode. Language-agnostic: it bakes in no toolchain, no test runner and no
 manifest — a project declares its own commands and flw runs them.
 
-> **Status: in construction.** The schemas, the four skills, the scout, the check
+> **Status: in construction.** The schemas, the skills, the scout, the check
 > runner and the CLI work and are tested. What running flw against a real host and a
 > real repository has found is recorded as a comment at the code each finding
 > explains, not in a separate document. See `plans/design-v3.md` for the full design,
@@ -100,6 +100,9 @@ rescans; in Claude Code that is `/reload-skills`.
 | `/flw-review` | Review at any stage — one reader by default, a team of lenses when you name one. Reports; fixes nothing. |
 | `/flw-research` | Bring flw to a repo you did not set up: learn how it is tested and built, write that into its own config. |
 
+`/flw-style` is a fifth skill and not a stage: it reports what the writing style has drifted
+from in this session's own replies. Nothing depends on it and it depends on nothing.
+
 Nothing chains. You drive, and each skill stops and hands back — `flw-execute` proposes
 commits rather than making them, and `flw-review` reports rather than fixing.
 
@@ -161,7 +164,7 @@ reports it as installed, installed but not selected, or no longer matching the f
 was copied from — and in that last case whether flw's source moved on or the copy was
 edited by hand, because install records what it wrote.
 
-The four skills are symlinks, so `flw update` — a pull, then a re-verify — makes them
+The skills are symlinks, so `flw update` — a pull, then a re-verify — makes them
 live on every host the moment it lands, with no sync step. Two installs are copies
 instead, and flw treats them differently. The style is a copy because Claude Code needs
 a frontmatter header the source file deliberately does not carry; install records its

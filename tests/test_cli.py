@@ -32,6 +32,11 @@ if flw is None:
 
 SKILL = "---\nname: {name}\ndescription: {name}, for a test.\n---\n\nDo the thing.\n"
 
+# From the glob, never typed: a fifth skill breaks a hardcoded 4 on the day it is
+# added rather than on the day someone remembers to update the number, and the
+# failure looks like an install bug. `budget.py` takes its list the same way.
+CORE_SKILLS = len(list((REPO / "core" / "skills").glob("*/SKILL.md")))
+
 # The real one, captured before the `home` fixture patches it away.
 REAL_PRESENT = flw.present
 
@@ -1374,7 +1379,7 @@ def test_uninstalling_opencode_leaves_a_claude_code_only_install_alone(home, cap
 
     assert "nothing to remove" in out
     assert (home / ".claude" / "skills" / "flw-spec").is_symlink()
-    assert len(flw.read_links()) == 4
+    assert len(flw.read_links()) == CORE_SKILLS
 
 
 def test_sync_does_not_adopt_into_a_root_the_record_does_not_name(home, capsys):
@@ -1661,13 +1666,13 @@ def test_a_lost_links_record_is_rebuilt_from_what_is_on_disk(home, capsys):
     is the one state where there is no install to widen."""
     install("claude-code")
     skills = home / ".claude" / "skills"
-    assert len(list(skills.iterdir())) == 4
+    assert len(list(skills.iterdir())) == CORE_SKILLS
     flw.LINKS.unlink()
     capsys.readouterr()
 
     assert sync() == 0
     assert "flw-spec — adopted" in capsys.readouterr().out
-    assert len(flw.read_links()) == 4
+    assert len(flw.read_links()) == CORE_SKILLS
 
     assert doctor() == 0
     assert "✓ claude-code: via" in capsys.readouterr().out
