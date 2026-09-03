@@ -12,9 +12,12 @@ resolves to a real directory — so a skill reaching its sibling `scripts/` by
 relative path works everywhere. One core, edited once, live on every host: no
 sync step, no generated copies, no staleness to detect.
 
-What is deliberately not here: any edit to a host's settings, permissions or hook
-configuration. The single file `install` may touch is the user's ambient
-instructions file, opt-in, tagged, and stripped exactly by `uninstall`.
+What is deliberately not here: any edit to a host's permission or hook
+configuration. Two things are touched and both are opt-in, recorded and exactly
+reversible: `install` may write a tagged block into the user's ambient
+instructions file, and `style install` writes the single settings key
+`outputStyle`, keeping whatever it replaced so `uninstall` puts it back. Nothing
+else in a host's settings is read or written.
 """
 
 from __future__ import annotations
