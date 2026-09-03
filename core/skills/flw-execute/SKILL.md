@@ -140,7 +140,10 @@ non-terse moment.
   pre-approved.
 
 `--auto` skips both, and skips them at every later boundary too. It does not relax the
-drift rule.
+drift rule, and **its report names the mode in the header** — the contract assumes a human
+reads what an agent wrote before the work runs, and that assumption is what buys flw the
+right to verify nothing about its own reports. `--auto` removes that read, so a report not
+saying so claims a review that did not happen.
 
 Treat a plain request for an unattended run — *"just do the whole thing"*, *"don't ask me
 between phases"* — as `--auto`. Say that you are reading it that way, and say up front that
@@ -208,40 +211,11 @@ reports rather than judging:
 | 1 | something it ran failed |
 | 2 | the run proved nothing |
 
-**`--yolo` skips this step entirely.** Rules 3 and 4 are unaffected — it changes what the
-run *executes*, not what it may *claim*, so a run that skipped its checks may never print
-the completion block in step 6, because that block reads as verified. It is for a suite
-that runs fine and is too slow to sit through right now. It is not the answer to "these
-checks cannot run in this session" — that is `[tests] yours` in `.flw/config.toml`, which
-outlives any single run; propose adding a check there instead of reaching for `--yolo`
-when the problem is that it cannot run here at all. It composes with `--auto`; neither
-implies the other.
-
-The contract names the exit-2 cases. Plain `flw test` still exits 0 when it hands one back
-and the rest pass, because declaring a check in `[tests] yours` must not turn every green
-run red.
-
-**One kind of check is handed back as yours: one the project declared in `[tests] yours`.**
-Nothing is inferred from an exit code. 127 is bash's "command not found", which an absent
-binary returns and `npm run <script>` also returns when a devDependency is missing, while
-`cargo <subcommand>` returns 101 whether the subcommand is absent or the code failed to
-compile. Everything that fails is reported as **failed**, including a check that failed only
-because this session has no network or no database — a `curl` with no route exits 7 and a
-test that dials out exits 1, and neither is distinguishable from a real failure.
-
-So when you believe a failure is a missing capability rather than broken work:
-
-- **Report it as failed.** You may not reclassify it. A check you could not run is not a
-  check that passed, and an agent that gets to decide which failures do not count is worse
-  than no check at all.
-- **Say what you think and why**, naming the check and the capability.
-- **Propose adding it to `[tests] yours`** in `.flw/config.toml`, so future runs hand it
-  over instead of failing every time. That file may not exist yet; creating it is
-  part of the proposal, and the user decides.
-
-Read the whole table before stopping. `flw test` runs every check regardless of earlier
-failures, and Rule 3's "stop" means do not proceed past the check step — not truncate the
-report.
+**Anything but green is in `$FLW/core/skills/flw-execute/references/checks.md`** — a check
+that failed, one that cannot run in this session, or a `--yolo` run that skipped them all.
+Read it when one of those happens and not before. Two rules from it that decide what this
+run may claim: a failure is reported as failed whatever you believe caused it, and a
+`--yolo` run never prints step 6's completion block.
 
 ## 5. Record it
 
@@ -301,7 +275,8 @@ run touched — **by name, the ones from your own task lines** — then diff the
 
 ```sh
 git add <the files this run touched>
-git diff --stat --staged <baseline>
+git diff --stat --staged <baseline> | cat
+git diff --staged <baseline> | cat      # the change itself, not a list of its file names
 ```
 
 **Never `git add -A` or `git add .`.** The user's tree is theirs: a fixture edited for
@@ -315,29 +290,32 @@ that created a directory would otherwise report nothing. Staging is not committi
 If the user's own changes were already staged before the run, say so rather than trying to
 separate them — the diff will include them and you cannot tell which are yours.
 
-**Paste the output into your reply.** A command's output goes to you, not reliably to the
-user's terminal — so a diff you merely ran is a diff they never saw. Drop `| cat` on the
-end so no pager or colour escape mangles it, and put the result in the message, above the
-report block.
+**Paste both into your reply.** A command's output goes to you, not reliably to the user's
+terminal — so a diff you merely ran is a diff they never saw. The stat is a manifest and
+answers "what did this touch"; the diff answers "what does it now say", which is the
+question a reader approving a commit is asking. Put both in the message, above the report
+block. Where the diff is too large to paste, paste the stat, say so, and name the files
+worth opening.
 
 ```text
-flw-execute — <version>
+flw-execute — <version><, unattended (--auto) when it was>
   Phases: <n> of <m>, or — when the record carried no dag
   Checks: <p> passed · <q> failed · <r> for you
   Knowledge: <files re-stamped · files awaiting the commit, or none>
   Left to do: <what stopped, or nothing>
 ```
 
-When you stopped on a proposal rather than reaching the end, use this instead — the shape
-above implies a run that finished:
+**When the run stopped, use this instead** — the shape above implies one that finished. It
+covers both ways a run stops: a gap the contract does not cover, and a declared check that
+failed after the phases were done.
 
 ```text
 flw-execute — <version> — STOPPED, awaiting a decision
   Done:        <phases and tasks that completed>
-  Stopped at:  <task id> — <what the contract does not cover>
+  Stopped at:  <task id and what the contract does not cover — or the check that failed>
   Uncommitted: <files from this phase, left in place>
   Contract:    not moved — the run did not finish
-  Waiting on:  the spec change above, through flw-spec
+  Waiting on:  the spec change above, through flw-spec — or the failing check
 ```
 
 Say where the run stopped, plainly, so the next one can pick up. Do not claim the work is
