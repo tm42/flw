@@ -120,7 +120,7 @@ five steps below address both:
 You already have two of the things `references/team-dispatch.md` §2 has to hand a
 dispatched reviewer explicitly: the writing style, from your own opening, and the note
 store, printed there too. Line up the rest yourself: the scope from §1; the contract
-narrowed to it, by running `flw context flw-review --scope <the paths in scope>` rather than reading
+narrowed to it, by running `flw context --scope <the paths in scope>` rather than reading
 the whole file; and the knowledge store narrowed to it — `flw know <path>` for each path
 in scope, heads not bodies.
 

@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.12.2"
+spec_version = "0.12.3"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -29,6 +29,7 @@ applied = [
   "review-opens-solo",
   "a-solo-review-fills-the-store",
   "quiet-wrongness",
+  "pay-the-opening-once",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.

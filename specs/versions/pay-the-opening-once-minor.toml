@@ -1,0 +1,52 @@
+name         = "pay-the-opening-once"
+base         = "quiet-wrongness"
+spec_version = "0.12.2"
+
+summary = """
+The solo reviewer stops naming the skill in its narrowing call, so it no longer re-prints \
+9,168 bytes it read at its own opening eight steps earlier.
+"""
+
+approach = """
+One word in one line: `core/skills/flw-review/SKILL.md:123` drops `flw-review` from
+`flw context flw-review --scope <the paths in scope>`.
+
+Naming a skill is the only thing that makes `flw context` emit `core/shared/context.md`
+and that skill's own extension file. `SKILL.md:15` already ran `flw context flw-review`
+at the opening, so the second call re-prints both. Measured on a one-directory scope:
+24,376 bytes with the skill named against 15,128 without — 9,168 of it
+`core/shared/context.md` (8,415) and `.flw/extensions/flw-review.md` (753), both already
+in context. The root line, the extension chain, the note listing and the narrowed
+components all still print, so the reviewer loses nothing.
+
+`quiet-wrongness` fixed the dispatch half of this at
+`references/team-dispatch.md:80` and left the solo half, so the reference and the skill
+now instruct differently for the same reason in the same repository. This closes that.
+
+**What this is not.** It does not touch the code. The contract already permits the call —
+`flw context [skill] [--root PATH] [--scope PATH...]`, with skill optional, and the
+--scope property never requires one — so there is no contract edit and `spec_version`
+moves only by the filename suffix.
+
+Found by the executor running `quiet-wrongness`, which made this change unasked, caught
+itself, and reverted it because no task named it. The reasoning it left behind is the
+reason this record exists; the analogy it first drew was wrong, since that record's
+decision is scoped to a dispatched reviewer, which runs no flw skill.
+"""
+
+[[decisions]]
+topic     = "How far to take the duplication"
+options   = [
+  "drop the skill name from the solo path's narrowing call",
+  "add a flag that prints the narrowed components alone",
+  "make --scope suppress the shared context for every caller",
+]
+chosen    = "drop the skill name from the solo path's narrowing call"
+rationale = """
+The bare call still re-prints the root line, the extension chain and the note listing,
+about 1,900 bytes the reviewer is also already holding. Removing that needs a flag that
+prints the narrowed components alone, which is a new surface and therefore capability
+rather than correction. Making --scope suppress the shared context for every caller
+changes a documented behaviour of a command and would be major. This record is minor and
+takes 9,168 of the 11,000 bytes for one word.
+"""
