@@ -10,9 +10,11 @@ and every finding was real.
 
 REPLY_RULES is vocabulary and shape, checked against what the agent said rather
 than what it wrote to disk. Measured across 109,344 words of agent prose against
-88,618 words from subagents that never load the style, these words are genuinely
-overused: emoji at ten times the rate in prose the style never reached, and five
-words carrying 92% of the vocabulary violations.
+88,618 words from subagents that never load the style, five words carry 92% of the
+vocabulary violations. There was an emoji rule here on the strength of a tenfold
+difference between those two corpora; re-measured over 276,281 words it was counting
+`\u2713` and `\u2717`, which flw itself prints, and neither corpus held a single
+pictographic emoji. The style file still says "No emoji." and no pattern enforces it.
 
 The same words in a hand-written document are almost always right — "partial and
 honest beats complete and late" uses `honest` precisely, and a table row reading
@@ -45,6 +47,7 @@ FENCE = re.compile(r"^\s*```(.*)$")
 _HEADING = re.compile(r"^#{1,6}\s")
 _BULLET = re.compile(r"^\s*([-*+]|\d+[.)])\s")
 _QUOTE = re.compile(r"^\s*>")
+_CODE_SPAN = re.compile(r"`[^`\n]*`")
 
 Rule = tuple[str, re.Pattern[str], str]
 
@@ -65,16 +68,24 @@ FILE_RULES: tuple[Rule, ...] = (
 
 REPLY_RULES: tuple[Rule, ...] = (
     # "Cut every qualifier that changes nothing when removed."
+    # `honest` only where it modifies a noun. The predicate use is a claim the
+    # style permits -- "the staleness numbers stay honest" -- and 3 of 12 sampled
+    # hits were that, against 9 of the attributive tic the rule is aimed at.
     (
         "qualifier",
-        re.compile(r"\b(inherently|genuinely|honestly)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(inherently|genuinely|honestly|really|quite)\b"
+            r"|\b(?:the|a|an|this|that|one|its|their|our|my|more|most|only|same"
+            r"|another|no)\s+honest\b(?=\s+\w)",
+            re.IGNORECASE,
+        ),
         "a qualifier that changes nothing when removed",
     ),
     # "No evaluative words without a measurement behind them."
     (
         "evaluative",
         re.compile(
-            r"\b(robust|elegant|elegantly|dramatically|significantly|seamlessly)\b",
+            r"\b(robust|elegant|elegantly|dramatically|significantly|seamlessly|properly)\b",
             re.IGNORECASE,
         ),
         "an evaluative word with no measurement behind it",
@@ -117,15 +128,6 @@ REPLY_RULES: tuple[Rule, ...] = (
         "signpost",
         re.compile(r"(?im)^\s*(two|three|four|five) things:"),
         "a signpost; say the things",
-    ),
-    # "No emoji."
-    (
-        "emoji",
-        re.compile(
-            "[\U0001f300-\U0001faff\U0001f000-\U0001f0ff"
-            "\U00002600-\U000026ff\U00002700-\U000027bf]"
-        ),
-        "an emoji",
     ),
 )
 
@@ -202,17 +204,28 @@ def report(paths: list[Path], root: Path) -> tuple[list[str], int]:
 def reply_findings(text: str) -> dict[str, list[str]]:
     """{rule: examples} for one reply. The count is len() of each list.
 
-    Two geometry rules apply to a reply and to nothing else: a file must NOT
-    carry the trailing spaces, and a file's width is the reader's to choose.
-    They are also the only two rules measurement found the agent breaking at
-    volume — 36.7% of replies over 120 columns, 63.1% of the lines that need the
-    trailing pair lacking it.
+    Two geometry rules invert against a file: a file must NOT carry the trailing
+    spaces, and a file's width is the reader's to choose. They are also the only
+    two rules measurement found the agent breaking at volume — 36.7% of replies
+    over 120 columns, 63.1% of the lines that need the trailing pair lacking it.
 
     A paragraph is consecutive prose lines. A bullet, a quote and a table row are
     each their own block and do not reflow into a neighbour, so a missing pair on
-    one of them is not a finding — counting them overstated this by 26%.
+    one of them is not a finding — counting them overstated this by 26%. Width is
+    checked before that branch, because a bullet still has to fit the terminal:
+    892 of the 1,048 over-120 lines the branch used to swallow were bullets.
+
+    The vocabulary rules read the line with its inline code spans removed. A word
+    inside backticks is being quoted rather than used, and 25 of 44 measured false
+    positives were exactly that — a reply reporting this checker's own output.
+
+    fence-untagged is the one rule both sets run. The style asks for a language tag
+    wherever a fence is written, and a reply is written.
     """
-    out: dict[str, list[str]] = {"over-120": [], "missing-two-spaces": []}
+    # Every rule gets a key whether it fired or not, so a caller can ask about
+    # one without knowing whether it hit. style_check skips the empty ones.
+    out: dict[str, list[str]] = {name: [] for name, _, _ in REPLY_RULES}
+    out.update({"over-120": [], "missing-two-spaces": [], "fence-untagged": []})
     in_fence = False
     paragraph: list[str] = []
 
@@ -224,21 +237,27 @@ def reply_findings(text: str) -> dict[str, list[str]]:
         paragraph.clear()
 
     for line in text.split("\n"):
-        if FENCE.match(line):
+        fence = FENCE.match(line)
+        if fence:
+            if not in_fence and not fence.group(1).strip():
+                out["fence-untagged"].append(line.strip()[:52] or "```")
             in_fence = not in_fence
             flush()
             continue
         if in_fence:
             continue
+        probe = _CODE_SPAN.sub(" ", line)
         for name, pattern, _ in REPLY_RULES:
             # group(0), not findall: a pattern with alternated groups returns a
             # tuple of mostly empty strings and the label comes out as the rule
             # name instead of the word that tripped it.
-            for hit in pattern.finditer(line):
-                out.setdefault(name, []).append(
+            for hit in pattern.finditer(probe):
+                out[name].append(
                     f"{hit.group(0).strip()}: {line.strip()[:52]}"
                 )
         stripped = line.strip()
+        if len(line) > WRAP_COLUMNS:
+            out["over-120"].append(f"{len(line)} cols: {stripped[:52]}")
         own_block = (
             not stripped
             or stripped.startswith("|")
@@ -250,8 +269,6 @@ def reply_findings(text: str) -> dict[str, list[str]]:
             flush()
             continue
         paragraph.append(line)
-        if len(line) > WRAP_COLUMNS:
-            out["over-120"].append(f"{len(line)} cols: {stripped[:52]}")
     flush()
     return out
 
@@ -267,6 +284,7 @@ def session_transcripts(root: Path, home: Path | None = None) -> list[Path]:
     A list rather than one path because several sessions run against one project
     and the newest is often one that has not said anything yet. The caller takes
     the first that actually holds prose.
+
     """
     base = (home or Path.home()) / ".claude" / "projects"
     matched: list[Path] = []

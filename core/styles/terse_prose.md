@@ -85,8 +85,9 @@ and both of those are mistakes on the page.
 
 ### Words
 
-**Use the plain word when there is one.** "Use" rather than "utilise". "Show" rather than
-"surface". "Enough" rather than "sufficient". "About" rather than "regarding".
+**Use the plain word when there is one.** "Use" rather than "utilise". "Enough" rather than
+"sufficient". "About" rather than "regarding". "Show" rather than *surface* as a verb — as a
+noun it is already the plain word, so this one is yours to judge.
 
 **Keep the exact technical term.** Idempotent, race condition, transitive dependency. Do not
 swap a precise term for a vague simple one. When precision and simplicity conflict, precision

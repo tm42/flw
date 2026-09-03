@@ -93,9 +93,9 @@ def test_banned_words_are_findings_in_a_reply():
         "reaction-opener",
         "evaluative",
         "plain-word",
-        "emoji",
         "closing-offer",
     }
+    assert "emoji" not in found, "the emoji rule was deleted; the 🎉 must not fire"
 
 
 def test_a_hit_is_labelled_with_the_word_not_the_rule():
@@ -106,11 +106,53 @@ def test_a_hit_is_labelled_with_the_word_not_the_rule():
     assert [h.split(":")[0] for h in hits] == ["utilise", "sufficient", "regarding"]
 
 
+def test_the_words_the_style_names_are_all_caught():
+    """Three of them were named by the style and matched by no pattern.
+
+    `honestly` fired and `honest` did not; `properly` was in the style's
+    evaluative sentence and in no rule. Measured in main-agent replies: honest
+    37, properly 10, really 5, quite 2, outside inline code spans.
+    """
+    for text, rule in (
+        ("the honest answer is no", "qualifier"),
+        ("we should really do this", "qualifier"),
+        ("it is quite small", "qualifier"),
+        ("it does not work properly", "evaluative"),
+    ):
+        assert style_lint.reply_findings(text)[rule], text
+
+
+def test_honest_fires_attributively_and_not_as_a_predicate():
+    """The predicate use is a claim the style permits, and 3 of 12 sampled were it."""
+    assert style_lint.reply_findings("the honest option")["qualifier"]
+    assert style_lint.reply_findings("the numbers stay honest")["qualifier"] == []
+
+
+def test_a_word_inside_backticks_is_quoted_not_used():
+    """25 of 44 measured false positives were exactly this — a reply reporting
+    this checker's own output trips the rules it is reporting on."""
+    assert style_lint.reply_findings("the `robust` rule fired twice")["evaluative"] == []
+    assert style_lint.reply_findings("the robust rule fired twice")["evaluative"]
+
+
+def test_an_untagged_fence_in_a_reply_is_a_finding():
+    """The only rule both sets run: a reply is written, so it takes a tag too."""
+    assert style_lint.reply_findings("text\n\n```\nls\n```\n")["fence-untagged"]
+    assert style_lint.reply_findings("text\n\n```sh\nls\n```\n")["fence-untagged"] == []
+
+
 def test_over_120_columns():
     found = style_lint.reply_findings("x" * 121 + "\n")
     assert len(found["over-120"]) == 1
     assert found["over-120"][0].startswith("121 cols")
     assert style_lint.reply_findings("x" * 120 + "\n")["over-120"] == []
+
+
+def test_a_bullet_over_120_columns_is_still_too_wide():
+    """own_block was built for missing-two-spaces and swallowed the width check
+    with it: 892 of the 1,048 dropped over-120 lines were bullets."""
+    for line in ("- " + "x" * 130, "| " + "x" * 130, "> " + "x" * 130):
+        assert style_lint.reply_findings(line + "\n")["over-120"], line[:4]
 
 
 def test_missing_two_spaces_only_inside_a_paragraph():
@@ -194,22 +236,26 @@ def test_no_transcript_directory_is_not_an_error(tmp_path):
 def test_the_shipped_style_file_has_the_rules_the_checker_claims():
     """A rule whose sentence has left the style file is a rule nobody agreed to."""
     text = (REPO / "core" / "styles" / "terse_prose.md").read_text()
-    for phrase in ("No emoji", "Tag every code fence with its language"):
+    for phrase in ("Tag every code fence with its language",):
         assert phrase in text, phrase
 
 
-def test_the_two_narrowed_words_are_in_neither_rule_set():
-    """`clean` and `actually` were narrowed in the style, so no pattern may ban them.
+def test_the_three_narrowed_words_are_in_neither_rule_set():
+    """`clean`, `actually` and `surface` are narrowed in the style, so no pattern
+    may ban them.
 
-    They were 240 of roughly 356 measured vocabulary violations precisely because
-    both have uses the style permits. A pattern that reintroduces either one puts
-    the checker back at odds with the sentence it is supposed to enforce.
+    The first two were 240 of roughly 356 measured vocabulary violations precisely
+    because both have uses the style permits. `surface` joined them at 260 uses in
+    166,185 words, against a contract with a field of that name. A pattern that
+    reintroduces any of the three puts the checker back at odds with the sentence
+    it is supposed to enforce.
     """
     patterns = " ".join(
         p.pattern for _, p, _ in style_lint.REPLY_RULES + style_lint.FILE_RULES
     )
     assert "clean" not in patterns
     assert "actually" not in patterns
+    assert "surface" not in patterns
 
 
 def test_the_style_file_still_narrows_them():
@@ -217,3 +263,4 @@ def test_the_style_file_still_narrows_them():
     text = (REPO / "core" / "styles" / "terse_prose.md").read_text()
     assert "*actually*" in text
     assert "*clean* as a claim about quality" in text
+    assert "*surface* as a verb" in text
