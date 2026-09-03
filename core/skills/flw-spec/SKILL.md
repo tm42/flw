@@ -165,6 +165,13 @@ validation.
    design is not knowledge — it does not exist yet — so it stays a plan until it lands,
    and then it moves into the repository-level files.
 
+   **Quote the decision you depend on, not only the path.** `flw ledger`'s corpus is
+   bounded by the resolved project root, so from inside the member where the record is
+   written, the parent's `plans/` is outside it: the search a later session runs to find
+   out whether the seam was already settled answers "nothing written down here matches"
+   and exits 0. The path stays, for whoever is standing at the parent. The quote is what
+   the member can reach.
+
    **If the interview settles nothing** — the contract already says what they asked for, or
    the thing they want changed lives somewhere else — say so and stop. Write no edit and
    no version file. A version whose diff is empty is worse than no version.
@@ -229,6 +236,21 @@ validation.
      what it did not — and any measurement it made into `approach`. A number is the part of
      a report that cannot be re-derived by reading, so it is the part most worth carrying;
      the report itself is scaffolding once this happens.
+
+     **A number arrives with the command that produced it and the revision it was taken
+     at, or with a sentence saying it cannot be re-run here.** A decision resting on a
+     number nobody can re-take has recorded a conclusion, not a measurement.
+     `a-rule-nothing-breaks` carried eleven figures from a transcript survey and named no
+     command, no corpus and no pattern; the one its emoji decision turned on was
+     re-measured a day later as the opposite of what it claimed, because the pattern had
+     been counting check marks. `checked-and-bounded` is the model — every code claim
+     carries `path:line`, and the field figure that could not be reproduced says so in its
+     own sentence.
+
+     **Then write this record's name into the report you specced from**, one line at the
+     top. This session is the only one that knows the mapping, and the next round is told
+     to read past reports covering its scope first — so a figure a record has already
+     overturned otherwise reads as a live finding.
    - **A version that adds a subcommand declares it in the contract now, not at the end.**
      Write the `flw <name> [flags...]` line into the CLI component's `surfaces` at spec
      time, exactly as the parser will accept it, and say in `approach` that you did.
@@ -277,13 +299,25 @@ in it is worse than an unfinished draft beside it.
 
 A marker is what you write instead of guessing.
 
-## Optional: a second read
+## A second read, on any record that edits the contract
 
-For a large or intricate contract, offer to run the critic in
-`$FLW/core/skills/flw-spec/references/spec-critic.md`. It finds the semantic gaps
-validation structurally cannot —
-a requirement with no component, an assumption relied on but never stated, drift from the
-plan. Skip it for small ones; do not manufacture ceremony.
+**If the record carries a `contract_edit`, offer the critic in
+`$FLW/core/skills/flw-spec/references/spec-critic.md`.** That is the gate — not how large
+the contract is, and not how intricate the change feels while you are holding it. It finds
+the semantic gaps validation structurally cannot: a requirement with no component, an
+assumption relied on but never stated, a contract sentence contradicting a decision the
+same record took.
+
+**Why the gate moved.** It used to read "for a large or intricate contract … skip it for
+small ones". Measured over flw's own 51 records, the critic ran four times and found
+something on all four: 8, then 5, then 4, then 5. The record it was skipped for —
+`a-rule-nothing-breaks`, judged not to warrant the ceremony — shipped a `provides` its own
+decision had already ruled out, and a review found it 71 minutes after the commit. A gate
+on size excludes by the wrong variable, because a one-sentence edit to a contract is read
+by every later run exactly as a long one is.
+
+A record with no `contract_edit` changes no shared statement, so skip it there. Nothing
+about this is a promise the critic finds something; it is a promise it gets to look.
 
 ## Rules
 
