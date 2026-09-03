@@ -306,7 +306,7 @@ def test_the_diff_runs_against_the_mirrored_path_in_the_file_s_own_repo(monkeypa
     args, cwd = calls[0]
     # No HEAD: the revision is compared against the working tree, so an
     # uncommitted edit under api/ counts.
-    assert args == ["diff", "--numstat", "8be0117", "--", "api"]
+    assert args == ["diff", "--numstat", "--end-of-options", "8be0117", "--", "api"]
     assert cwd == shop
 
     knowledge.changed(knowledge.load(store / "shop.md", store, shop))
@@ -343,8 +343,8 @@ def test_system_md_is_checked_once_per_member_in_that_member_s_own_directory(mon
     }
     diffs = [(args, cwd) for args, cwd in calls if "diff" in args]
     assert [cwd for _, cwd in diffs] == [ACME / "shop", ACME / "worker"]
-    assert diffs[0][0][2] == "1f4ac02"
-    assert diffs[1][0][2] == "3c81d90"
+    assert diffs[0][0][3] == "1f4ac02"
+    assert diffs[1][0][3] == "3c81d90"
     assert knowledge.system_state(per_member) == "current"
 
 
@@ -484,6 +484,19 @@ def test_a_renamed_directory_yields_one_orphan_per_file(acme):
     missing = knowledge.orphans(store_of(shop), shop)
     assert [p.name for p, _ in missing] == ["api.md"]
     assert missing[0][1] == shop / "api"
+
+
+def test_a_listing_that_cannot_be_read_is_overwritten_rather_than_fatal(acme):
+    """The comparison read sat outside every guard, so one non-UTF-8 index.md
+    tracebacked out of the walk and no listing in any store was rewritten. The
+    contract says nothing may trust an index.md, so a corrupt one is replaced."""
+    shop = acme / "shop"
+    store = store_of(shop)
+    listing = store / "index.md"
+    listing.write_bytes(b"# Index\n\n\xff\xfe not utf-8\n")
+
+    assert listing in knowledge.reindex(store, shop)
+    assert "not utf-8" not in listing.read_text(encoding="utf-8")
 
 
 def test_the_toy_s_index_is_exactly_what_reindex_writes_and_a_second_run_is_a_no_op(acme):
@@ -1322,7 +1335,9 @@ def test_a_module_file_mirrors_the_file_it_describes_and_orphans_with_it(
     out = capsys.readouterr().out
     assert "api/orders.py.md           module" in out
     assert "changed since 8be0117" in out
-    assert ["diff", "--numstat", "8be0117", "--", "api/orders.py"] in [a for a, _ in calls]
+    assert ["diff", "--numstat", "--end-of-options", "8be0117", "--", "api/orders.py"] in [
+        a for a, _ in calls
+    ]
 
     (shop / "api" / "orders.py").rename(shop / "api" / "purchases.py")
     assert knowledge.orphans(store, shop) == [(path, shop / "api" / "orders.py")]

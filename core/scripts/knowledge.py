@@ -349,8 +349,13 @@ def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
     hash gone after a rebase — is unverifiable, and the file is read
     normally. A failed ls-files call adds nothing: the diff already ran and
     stands on its own.
+
+    `--end-of-options` because the revision comes out of a file's frontmatter,
+    which anyone with write access to the store authors: without it a value
+    beginning with `-` reaches git as an option and steers the command that is
+    supposed to be reading it.
     """
-    code, out = git(["diff", "--numstat", revision, "--", rel.as_posix()], cwd)
+    code, out = git(["diff", "--numstat", "--end-of-options", revision, "--", rel.as_posix()], cwd)
     if code != 0:
         return Diff("unverifiable")
     lines = [line for line in out.splitlines() if line.strip()]
@@ -688,9 +693,17 @@ def reindex(store: Path, root: Path) -> list[Path]:
     for directory in sorted({store, *inside}):
         target = directory / INDEX
         content = _listing(store, directory, root)
-        if target.is_file() and target.read_text(encoding="utf-8") == content:
+        try:
+            unchanged = target.is_file() and target.read_text(encoding="utf-8") == content
+        except UnicodeDecodeError:
+            # This read only asks whether the file already says what we are
+            # about to write. Nothing may trust an index.md, so one that cannot
+            # be read is overwritten rather than reported — and it used to
+            # traceback out of the walk, leaving every store's listing unwritten.
+            unchanged = False
+        if unchanged:
             continue
-        target.write_text(content)
+        target.write_text(content, encoding="utf-8")
         written.append(target)
     return written
 

@@ -210,16 +210,35 @@ with an unknown one is not.
 
 ## 4. Write it
 
+**Project root, when there is no flw directory yet.** The usual rule finds the nearest
+directory holding `specs/` or `.flw/`, and a repo nobody set up has neither — which is the
+only kind of repo this skill exists for. Use `$PWD`, say which directory you are about to
+create `.flw/` in, and get a yes before writing. Do not guess upward. There is no
+subcommand for it: the skill creates the directory, the way `flw-spec` creates `specs/`.
+
 **Config first.** `.flw/config.toml` (or the directory `flw doctor` names), `[tests]`:
 `setup`, `checks` for the working set, `yours` for what this session cannot run. Only
 commands, only what you verified.
 
-**Read that file before writing it, and edit `[tests]` in place.** It holds three other
-sections — `[paths] specs, reports`, `[interview] mode`, `[kb] category` — and none of
-them is yours to touch. This skill is meant to be re-run when a repo has changed enough
+**Read that file before writing it, and edit `[tests]` in place.** Nothing outside
+`[tests]` is yours to touch. This skill is meant to be re-run when a repo has changed enough
 that what was recorded is stale, and a re-run that writes the file fresh drops the report
 path, the interview mode and the note-store category the user chose. Leave every key you
 did not measure exactly as you found it.
+
+**Propose the ignore lines in the same block.** Nothing creates them, and three places
+here assume the reports directory and the knowledge store are ignored — so without them a
+review that was told to change nothing leaves ` M .flw/knowledge/…` and `?? .flw/reports/`
+in the user's tree. Show the lines beside the config, in whatever file this VCS ignores
+with, and let the user take them:
+
+```text
+.flw/reports/
+.flw/knowledge/
+```
+
+Read the ignore file first and propose only what is missing from it, and follow
+`[knowledge] dir` when the store is not at the default.
 
 **Then the extensions**, each holding only what its readers need. Do not restate across
 them: a fact every skill needs goes in `shared.md` once, not into three files.
@@ -262,8 +281,14 @@ when the folder exists — a repository of 1,800 files gets perhaps forty. Missi
 nothing checks this and nothing will.
 
 **`flw know --stamp <file>` for every file you write**, so it carries the revision it was
-true at, and `flw know --reindex` once at the end. A file with no revision is read normally
+true at, and `flw know --reindex` once after that. A file with no revision is read normally
 and reports as `unstamped`, which is a claim nobody can date.
+
+**The stamp follows the commit**, as `flw-execute` says for the same reason. A stamp
+records HEAD, so stamping before the files are committed records the revision from before
+they existed, and the next skill's first read reports them falsified by the flw setup
+itself — measured once as `changed since 587b0d5: 10 files · +169 −0`, the diff being this
+survey. Propose the commit, and stamp after the user makes it.
 
 **A `flw kb` note in this repo's own root that describes how the system is built moves into
 the tree**, once, as part of this survey. kb is addressed by topic and gated on
