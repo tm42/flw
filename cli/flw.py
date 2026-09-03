@@ -1218,6 +1218,87 @@ def style_uninstall(args: argparse.Namespace) -> int:
     return 0
 
 
+def style_lint(args: argparse.Namespace) -> int:
+    """Check prose against the mechanical rules the style states.
+
+    Reports and exits 1 on a finding, unlike `kb lint`, which always exits 0.
+    The difference is what a cheap green costs: deleting a note to quiet kb lint
+    loses something, and rewording a sentence to quiet this one is the point.
+    """
+    scripts = checkout() / "core" / "scripts"
+    sys.path.insert(0, str(scripts))
+    import style_lint as engine
+
+    targets = [Path(p) for p in (args.paths or ["."])]
+    root = nearest_project() or Path.cwd()
+    lines, total = engine.report(engine.walk(targets), root)
+    for line in lines:
+        print(line)
+    if total:
+        print(f"\n{total} finding{'s' if total != 1 else ''}")
+        return 1
+    print("style lint: clean")
+    return 0
+
+
+def style_check(args: argparse.Namespace) -> int:
+    """What the agent's own recent replies broke, named rather than restated.
+
+    Naming the specific violation is the one reinforcement with a measured
+    effect; restating a rule the model can already recite has almost none. So
+    this prints counts and examples and never the rules themselves.
+    """
+    scripts = checkout() / "core" / "scripts"
+    sys.path.insert(0, str(scripts))
+    import style_lint as engine
+
+    root = nearest_project() or Path.cwd()
+    candidates = engine.session_transcripts(root)
+    if not candidates:
+        print(
+            f"style check: no transcript found for {tilde(root)}",
+            file=sys.stderr,
+        )
+        print(
+            "         this host may keep none, or keep it somewhere flw does not read",
+            file=sys.stderr,
+        )
+        return 1
+    # Newest first, and the newest is often a session that has not spoken yet.
+    # Take the first that actually holds prose rather than reporting nothing.
+    transcript, replies = None, []
+    for candidate in candidates:
+        found = engine.recent_replies(candidate, args.last)
+        if found:
+            transcript, replies = candidate, found
+            break
+    if transcript is None:
+        print(
+            f"style check: {len(candidates)} transcripts for {tilde(root)}, "
+            "none holding a main-agent reply yet",
+            file=sys.stderr,
+        )
+        return 1
+
+    totals: dict[str, list[str]] = {}
+    for reply in replies:
+        for rule, examples in engine.reply_findings(reply).items():
+            totals.setdefault(rule, []).extend(examples)
+
+    print(f"style check — last {len(replies)} replies · {tilde(transcript)}")
+    found = False
+    for rule, examples in totals.items():
+        if not examples:
+            continue
+        found = True
+        print(f"  {rule}: {len(examples)}")
+        for example in examples[:3]:
+            print(f"    {example}")
+    if not found:
+        print("  clean")
+    return 0
+
+
 def style_state(entry: dict) -> tuple[str, str | None, str | None]:
     """Resolve one recorded style entry: "unreadable", "source-gone",
     "path-missing", "block-gone", "behind", "edited", "differs", "not-selected"
@@ -2033,8 +2114,8 @@ def update(args: argparse.Namespace) -> int:
         # sync compares each installed copy against the source in this checkout,
         # which the fetch did not move. Without this line the dry run reports no
         # refresh and the real run offers one.
-        print("  the style check below is measured against this checkout as it")
-        print("  stands, not against what the fetch found")
+        print("  the style comparison below is measured against this checkout as")
+        print("  it stands, not against what the fetch found")
         print()
         sync(argparse.Namespace(dry_run=True, yes=args.yes))
         print("\n  nothing written — drop -n to apply")
@@ -2863,7 +2944,7 @@ def _context_notes(root: Path | None) -> None:
 def context(args: argparse.Namespace) -> int:
     """Everything a skill reads at its opening, in one call.
 
-    Four skills opened with three reads each, described in prose that four files
+    The skills opened with three reads each, described in prose that four files
     had to keep in step — and the extension chain in particular is an order no
     agent can execute from a sentence, because `nearest_project` stops at the
     first hit and walking above it is work nothing in flw did. One command is one
@@ -3662,6 +3743,47 @@ def build_parser() -> argparse.ArgumentParser:
         )
         q.add_argument("-n", "--dry-run", action="store_true", help="show, do nothing")
         q.set_defaults(handler=handler)
+
+    # Outside the loop above, which gives every verb --host and --dry-run. These
+    # two write nothing and touch no host, so both flags would be lies.
+    q = style_sub.add_parser(
+        "lint",
+        help="check prose against the style's mechanical rules",
+        description="""The mechanical rules only: banned words with no defensible use,
+openers and offers that are always wrong, heading depth, untagged code fences, emoji, and
+the trailing spaces that become a <br> in a file.
+
+It says nothing about the prose rules. A checker that guesses at "one idea per sentence"
+produces noise that teaches people to ignore it.
+
+Two banned words are deliberately absent. "clean" and "actually" were measured at 141 and
+98 uses across 109,344 words, and both have uses the style does not want to forbid — a
+clean cut, actually as a contrast marker. A regex cannot tell those from the wrong ones.""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    q.add_argument(
+        "paths", nargs="*", metavar="PATH", help="files or directories; default: ."
+    )
+    q.set_defaults(handler=style_lint)
+
+    q = style_sub.add_parser(
+        "check",
+        help="what this session's own recent replies broke",
+        description="""Reads this project's session transcript and reports which of the two
+reply-only geometry rules the agent's own recent replies broke, with examples.
+
+It never restates a rule. Constraint restatement accuracy is measured at 97.3% while the
+same models violate the constraint they just restated, so repeating a rule an agent can
+already recite addresses nothing; naming the specific violation is what moves.
+
+Exits 1 when no transcript for this project can be found, because a check that proved
+nothing must not read as a check that passed.""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    q.add_argument(
+        "--last", type=int, default=10, metavar="N", help="replies to read (default 10)"
+    )
+    q.set_defaults(handler=style_check)
 
     p = sub.add_parser("sync", help="repair what doctor can only report")
     p.add_argument("-n", "--dry-run", action="store_true", help="show, do nothing")

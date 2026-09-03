@@ -1,0 +1,445 @@
+name = "a-rule-nothing-breaks"
+base = "pay-the-opening-once"
+summary = """
+Measure which of the writing style's rules actually hold, cut the ones nothing
+ever breaks, narrow the two that cannot be followed as written, and give the
+style a checker that names violations instead of restating rules.
+"""
+
+approach = """
+The style file has been shipped and installed for two weeks and nobody has ever
+measured whether it works. This record is what happened when someone did.
+
+The measurement, over 284 session transcripts of which 85 carry the flw-terse
+output-style attachment: 1,014 main-agent replies (10,314 lines, 109,344 words of
+prose), 403 subagent replies (88,618 words), 338 file writes of which 107 are
+markdown. Subagents never receive the output style, so they are a control group
+that cost nothing to obtain.
+
+What the style demonstrably does: emoji appear in 0.8% of main-agent replies and
+8.7% of subagent replies, a tenfold difference on a rule that exists only in this
+file. Announcements of what the agent is about to do run 0.8 per 10,000 words
+against 6.5 in the control. The bans on utilise, sufficient, regarding, elegant,
+robust, dramatically, quite, inherently and significantly produced zero or
+near-zero hits across 109,344 words. Reaction openers: one. Closing offers: one.
+
+What it does not do, and what this record acts on:
+
+Three mechanical rules were violated zero times — a heading deeper than ###, list
+nesting past three levels, and a table wider than five columns. Zero in replies,
+zero in written files, and zero in subagents that never load the style. They
+describe behaviour that holds without them, so they are paying words for nothing.
+
+Two rules carry every mechanical violation and both are line geometry: 36.7% of
+replies contain a line over 120 columns, and 63.1% of the lines that need two
+trailing spaces lack them. Both worsen within a session — first half against
+second half, 5.37 to 15.50 and 16.59 to 27.65 violations per 100 lines. Nothing
+else moves. They are also the only rules unreachable by any enforcement mechanism
+on any of the three hosts, because no hook can inspect a reply before the user
+reads it.
+
+Five words are 92% of every vocabulary violation: clean (141), actually (98),
+surface as a verb (60), honest (33), genuinely (24). They are the five with
+legitimate uses, which is why they leak. And surface is flw's own doing: core/
+uses it as a verb 19 times, nine of them in flw-spec/SKILL.md, so the file the
+agent reads every turn instructs the opposite of the file it writes by. core/
+also carries 13 uses of actually, four of robust, and one each of utilise and
+sufficient, and terse_prose.md breaks its own rule at line 150.
+
+What this record is NOT.
+
+It is not a cut to the prose sections, which are most of the file's 9,681 bytes.
+AgentIF (arXiv:2505.16944) measures instruction success falling as instruction
+length grows, at a mean instruction size of 1,723 words against this file's
+~1,500, and puts formatting constraints second-worst of six types at 39-46%. So
+there is an argument for cutting more. There is no evidence for cutting anything
+in particular, because prose rules are not mechanically checkable and nothing
+here measures whether "one idea per sentence" is followed. Cutting them would be
+taste presented as a finding.
+
+One thing this record got wrong at spec time and corrected while building.
+The word lists were aimed at files, on the reasoning that the measured volume
+lived there. It does not: the 356 vocabulary hits were in agent replies, and the
+same rules over flw's own hand-written docs produced 17 false positives against
+16 real findings — a 52% rate, which is a checker nobody keeps. "partial and
+honest beats complete and late" uses `honest` precisely, and a table row reading
+`break it, security, robustness, what if` quotes a user rather than making an
+evaluative claim. So the rules are split by corpus: geometry against files, where
+untagged fences run at 19.6% and every finding is real, and vocabulary against
+replies, where the ten-times-the-control measurement was actually taken. That
+also removes the reason for cleaning flw's own docs of those words to make a
+check pass. The cleanup stays for the better reason: a file that instructs the
+agent nineteen times to "surface a proposal" teaches the word the style bans.
+
+It is not a hook layer. Both Claude Code levers fail on documented behaviour: the
+UserPromptSubmit additionalContext cap is 10,000 characters against a 9,681-byte
+file and silently substitutes a file path past it, and a Stop hook of type
+"prompt" appends the corrected reply beneath the uncorrected one rather than
+rewriting it. A UserPromptSubmit hook injecting only style check's counts is
+viable in a way injecting the file is not, and it is deliberately left out: it
+crosses what cli/flw.py's docstring declares about flw, and that is its own
+decision rather than a rider on this one.
+
+It does not touch keep-coding-instructions, the settings-shadowing warning, the
+subagent style gap, or the Codex and OpenCode install targets. A review round
+raised all four as defects and the code already handles all four —
+style_file_text writes keep-coding-instructions: true with the reason in its
+docstring, shadowing_style warns at install, core/shared/context.md documents
+that a dispatched subagent inherits neither the style nor the context, and HOSTS
+already routes Codex to ~/.codex/AGENTS.md and OpenCode to
+~/.config/opencode/AGENTS.md through the ambient block. Only the module docstring
+is wrong, and only about itself.
+
+Order matters in one place. flw's own prose is fixed before style lint becomes a
+declared check, or the check's first run reports this repository as its worst
+offender on words this repository taught the agent.
+"""
+
+contract_edit = """
+1. Already applied at spec time, listed so nothing applies it twice: the CLI
+   component's surfaces gained `flw style lint [paths...]` and
+   `flw style check [--last N]`, immediately after
+   `flw style uninstall [-H|--host] [-n|--dry-run]`. They are in current.toml
+   before the run starts because tests/test_cli.py diffs build_parser() against
+   that list at every phase boundary, so a declaration deferred to this edit
+   fails the phase that builds the parser.
+
+2. In final_state.components, the component named "validation and checks", in
+   paths: add `core/scripts/style_lint.py` after `core/scripts/budget.py`.
+
+3. In final_state.components, the component named "the flw CLI", in provides:
+   append two lines:
+
+     "A user can check any prose in the repository against the mechanical rules
+     of the writing style flw ships, and is told the path, the line and the rule
+     for each violation rather than a count."
+
+     "A user can ask what the agent's own recent replies broke in that style, and
+     gets the rule and an example rather than the rule restated, because a model
+     that can recite a constraint it is breaking is not helped by hearing it
+     again."
+
+4. In final_state.components, the component named "the skills", in provides:
+   append one line:
+
+     "A user can invoke that self-check as a skill, which reports what drifted
+     and repairs it forward without restating the style."
+
+5. In success_criteria.tests, append one entry:
+
+     { command = ".venv/bin/python core/scripts/style_lint.py core/ docs/ README.md" }
+
+6. In assumptions, append one:
+
+     A host writes each session's transcript to disk as the session runs, so a
+     session can read its own recent replies. `flw style check` depends on it and
+     degrades to reporting nothing if a host stops doing it, or names a different
+     session's file where several run against one project at once.
+"""
+
+[[dag]]
+group = 1
+phase = "the two commands"
+[[dag.tasks]]
+id = "style-lint-script"
+desc = """
+core/scripts/style_lint.py — stdlib regex over the word lists and untagged code
+fences, reporting path:line and the rule. Not Vale and not markdownlint. It
+reports and exits 1 on any finding; it never rewrites a file.
+"""
+[[dag.tasks]]
+id = "style-lint-surface"
+desc = """
+Wire `flw style lint [paths...]` into the parser, matching the line already in
+the contract exactly.
+"""
+[[dag.tasks]]
+id = "style-check-cmd"
+desc = """
+`flw style check [--last N]`, default N=10. Finds this project's transcript
+directory, reads the last N main-agent replies, and reports counts plus up to
+three examples per rule. Around 350 bytes of output. Says so and exits 2 when it
+cannot identify a transcript rather than guessing at one. Built in this phase
+rather than a later one because its surface is declared in the contract already,
+and the parser-surface check runs at every phase boundary.
+"""
+
+[[dag]]
+group = 2
+phase = "flw's own prose"
+[[dag.tasks]]
+id = "own-words"
+desc = """
+In core/*.md, replace the verb uses of "surface" — 12 of them, once the field
+name `surfaces`, the noun "a surface" and "the review surface" are set aside.
+
+The other counts in this task were raw greps and do not survive reading. All 11
+uses of "actually" are the contrast sense the narrowing decision explicitly
+permits — "what is actually on the machine", "the file they will actually edit" —
+so none is replaced. All three "robust" hits are quotations: two are a table row
+listing what a user might say, one is inside commits.md's own list of banned
+verbs. "utilise" and "sufficient" appear only inside terse_prose.md's ban lists.
+So 38 candidate occurrences classify down to 12 violations.
+
+Nothing checks this: the word rules run against replies, not files. The reason is
+instruction conflict rather than a failing check — a file that tells the agent
+nineteen times to "surface a proposal" teaches the word the style bans, and the
+agent copies the louder instruction.
+"""
+[[dag.tasks]]
+id = "own-fences"
+desc = """
+16 untagged code fences under core/ and docs/, every one a real finding — this is
+what the declared check in phase 5 fails on until they are tagged. Tag each with
+its language, or `text` where nothing else fits.
+"""
+[[dag.tasks]]
+id = "own-line-150"
+desc = """
+terse_prose.md line 150 reads "Use something that actually happened". Fix its use
+of a word it bans two sections earlier.
+"""
+
+[[dag]]
+group = 3
+phase = "the style file"
+[[dag.tasks]]
+id = "cut-dead-rules"
+desc = """
+In core/styles/terse_prose.md, Structure and formatting: remove the three-line
+`####` consolidating-documents exception, "Maximum three levels of nesting", and
+"five columns at most". KEEP "Maximum depth is `###`" — that limit is broken in
+2.8% of the markdown files measured, so unlike the other two it is doing work.
+Keep the advice that is not a limit: a table only for tabular data, two columns
+written as `**term** — text` lines.
+"""
+[[dag.tasks]]
+id = "drop-file-wrap"
+desc = """
+Remove the 90-column file wrap. Keep the 120-column terminal wrap and the two
+trailing spaces, both unchanged.
+"""
+[[dag.tasks]]
+id = "narrow-two-bans"
+desc = """
+Narrow the bans on "clean" and "actually" so they name the use that is wrong
+rather than the word. They are 240 of ~356 vocabulary violations because both
+have honest uses and the rule as written forbids those too. Leave "honest",
+"genuinely", "inherently", "really" and "quite" exactly as they are.
+"""
+
+[[dag]]
+group = 4
+phase = "the skill"
+[[dag.tasks]]
+id = "flw-style-skill"
+depends_on = ["style-check-cmd"]
+desc = """
+core/skills/flw-style/SKILL.md — a thin skill that runs `flw style check` and
+acts on what it names. It restates no rule: the point is that the rules are
+already in context and the violations are not.
+"""
+[[dag.tasks]]
+id = "five-skills-prose"
+depends_on = ["flw-style-skill"]
+desc = """
+flw becomes five skills. Update every live claim of four: README.md (three
+places), docs/index.html (two), .flw/extensions/shared.md, and cli/flw.py:2866.
+Applied version records are immutable and stay as they are. The user's own
+CLAUDE.md is outside this repository and is theirs to change.
+"""
+
+[[dag]]
+group = 5
+phase = "the declared check"
+[[dag.tasks]]
+id = "style-lint-check"
+depends_on = ["own-words", "own-line-150", "style-lint-script", "narrow-two-bans"]
+desc = """
+Append the lint to success_criteria.tests, once the prose it checks is clean and
+the two narrowed bans are what it checks against.
+"""
+
+[[dag]]
+group = 6
+phase = "the disclaimer"
+[[dag.tasks]]
+id = "docstring"
+desc = """
+cli/flw.py's module docstring says "What is deliberately not here: any edit to a
+host's settings, permissions or hook configuration" while select_style writes
+outputStyle into ~/.claude/settings.json. Correct it to say what flw does touch
+and what it still does not. flw doctor also already prints "the style check",
+meaning the installed-versus-source comparison; reword that line so the new
+command does not share its name.
+"""
+
+[[decisions]]
+topic = "The 120-column wrap, which is the most-violated rule in the file"
+options = [
+  "Drop it, together with the two-trailing-spaces rule it exists to support, removing 100% of measured reply violations",
+  "Lower the target to 110 so the overshoot lands under 120",
+  "Keep it at 120 unchanged",
+]
+chosen = "Keep it at 120 unchanged"
+rationale = """
+The user values the wrapping and said so directly. The measurement also shows the
+rule is not being abandoned: 35.3% of all prose lines land in the ten columns
+immediately below the target, and 28.5% of the overshoots are within three
+columns of it. That is imprecise counting, not refusal. Lowering to 110 is the
+cheaper fix and was left on the table rather than taken, because it trades a
+narrower terminal for a rule nobody can enforce anyway — and `flw style check`
+will say whether it is needed.
+"""
+
+[[decisions]]
+topic = "The 90-column file wrap"
+options = ["Keep it", "Drop it"]
+chosen = "Drop it"
+rationale = """
+An editor wraps a file on the reader's own terms. The rule constrains what flw
+writes to disk in order to give a reader something they can do locally, and it
+was never measured because a file's width is the one geometry a reader controls.
+"""
+
+[[decisions]]
+topic = "Which mechanical rules measurement found to be doing no work"
+options = [
+  "All three limits: heading depth, list nesting, table width",
+  "Two limits and one exception: list nesting, table width, and the #### exception, keeping the ### limit",
+  "Keep all of them: absence of violations may be evidence they work",
+]
+chosen = "Two limits and one exception: list nesting, table width, and the #### exception, keeping the ### limit"
+rationale = """
+The subagent control settles which rules are inert. Subagents never load the
+style and also produce zero tables past five columns and 0.02 list violations per
+100 lines, so those two limits are not causing the obedience. Heading depth is
+different and was nearly cut by mistake: it is zero in replies but broken in 2.8%
+of the markdown files written, so the limit is doing work and stays. What goes
+with the two inert limits is the three-line #### exception, which describes a
+case that has never arisen in 1,014 replies or 107 files. Compare emoji, which
+the same control shows at a tenfold difference and which therefore stays.
+"""
+
+[[decisions]]
+topic = "Whether to cut the prose sections, which the research recommended"
+options = [
+  "Cut substantially, as the research's own recommendation table says: AgentIF puts instruction success near zero beyond ~6,000 words and this file is ~1,500",
+  "Cut only what measurement shows is doing no work, and leave the prose",
+]
+chosen = "Cut only what measurement shows is doing no work, and leave the prose"
+rationale = """
+This reverses the research, so it is recorded here rather than argued in prose.
+The dig recommended shrinking the file and called it the one action supported by a
+measurement in our own regime. The transcript measurement came after the dig and
+changed what was known: the mechanical rules turned out to be almost entirely
+held, the failures concentrated in two geometry rules and five words, and none of
+that gives any handle on which prose sentences to lose. AgentIF measures length
+in aggregate and names no sentence. Cutting on that basis would be taste wearing a
+citation, and the record would carry no way to tell afterwards whether the cut
+helped. `flw style check` is what makes a later cut measurable, which is why it is
+in this record and the cut is not.
+"""
+
+[[decisions]]
+topic = 'The bans on "clean" and "actually", broken 240 times'
+options = [
+  "Enforce them as written",
+  "Narrow them to the use that is wrong",
+  "Drop them",
+]
+chosen = "Narrow them to the use that is wrong"
+rationale = """
+Both words have uses the file does not want to forbid — a clean cut, a clean
+context, actually as a contrast marker. The ban forbids those too, so it is
+unfollowable, and an unfollowable rule teaches that the list is approximate. The
+other nine words on the same lists produced zero hits, which is what a followable
+ban looks like.
+"""
+
+[[decisions]]
+topic = 'Whether "honest" and "genuinely" are narrowed alongside them'
+options = [
+  "Narrow all four, since they share a rule and the same diagnosis",
+  "Narrow clean and actually only, and leave honest and genuinely banned outright",
+]
+chosen = "Narrow clean and actually only, and leave honest and genuinely banned outright"
+rationale = """
+They do share the rule and the leak, so this needs saying rather than omitting.
+Scope first: this is about replies. Every counter-example found while building —
+six of six in flw's own documents — was a file, and the split below takes files
+out of these rules' scope entirely. In replies the two run at 2.7 and 3.2 times
+the rate of subagent prose the style never reached, so they are overused there.
+The difference from the other two is volume and legitimacy. "clean" runs 12.9 per 10,000 words and
+"actually" 9.0, against 3.0 for "honest" and 2.2 for "genuinely" — four to six
+times rarer. And the frequent two have a defensible use in this register while
+these two rarely do: "a clean cut" is precise, "genuinely useful" is emphasis.
+Narrowing a ban that is nearly holding costs the rule its edge for no measured
+gain.
+"""
+
+[[decisions]]
+topic = "What implements the lint"
+options = [
+  "Vale plus markdownlint, the general recommendation from the prior-art survey",
+  "A stdlib Python script in core/scripts/",
+]
+chosen = "A stdlib Python script in core/scripts/"
+rationale = """
+Five of the seven mechanical rules fall through both tools: Vale has no
+line-geometry primitive at all and markdownlint covers only line length, so
+together they reach heading depth and emoji and nothing else. The general
+recommendation inverts on this rule set. It would also break the stdlib-only
+constraint for two rules that are one regex each, and the real violation volume
+is in the word lists, which are literal strings.
+"""
+
+[[decisions]]
+topic = "How the style gets reinforced during a session"
+options = [
+  "A /flw-style skill that reprints the rules",
+  'A Stop hook of type "prompt" that judges each reply',
+  "A command that reads the transcript and names the violations",
+]
+chosen = "A command that reads the transcript and names the violations"
+rationale = """
+The three have measured effects and they differ by an order of magnitude.
+Restating an instruction gets 6-12% (Drift No More?, arXiv:2510.07777), and When
+Attention Closes (arXiv:2605.12922) carries an appendix titled "Negative result:
+periodic user-role goal re-injection". Naming the specific violations gets +8.2
+points per round and +19.3 cumulative (MultiCodeIF, arXiv:2507.00699). The reason
+restatement fails is DriftBench (arXiv:2604.28031): constraint restatement
+accuracy is 97.3% while knows-but-violates runs 8-99%, so repeating a rule the
+model can already recite addresses nothing. The Stop judge is separately
+unusable — on ok:false the reason is fed back and the turn continues, so the
+corrected reply is appended beneath the uncorrected one the user already read.
+SubagentStart additionalContext lands where the output style sits in the main
+conversation and is the documented route to a non-fork subagent, so the deferred
+hook decision covers two uses rather than one.
+"""
+
+[[decisions]]
+topic = "Which corpus each mechanical rule runs against"
+options = [
+  "One rule set over both files and replies, which is how this record was specced",
+  "Geometry against files, vocabulary against replies",
+]
+chosen = "Geometry against files, vocabulary against replies"
+rationale = """
+Found by building it and running it. One rule set over flw's own documents gave
+33 findings of which 17 were false — 52%, which is a checker people learn to
+ignore. Every false positive was a vocabulary rule reading a file: a quoted user
+phrase in a table, `honest` as a predicate, `✅` marking a good example, `✗`
+documenting what flw doctor prints.
+
+The split follows where each rule was measured. Untagged fences were measured at
+19.6% of 107 markdown files an agent wrote and came back 16 of 16 real. The
+vocabulary overuse was measured in 109,344 words of agent replies against 88,618
+words of subagent prose the style never reached, where emoji ran at ten times the
+rate and five words carried 92% of the hits. Neither measurement was ever about
+the other corpus.
+
+Emoji moves with the vocabulary rules for the same reason, rather than gaining an
+exemption list for `✓`, `✗` and `✅`. An exemption list is a thing that rots, and
+the rule was never earning anything against files.
+"""

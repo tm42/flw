@@ -131,6 +131,8 @@ surfaces = [
   "flw uninstall [hosts...] [-n|--dry-run]",
   "flw style install [name] [-y|--yes] [-H|--host] [-n|--dry-run]",
   "flw style uninstall [-H|--host] [-n|--dry-run]",
+  "flw style lint [paths...]",
+  "flw style check [--last N]",
   "flw sync [-n|--dry-run] [-y|--yes]",
   "flw update [-y|--yes] [-n|--dry-run]",
   "flw doctor [-v|--verbose] [--root PATH]",
