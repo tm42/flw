@@ -1,6 +1,6 @@
 # Speccing in flw
 
-**One record per version under `specs/versions/`, named for what it does**, 35 of them.
+**One record per version under `specs/versions/`, named for what it does.**
 `flw ledger <term>` searches them and is faster than reading — a fork this project already
 settled is usually in some record's `decisions`, with the option it beat.
 

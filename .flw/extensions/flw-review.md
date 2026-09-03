@@ -8,6 +8,6 @@ filed that way against `finish-the-store`. 638 tests in 7.3 seconds, so the loop
 instructions to every later run, so a sentence that reads two ways is a defect the way a
 branch can be. `core/scripts/budget.py` holds each of them to a byte ceiling.
 
-**Past reports are in `.flw/reports/`, gitignored, 44 of them.** Read the ones covering
+**Past reports are in `.flw/reports/`, gitignored.** Read the ones covering
 your scope first: a finding already filed and deliberately left is a decision, and the
 record that took it is under `specs/versions/`.
