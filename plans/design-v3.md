@@ -216,7 +216,7 @@ backward-compatible.
 
 ## 4. Architecture
 
-```
+```text
 ~/.agentic/
   flow/                     ← the clone. upstream-owned, disposable, re-clonable
     cli/                    flow CLI (stdlib only)
@@ -245,7 +245,7 @@ backward-compatible.
 **As built** — `adapters/`, `design.md`, `specs/deltas/` and `.flw/map.md` are all gone,
 and `docs/` arrived. See §1.1 for each:
 
-```
+```text
 flw/
   cli/flw.py
   core/skills/<name>/SKILL.md      four: spec, execute, review, research
@@ -339,7 +339,7 @@ the contract storing it twice.
 
 Two file types. Nothing else.
 
-```
+```text
 specs/current.toml         the contract — what is true when the work is done
 specs/versions/v2.0.toml   one file per version — how this version came about
 ```
@@ -400,7 +400,7 @@ is not stored anywhere, and no code enforces it. It is a word people use to desc
 change, and its one real consequence — a removal bumps major — is a rule a human applies
 while numbering the file.
 
-#### The two layers
+**The two layers**
 
 The working sequence is `spec` → `re-spec` → plan, and the two halves are different kinds
 of work at different altitudes:
@@ -585,7 +585,7 @@ than a per-machine porting chore.
 
 ### 8.1 Surface
 
-```
+```text
 flow install <host>...      symlink skills; offer the ambient block
 flow uninstall <host>...    exact reverse, tag-scoped
 flow doctor                 verify: links resolve, overrides, orphans
@@ -621,7 +621,7 @@ skills are standard `SKILL.md` folders; Claude Code **documents** symlink suppor
 cross-location deduplication; `~/.agents/skills/` covers Codex and OpenCode, and OpenCode
 also reads `~/.claude/skills/`. Two symlink targets serve three hosts:
 
-```
+```text
 ~/.claude/skills/flow-spec   →  ~/.agentic/flow/core/skills/spec/     # CC + OpenCode
 ~/.agents/skills/flow-spec   →  ~/.agentic/flow/core/skills/spec/     # Codex + OpenCode
 ```
@@ -691,7 +691,7 @@ in earlier drafts were
 an open format, published at `agentskills.io`, and implemented by 40+ tools including
 all three targets. A skill is a folder:
 
-```
+```text
 my-skill/
 ├── SKILL.md      # required: `name` + `description` frontmatter, then instructions
 ├── scripts/      # optional: executable code          ← the standard has this
@@ -909,7 +909,7 @@ lifecycle, no first-class/second-class split. An agent asked to add a skill copi
 shape of an existing one and it works — which is the whole reason "humans and agents can
 figure this out" is true.
 
-```
+```text
 bundles/<name>/
   skills/*.md      scripts/*.py      schemas/*.json
 ```

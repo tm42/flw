@@ -170,7 +170,7 @@ silently while a path plus a symbol fails under grep:
 
 `ds/`, `rt/`, `tl/` and `ui/` below stand for the four repos; substitute your own.
 
-```
+```text
 edge                  literal            producer                      consumer
 ui→datastore          POST /v1/configs   ds/api/routes.py:88           ui/src/api/configs.ts:24
 runtime→datastore     table configs      ds/migrations/003_cfg.sql:1   rt/store/loader.go:61
@@ -349,7 +349,7 @@ one complete user-facing transaction end to end and record where you lost it" an
 
 **3. A seam mode for scout, over N roots, matching duplicated literals rather than parsing.**
 
-```
+```text
 flw seam <root>...     # print the edge table: literal, producer file:line, consumer file:line
 flw seam --verify      # re-grep every recorded edge; non-zero exit when a side has vanished
 ```

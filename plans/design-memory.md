@@ -44,7 +44,7 @@ a skill, so its cost is paid on every run and its content has to earn that — s
 that change how the skill behaves *every* time. A note is what you want to know once,
 when it comes up.
 
-```
+```text
 "Run the tests with `make verify`."                          extension
 "Why the scout ranks imports rather than name references,
  and the three measurements that killed the alternative."    note
@@ -65,7 +65,7 @@ Two roots. `~/.flw/kb/` holds what follows you between repositories; a project's
 `plans/` holds what follows the repository. Both are read together, and the project root
 is read only from inside that project.
 
-```
+```text
 ~/.flw/kb/                     # machine-wide: follows you between repositories
   index.md                     # optional, written not generated
   flw/
@@ -291,7 +291,7 @@ written down:
 | `flw kb lint` | **reports**, after the fact, never blocking, always exit 0 (§7) |
 | the skills | **teach**, at a write moment, which is the only time it matters (§5.1) |
 
-```
+```text
 flw kb write <category> <title> -d <description> [--type t] [--tags a,b]
 flw kb write --here <title> -d <description> [--type t] [--tags a,b]
 
@@ -341,7 +341,7 @@ path, and the agent has its own editor and its own `rm`.
 **Moving one between roots does need a command**, because the roots are the one thing a
 path does not make obvious:
 
-```
+```text
 flw kb promote <slug> <category>    # project root → machine-wide, printing both paths
 ```
 
@@ -465,7 +465,7 @@ extension.
 **The verb says what operation; flags say what subset and what shape.** Without that split
 every new way of looking at the store becomes another subcommand, and the surface sprawls.
 
-```
+```text
 flw kb                            counts, per category and per root
 flw kb -c <category>              that category's index.md, or its titles
 flw kb search <terms>             search
@@ -516,7 +516,7 @@ most expensive thing to run, at the ~2,309 tokens §6.1 spends a paragraph refus
 category is what asks for contents.
 | `-p, --paths` | one path per line, for piping |
 
-```
+```text
 $ flw kb -t pydantic -T
 python/                                                    3 notes
   pydantic discriminated unions need a Literal, not an Enum      gotcha · 1d

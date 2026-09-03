@@ -107,7 +107,7 @@ The opening reads are duplicated prose across four `SKILL.md` files: `flw-spec` 
 reviewers instead. Four copies of an instruction drift, and a command written as prose gets reconstructed wrongly —
 flw's own stated reason for putting commands in config.
 
-```
+```text
 flw context              # context.md, resolved root and chain, shared.md, kb listing, contract shape
 flw context flw-spec     # the above plus flw-spec's own extension chain
 ```

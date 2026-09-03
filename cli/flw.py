@@ -3775,16 +3775,16 @@ def build_parser() -> argparse.ArgumentParser:
     q = style_sub.add_parser(
         "lint",
         help="check prose against the style's mechanical rules",
-        description="""The mechanical rules only: banned words with no defensible use,
-openers and offers that are always wrong, heading depth, untagged code fences, emoji, and
-the trailing spaces that become a <br> in a file.
+        description="""Document geometry, and only that: a heading deeper than ###, a code
+fence with no language, and the trailing spaces that become a <br> in a file.
 
-It says nothing about the prose rules. A checker that guesses at "one idea per sentence"
-produces noise that teaches people to ignore it.
+The word rules are not here. They run against what an agent said, not what it wrote to
+disk, because the same words are almost always right in a hand-written document — one
+rule set over both corpora was measured at a 52% false-positive rate. Ask about the words
+with `flw style check`.
 
-Two banned words are deliberately absent. "clean" and "actually" were measured at 141 and
-98 uses across 109,344 words, and both have uses the style does not want to forbid — a
-clean cut, actually as a contrast marker. A regex cannot tell those from the wrong ones.""",
+It says nothing about the prose rules either. A checker that guesses at "one idea per
+sentence" produces noise that teaches people to ignore it.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     q.add_argument(
@@ -3795,15 +3795,17 @@ clean cut, actually as a contrast marker. A regex cannot tell those from the wro
     q = style_sub.add_parser(
         "check",
         help="what this session's own recent replies broke",
-        description="""Reads this project's session transcript and reports which of the two
-reply-only geometry rules the agent's own recent replies broke, with examples.
+        description="""Reads this project's session transcript and reports what the agent's
+own recent replies broke, with examples: the overused words, the openers and offers, the
+120-column wrap and the two trailing spaces a reply needs and a file must not have.
 
 It never restates a rule. Constraint restatement accuracy is measured at 97.3% while the
 same models violate the constraint they just restated, so repeating a rule an agent can
 already recite addresses nothing; naming the specific violation is what moves.
 
-Exits 1 when no transcript for this project can be found, because a check that proved
-nothing must not read as a check that passed.""",
+Exits 1 when no transcript for this project can be found, and when the newest one holds
+nothing but a dispatched agent's replies — that prose never received the style, and
+reading the next session's instead would report someone else's writing as yours.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     q.add_argument(

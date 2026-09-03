@@ -6,7 +6,7 @@ Recorded before spec work. Answers are the user's; rationale is theirs, not infe
 
 Optional, never automatic. Install mentions it exists; a separate command does the work.
 
-```
+```text
 flw style install            install the shipped style into every host
 flw style install <name>     install a named custom style
 flw style uninstall          remove it everywhere

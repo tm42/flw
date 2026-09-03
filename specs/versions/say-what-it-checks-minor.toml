@@ -1,0 +1,253 @@
+name = "say-what-it-checks"
+base = "a-rule-nothing-breaks"
+spec_version = "0.13.0"
+
+summary = '''
+The style checker and the contract each claim more than the code does: three words the
+style names go uncaught, the emoji rule fires only on flw's own checkmarks, a session
+reads another session's replies and calls them its own, and two --help texts plus one
+contract sentence describe a rule set that is not there. This record makes every claim
+match what runs.
+'''
+
+approach = '''
+Everything here comes from the four-lens review at
+.flw/reports/2026-09-03T1731-style-checks.md, run over the six commits that shipped
+a-rule-nothing-breaks. Four CRITICAL, ten MAJOR, seven MINOR. Two of the report's own
+figures did not reproduce and this record carries the re-measurement instead.
+
+What the report measured, and what stands. The corpus split works on the file side: 0 of
+156 file findings false. It does not work on the reply side: 44 of 121 vocabulary hits
+false, 36.4%, and 25 of those 44 are the banned word inside an inline code span, a table
+cell or a blockquote. That is the checker tripping on the reply that reports its own
+output. Stripping inline code spans removes 57% of them.
+
+Two figures re-measured here, both changing what to build.
+
+The emoji rule. The report called it 71% false. Measured over 276,281 words of this
+project's replies -- 166,185 main-agent and 110,096 named-agent -- there are ZERO
+pictographic emoji in either corpus. All 324 hits are U+2600-27BF: 305 checkmarks, 17
+crosses, 2 white heavy check marks. `cli/flw.py` prints the checkmark and the cross on
+about thirty lines, so an agent quoting flw's own output trips this rule while obeying
+the style's "keep error text exactly as it is". The rule is not 71% false, it is 100%
+false, and the record it shipped in justified keeping it with "emoji at ten times the
+rate in prose the style never reached" -- which was measuring checkmark density, not
+emoji. So the rule goes rather than narrows. See the decision below.
+
+The declared check. The report says the repository holds 156 real findings that the
+check's three paths miss. Run over the whole tree it finds 18, all fence-untagged, all
+in plans/. The 156 does not reproduce: `.flw` is in SKIP_DIRS and `walk` tests every
+path part against it, so naming `.flw` explicitly reports clean rather than reading it.
+Widening the check to `.` therefore costs 18 fence tags, not 156 edits.
+
+The agentName clause, where this record departs from the report. The report's CRITICAL
+says to drop `or record.get("agentName")` from recent_replies, because
+~/.claude/settings.json carries outputStyle at user level and a dispatched teammate in
+its own top-level session loads it. That premise is wrong. Named-agent replies break
+`announcement` at 6.18 per 10,000 words against the main agent's 2.29 -- 2.7x -- so the
+style is not reaching them, and the base record's A/B control stands. What the report
+reproduced is real all the same: 49.0% of this project's 15,471 assistant records carry
+agentName with isSidechain false, across 91 of 298 transcripts, and `flw style check`
+run inside one of those sessions gets zero replies, falls through the loop, and prints
+another session's prose as "your recent replies". No transcript mixes the two shapes --
+0 of 298 -- and isSidechain fires in none of them, so the filter is doing all the work
+and the fall-through is the whole defect. The fix keeps the filter and refuses instead
+of falling through.
+
+`surface` joins `clean` and `actually` as narrowed rather than banned. The style names it
+("Show rather than surface") and the report calls its absence part of a CRITICAL, but the
+word runs at 260 uses outside code spans in 166,185 words of main-agent replies, and the
+contract has a field literally called `surfaces`. A verb-with-object pattern finds 17 and
+about 3 of 15 sampled are the noun. That is the cry-wolf rate the split was built to
+remove, so the drift-guard test gains a third word instead of the rule gaining a pattern.
+
+`honest` is added attributively only. Of twelve sampled hits, nine are the tic the style
+is aimed at -- "the honest option", "the honest caveat", "the honest split" -- and three
+are legitimate predicates: "the staleness numbers stay honest". Banning the attributive
+use leaves the predicate alone. `properly`, `really` and `quite` are literal additions
+with nothing to separate.
+
+What this record is not. It does not touch the prose rules, which the base record put out
+of scope and which no checker should guess at. It does not touch the corpus split itself,
+which held under two independent lenses. It adds no rule the style does not already name:
+every addition here is a word or a fence rule the style file states and the code missed.
+
+Coverage the report leaves open, carried forward because nothing here closes it. Recall
+was never measured for any rule -- cry-wolf measured false positives only, the-split
+found three missing words, and neither asked what fraction of real violations any rule
+catches. The base record's own figures (1,014 replies, 109,344 words, 19.6% of markdown
+files) were never reproduced; every reviewer and this record worked from a later, larger
+slice. One user, one project, one host, one Claude Code transcript format. Codex and
+OpenCode were confirmed only to the extent that flw finds nothing there.
+'''
+
+contract_edit = '''
+Four edits, each replacing one existing sentence, plus one appended clause.
+
+1. In the "the flw CLI" component's `provides`, replace
+
+   "A user can check any prose in the repository against the mechanical rules of the
+   writing style flw ships, and is told the path, the line and the rule for each violation
+   rather than a count."
+
+   with
+
+   "A user can check any prose file in the repository against the writing style's
+   document-geometry rules -- heading depth, untagged code fences, and the trailing
+   spaces that become a <br> in a file -- and is told the path, the line and the rule for
+   each violation rather than a count. The vocabulary rules never read a file, because the
+   same words are almost always right in a hand-written document."
+
+2. In `assumptions`, replace
+
+   "A host writes each session's transcript to disk as the session runs, so a session can
+   read its own recent replies. flw style check depends on it and degrades to reporting
+   nothing if a host stops doing it, or names a different session's file where several run
+   against one project at once."
+
+   with
+
+   "A host writes each session's transcript to disk as the session runs, so a session can
+   read its own recent replies. flw style check depends on it and reports nothing if a
+   host stops doing it. Where several sessions run against one project it cannot identify
+   its own, so it names the path it read; a transcript whose replies are all a dispatched
+   agent's is refused rather than skipped, because that prose never received the style."
+
+3. In `success_criteria.tests`, replace the command
+
+   ".venv/bin/python core/scripts/style_lint.py core/ docs/ README.md"
+
+   with
+
+   ".venv/bin/python core/scripts/style_lint.py ."
+
+4. In the "the skills" component's `provides`, replace
+
+   "A user can invoke that self-check as a skill, which reports what drifted and repairs it
+   forward without restating the style."
+
+   with
+
+   "A user can invoke flw style check as a skill, which reports what drifted in this
+   session's own recent replies and repairs it forward without restating the style."
+
+5. Append to the "validation and checks" component's `implementation`, at the end of the
+   existing string:
+
+   "The style checker bans a narrower word list than the style file names. clean, actually
+   and surface are stated as rules and enforced by no pattern, because each has a use the
+   style permits -- a clean cut, actually as a contrast marker, the contract's own surfaces
+   field -- and a regex cannot tell those from the wrong ones. Two tests hold that gap
+   open from both sides: one fails if a pattern reintroduces any of the three, the other
+   fails if the style file stops narrowing them."
+
+No component gains or loses a path, and no surface line changes: this record adds no
+subcommand and no flag.
+'''
+
+[[decisions]]
+topic = "The emoji rule, which fires 324 times in 276,281 words and never on an emoji"
+options = [
+  "Cut the dingbat ranges, keeping U+1F000-1FAFF, so the rule matches what the style bans",
+  "Keep it unchanged, accepting 8.3 false hits per 10,000 words to catch a future pictographic emoji",
+]
+chosen = "Delete the rule from REPLY_RULES entirely"
+rationale = '''
+There are zero pictographic emoji in either corpus. Cutting the dingbat ranges leaves a
+rule with no measured hits at all, which is weight that earns nothing and one more pattern
+for a later reader to reason about. The style file keeps the sentence "No emoji." -- it is
+advice a reader follows, and this record removes only the pattern that claimed to enforce
+it. The base record kept the rule on the strength of "emoji at ten times the rate in prose
+the style never reached", and that figure was checkmark density: 8.30 per 10k in
+main-agent prose against 16.89 in named-agent prose, all of it U+2713 and U+2717, which is
+what flw doctor itself prints.
+'''
+
+[[decisions]]
+topic = "A session whose own transcript is a dispatched agent's"
+options = [
+  "Drop the agentName clause as the review's CRITICAL says, reading named-agent prose as the agent's own",
+  "Drop it and print which shape the replies came from, so the reader discounts the count",
+]
+chosen = "Keep the filter and refuse instead of falling through to the next transcript"
+rationale = '''
+The review's premise is that a dispatched teammate loads the user-level outputStyle. The
+measurement contradicts it: named-agent replies break `announcement` at 6.18 per 10,000
+words against 2.29 for the main agent. Reading that prose as the agent's own would mix two
+populations and would also contaminate the A/B control the base record's rule set rests
+on. The defect the review reproduced is the fall-through, not the filter: 91 of 298
+transcripts hold only agentName records, and a session inside one of them silently gets
+another session's replies. Refusing names the reason and exits 1, which is what the
+command already does when it finds no transcript at all.
+'''
+
+[[decisions]]
+topic = "`surface`, which the style names and the checker does not enforce"
+options = [
+  "Add a verb-with-object pattern, accepting about 20% false on 17 hits",
+  "Add a plain word match, which fires 260 times in 166,185 words",
+]
+chosen = "Leave it out of the checker and add it to the narrowed-words drift guard beside clean and actually"
+rationale = '''
+The contract has a field called `surfaces` and this project talks about it constantly, so
+the noun is both legitimate and frequent. A verb-only pattern was probed at 17 hits with
+roughly 3 of 15 sampled being the noun -- the cry-wolf rate the corpus split was built to
+remove. The base record already established what to do with a word the style names and a
+regex cannot follow: narrow it in the style and hold the gap open with a test from both
+sides. This is the third such word, and the test that names them is where a later reader
+finds out why.
+'''
+
+[[decisions]]
+topic = "Whether the declared check should read the whole repository"
+options = [
+  "Leave it at core/ docs/ README.md and record plans/ as a known blind spot",
+  "Widen it and name plans/ explicitly, so a later top-level directory is a deliberate addition",
+]
+chosen = "Widen it to `.` and tag the 18 untagged fences in plans/ first"
+rationale = '''
+The blind spot is 18 findings, all one rule, all in plans/ -- not the 156 the report
+claims, which does not reproduce because SKIP_DIRS excludes every path under .flw even
+when .flw is named explicitly. Eighteen fence tags is one commit. Naming paths keeps the
+check honest about its own scope for exactly as long as someone remembers to extend it,
+which is the failure this finding is.
+'''
+
+[[dag]]
+group = 1
+phase = "flw's own prose, before the check widens"
+tasks = [
+  { id = "fences", desc = "Tag the 18 untagged code fences in plans/, `text` where nothing else fits. `.venv/bin/python core/scripts/style_lint.py .` must exit 0 before phase 4 changes the declared check." },
+]
+
+[[dag]]
+group = 2
+phase = "the reply rule set"
+tasks = [
+  { id = "emoji", desc = "Delete the emoji rule from REPLY_RULES, and the 'emoji at ten times the rate' clause from the module docstring at style_lint.py:14. Drop 'No emoji' from the phrase list in test_the_shipped_style_file_has_the_rules_the_checker_claims and 'emoji' from the expected set in test_banned_words_are_findings_in_a_reply. The style file keeps its sentence." },
+  { id = "words", desc = "qualifier gains `really` and `quite` as literal alternatives and `honest` in attributive position only -- preceded by a determiner or adjective and followed by a noun, so 'the honest option' fires and 'the numbers stay honest' does not. evaluative gains `properly`.", depends_on = ["emoji"] },
+  { id = "narrowed", desc = "Add `surface` to test_the_two_narrowed_words_are_in_neither_rule_set and to its other half in the style file, renaming both for three words. The style sentence naming surface stays as it is.", depends_on = ["words"] },
+  { id = "code-spans", desc = "Strip inline code spans before running the vocabulary patterns in reply_findings. Measured at 57% of the false positives; table cells and blockquotes are left for a later round.", depends_on = ["words"] },
+  { id = "wrap", desc = "Move the over-120 length check above the own_block branch in reply_findings, so bullets, quotes and table rows are measured. own_block was built for missing-two-spaces and its continue lands before the length check; 1,048 of 6,256 over-120 lines are dropped, 892 of them bullets.", depends_on = ["emoji"] },
+  { id = "fence-reply", desc = "Run fence-untagged against replies as well as files. It is gated on is_md inside findings() and reply_findings checks no fence tag at all, so an untagged fence in a reply is caught by neither set while 8.1% of replies open one.", depends_on = ["wrap"] },
+]
+
+[[dag]]
+group = 3
+phase = "reading a host's transcript"
+tasks = [
+  { id = "cap", desc = "In session_transcripts, cap the matches rather than the candidates: drop `candidates[:40]` and break once 40 have matched. The slice keeps the newest 40 files across all 29 project directories before any project filter, so a day spent in another repository makes this project's transcripts unreadable and reports it as the host keeping none. Scanning all 477 costs about 0.1s." },
+  { id = "cwd", desc = "Move the unconditional break at style_lint.py:294 inside the matching branch, so the 200-line budget keeps scanning. Six transcripts name this project but not in their first cwd record, and 31 of 476 hold more than one distinct cwd.", depends_on = ["cap"] },
+  { id = "refuse", desc = "In style_check, when a matched transcript holds assistant records but every one carries agentName, stop and exit 1 naming that reason rather than moving to the next transcript. A transcript with no assistant records at all is still skipped -- that is a session that has not spoken yet. Update the docstring on recent_replies: the premise is that a dispatched agent does not receive the style, measured at 6.18 announcements per 10k words against 2.29, not that it runs in a sidechain.", depends_on = ["cwd"] },
+  { id = "last-zero", desc = "`--last 0` returns the whole transcript, because replies[-0:] is replies. Make it return nothing, or refuse the value.", depends_on = ["refuse"] },
+]
+
+[[dag]]
+group = 4
+phase = "what flw says about itself"
+tasks = [
+  { id = "help", desc = "Rewrite both --help descriptions. `flw style lint` at cli/flw.py:3755 promises banned words, openers, offers and emoji and runs three geometry rules; its paragraph about clean and actually being deliberately absent is now trivially true and goes with it. `flw style check` at cli/flw.py:3776 says it reports the two reply-only geometry rules while the vocabulary rules also run." },
+  { id = "path-line", desc = "The success line at cli/flw.py:1291 names the transcript it read but never says it is one of several. Say how many matched.", depends_on = ["refuse"] },
+  { id = "counts", desc = "docs/index.html:510 reads `skills 04` and `flw list` prints 5. README.md:89's heading `## The four skills` sits over a section that names five; make it `## The four workflow skills`, which is the reading the base record decided. Add a `/flw-style` row to core/shared/ambient.md's skill table: that block is the only thing a session invoking no skill reads, and /flw-style is the skill such a session wants." },
+  { id = "contract", desc = "Apply the five contract edits above, in the order they are written. Print `git diff specs/current.toml` on its own before the run's staged diff.", depends_on = ["fences", "help", "counts", "last-zero"] },
+]
