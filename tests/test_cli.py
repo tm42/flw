@@ -3633,6 +3633,29 @@ def test_scout_names_the_languages_it_did_not_parse(tmp_path, capsys):
     assert "not read: 5 .rs" in capsys.readouterr().out
 
 
+def test_scout_says_which_root_it_walked_to_and_only_when_it_walked(tmp_path, capsys, monkeypatch):
+    """A directory with no specs/ and no .flw/ is answered by an ancestor, so a
+    run from the wrong place ranks a tree the caller never named. Naming a path
+    prints no root line, because `flw scout <path>` deliberately does not walk."""
+    parent = tmp_path / "parent"
+    (parent / "specs").mkdir(parents=True)
+    (parent / "specs" / "current.toml").write_text('schema_version = 4\n')
+    (parent / "other").mkdir()
+    (parent / "other" / "p.py").write_text("def f():\n    return 1\n")
+    inner = parent / "member" / "src"
+    inner.mkdir(parents=True)
+    (inner / "m.py").write_text("def g():\n    return 2\n")
+    monkeypatch.setenv("FLW_HOME", str(tmp_path / "no-global"))
+    monkeypatch.chdir(inner)
+
+    assert flw.scout(argparse.Namespace(path=None, budget=20)) == 0
+    walked = capsys.readouterr().out
+    assert f"  root: {flw.tilde(parent)}" in walked
+
+    assert flw.scout(argparse.Namespace(path=str(inner), budget=20)) == 0
+    assert "  root:" not in capsys.readouterr().out
+
+
 def test_unread_counting_is_relative_to_the_root_not_absolute(tmp_path):
     """The parts are taken relative to root: an absolute path under a dotted
     directory — ~/.cache, a job scratch tree — has a dotted part in it, and

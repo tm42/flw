@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.14.0"
+spec_version = "0.15.0"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -33,6 +33,7 @@ applied = [
   "a-rule-nothing-breaks",
   "say-what-it-checks",
   "checked-and-bounded",
+  "no-false-premises",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -52,6 +53,7 @@ assumptions = [
   "Not every tracked path belongs to a component. specs/, .flw/ and pyproject.toml are read by flw and by hosts and delivered by no component; a path claimed by none is a state, not a gap, and flw validate does not check for it.",
   "A repository or parent whose directory is named `system` has no store: its repository file and the system file share a name, and flw know refuses it naming the collision rather than pick a reading.",
   "A host writes each session's transcript to disk as the session runs, so a session can read its own recent replies. flw style check depends on it and reports nothing if a host stops doing it. Where several sessions run against one project it cannot identify its own, so it names the path it read; a transcript whose replies are all a dispatched agent's is refused rather than skipped, because that prose never received the style.",
+  "Two declared members whose directories share a basename have no store between them: system.md's revision table is keyed by member directory basename, so one entry would stand for both, and flw know refuses the pair naming both config keys and both paths rather than recording one and reporting it for the other.",
 ]
 
 open_questions = [
@@ -87,7 +89,7 @@ provides = [
   "A user can verify an install — that every link resolves, no bundle silently overrides a core skill, and no orphan remains from a removed bundle.",
   "A user who updates flw is never left with a host silently running older material: what a host holds as a symlink is live the moment the pull lands, and what it holds as a copy is reported and offered for refresh in the same run.",
   "A user can register a local bundle of extra skills and have it install and uninstall exactly like flw's own.",
-  "A user can see which of a repo's extensions a skill will actually read at every level from the outermost project root inward, how large each one is, and which sit there read by nobody — for the repository they name rather than only the one they are standing in.",
+  "A user can see which of a repo's extensions a skill will actually read at every level from the outermost project root inward, how large each one is, and which sit there read by nobody — for the repository they name rather than only the one they are standing in, and including a declared member that resolves outside the parent's own directory and so reads none of the parent's extensions.",
   "A user can print everything a skill reads at its opening — the shared context, the resolved root and where it came from, this repo's extensions from the outermost project root inward, the note store listing where that skill's own opening reads one, the records the contract has not applied, and the contract's component names and paths — with one command. Run with no skill named it omits the shared context: that call serves a session flw has no skill for, which wants what the repository records and not the file every skill already reads.",
   "A user can print the same opening without the shared context every skill already carries — the resolved root, the live extensions, the note store listing, the records the contract has not applied, and the scoped components — so a second call in one session, or an agent handed a briefing, pays for what this repository records rather than for the rules it is already holding.",
   "A user can see, per host, where skills install and what that host does and does not support, before installing — and is told when a host cannot do something a skill wants, rather than the skill silently not working.",
@@ -186,12 +188,17 @@ provides = [
   "A user gets commits that are one part of the product each, complete with the check that proves them, because what a commit is and what its message says are written once in one file every skill cites rather than restates — so an agent proposing a commit and an agent working outside a flw run follow the same rule.",
   "A user can spec two changes at once on separate branches without either having to be renumbered when it lands, because a version record is addressed by a name it keeps, the order they landed in is recorded by the contract rather than by the records, and the release number moves by itself when a run finishes.",
   "A user can run a version's work without waiting for its checks, and gets a report that says the version was built and not verified rather than one that reads as finished.",
+  "An unattended run and a run stopped by a failing check each get a report that says which it is — the mode named in the header, the check named where one failed, and the contract stated as not moved — so neither can be read at a glance as an attended run that finished.",
   "A user gets a store that fills itself, because flw-execute, flw-research and every flw-review reviewer — the one that runs by default as much as each one a team dispatches — are offered a write at the point they have just finished learning something, and offered it, never blocked by it.",
   "A user who runs flw-research on a repository gets its architecture written into that repo's knowledge store — the repo file, area files where reading one removes reading several, and with [project.roots] declared, system.md at the parent from a pass that reads the topology before any member — reviewed per level rather than in one block, and shaped like a shipped toy example rather than invented.",
   "A user's spec, execute and review runs read the store from where they are working: orientation across the declared roots at spec time, the walk from the record's paths at execute time, the walk from the diff at review time. An execute run that changes code re-reads and re-stamps the files describing what it changed, at the phase boundary, and its report lists them.",
-  "Any skill that finds a knowledge file wrong may rewrite that one file and re-stamp it. That permission is one sentence in each skill and not a rule in the shared context, because a permission granted there reads as permission to write anything.",
+  "Any skill may rewrite one knowledge file the code has already falsified, and re-stamp it. The trigger is evidence rather than judgment, and the run says which file it rewrote. That permission is one sentence in each skill and not a rule in the shared context, because a permission granted there reads as permission to write anything.",
   "A user can run flw-research on a repository that has no flw directory yet, which is the ordinary case for a repo nobody set up: the skill says which directory it is about to create and gets a yes before writing, the same gate flw-spec already applies to specs/, and proposes the ignore lines alongside the config it writes.",
   "A user can invoke flw style check as a skill, which reports what drifted in this session's own recent replies and repairs it forward without restating the style.",
+  "A measurement a record carries from a review report arrives with the command that produced it and the revision it was taken at, or with a sentence saying it cannot be re-run there, so a decision resting on a number is a decision a later reader can re-take rather than one they have to believe.",
+  "A record that edits the contract gets a second reader before the work starts, rather than only when someone judges the contract large enough to warrant one.",
+  "A review report a record has superseded carries that record's name, so a later round reading past reports first can tell a filed finding from one a re-measurement has already overturned.",
+  "A record citing a plan outside its own project quotes the decision it depends on, so the ledger a session can reach from where it is standing holds the reasoning and not only a path out of the corpus.",
   "A spec run checks the amendment it has just written against the extensions live in that repository and names any the amendment contradicts, so a convention a human made binding is not left standing over a contract that removed what it requires.",
 ]
 

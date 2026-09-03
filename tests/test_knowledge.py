@@ -847,6 +847,23 @@ def test_a_file_in_no_store_cannot_be_stamped(acme, capsys, monkeypatch):
     assert "is in no store" in capsys.readouterr().err
 
 
+def test_two_members_sharing_a_basename_are_refused_naming_both(acme, capsys):
+    """system.md keys one revision per member basename, so a pair sharing one is
+    unrepresentable: the table would record one member's HEAD and report it for
+    the other, and --check would answer `current` for a member it never read."""
+    (acme / ".flw" / "config.toml").write_text(
+        '[project.roots]\nleft = "./a/core"\nright = "./b/core"\n'
+    )
+    for side in ("a", "b"):
+        (acme / side / "core").mkdir(parents=True)
+
+    assert run(["know", "--check", "--root", str(acme)]) == 1
+    said = capsys.readouterr().err
+    assert "left" in said and "right" in said
+    assert "a/core" in said and "b/core" in said
+    assert "named core" in said
+
+
 def test_the_map_orders_edges_by_name_and_not_by_declaration(acme, capsys, monkeypatch):
     """`[project.roots]` is a table a person writes in whatever order suits them,
     and the map is a document read top to bottom. `edges.sort` is what makes the

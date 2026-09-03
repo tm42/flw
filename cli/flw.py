@@ -2600,8 +2600,10 @@ def scout(args: argparse.Namespace) -> int:
     # way test is — you scout a tree, and `flw scout ./` must not walk upward.
     if args.path:
         root = Path(args.path).resolve()
+        walked = False
     else:
         root = nearest_project() or Path.cwd()
+        walked = True
 
     scripts = checkout() / "core" / "scripts"
     if not root.is_dir():
@@ -2612,6 +2614,12 @@ def scout(args: argparse.Namespace) -> int:
 
     sys.path.insert(0, str(scripts))
     import scout as engine
+
+    # Only when no path was given, because only then did something walk. A run
+    # from a directory with no specs/ and no .flw/ is answered by an ancestor,
+    # and ranking a tree the caller never named is the failure this line names.
+    if walked:
+        print(f"  root: {tilde(root)}")
 
     # The engine's own walk decides whether there is Python here. Asking rglob
     # separately cost most of the run and answered differently: it descends into

@@ -97,9 +97,15 @@ first lets every seam between them stay vague.
 
 **With `[project.roots]` declared, the survey is every member and the parent pass comes
 first.** One pass over the topology, the shared literals and one transaction traced end to
-end, then one pass per member. The parent gets `system.md` — and a `shared.md` too, when a
-convention holds across all of them: one is architecture and rots on a commit, the other is
-a rule and rots on a decision, and the parent is the only level that can carry either.
+end, then one pass per member. The parent gets `system.md`, which is read by declaration and
+so reaches every member wherever it sits.
+
+**A parent `shared.md` reaches only members that nest under it.** Extensions are read by
+filesystem ancestry and `[project.roots]` does not require nesting — a member declared as
+`../datastore` is a sibling, and no session inside it reads a line the parent wrote. So
+write a convention at the parent only when every declared member resolves under the parent's
+own directory. Otherwise say the convention has to go into each member, and say why, rather
+than writing one file that `flw doctor` will report as live and nobody will read.
 
 ## 2. Probe
 
@@ -256,7 +262,8 @@ them: a fact every skill needs goes in `shared.md` once, not into three files.
 above the one being worked in, so a convention belongs at the level it is true of. A repo's
 own quirks go in that repo; something every checkout under a parent directory obeys goes in
 the parent, which needs only a `.flw/` to become a level. Writing it once above beats
-writing it into six repos that then drift.
+writing it into six repos that then drift — but only where those repos are genuinely under
+it on disk, which a declared member need not be.
 
 **Then the knowledge tree**, at `<flw dir>/knowledge/`, mirroring the code: the repository
 file first — what it owns and its outward edges, the most valuable file in the store — then

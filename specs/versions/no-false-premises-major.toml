@@ -1,0 +1,394 @@
+name = "no-false-premises"
+base = "checked-and-bounded"
+spec_version = "0.14.0"
+
+summary = '''
+Eleven places where a document flw ships tells an agent something about the run that does
+not hold: the shell cannot rebase (it can), an unattended run reads as approved, a stat
+reads as a diff, a failed check reads as finished, a cited number cannot be re-taken, a
+parent's conventions read as live when nothing reads them, and two declared members
+collapse into one.
+'''
+
+approach = '''
+From the process review at `.flw/reports/2026-09-03T2050-process.md` -- five lenses over
+the repository read as a method rather than as code, 1 CRITICAL, 16 MAJOR, 3 MINOR. This
+record takes eleven and drops nine. The test applied was whether a finding bites a user who
+is not flw's author; the nine dropped are this repository's own hygiene or a conclusion
+nothing has measured yet.
+
+Every line reference below was re-opened here before this record was written, which is what
+finding 6 is about. Two of the report's references had drifted and this record carries the
+corrected ones: the per-member revision promise is at `specs/current.toml:298`, a surface
+line reading "in system.md a table of member directory basename to HEAD", not at `:291`,
+which is the staleness property beside it. The carve-out sentence the contract carries is at
+`:192`.
+
+**The false premise in commits.md, which is the highest return in the set.** `:47` states
+"`git rebase -i` is unavailable in an agent's shell" and `:85` requires that a red non-tip
+commit be fixed in place, which needs a rebase. Both cannot hold. Reproduced twice, once by
+the reviewer in a detached worktree and once independently before consolidating this round:
+`GIT_SEQUENCE_EDITOR=true GIT_EDITOR=true git rebase -i HEAD~3` succeeds, a `sed` sequence
+editor squashes, and one file's hunks split across two commits with `git diff -U0` then
+`git apply --cached --unidiff-zero` on the selected hunk. The consequence `:47` draws is
+true on its own terms -- a rebase rewrites every commit above the one it touches -- so
+fold-by-default survives without the false premise. The belief cost two commit handbacks and
+a round of manual file surgery on 2026-09-03.
+
+**The CRITICAL, and the gate that would have caught it.** `a-rule-nothing-breaks`' decision
+9 chose geometry-against-files and vocabulary-against-replies over one rule set for both;
+the same record's `contract_edit` appended a sentence claiming `flw style lint` checks prose
+"against the mechanical rules of the writing style flw ships". `flw-execute` applied it
+verbatim at `3473991`, and `git show 3473991:specs/current.toml` carries it at line 106. The
+interview, the human read and `flw validate` all passed it -- validate by design, since it
+checks shape and says so. The spec critic's own prompt names this exact class as its finding
+type 3. It ran on 3 of 51 records and found something on all four runs it has ever had: 8, 5
+then 3, 4, and 5. The gate at `core/skills/flw-spec/SKILL.md:276-280` is contract size, and
+its closing words -- "do not manufacture ceremony" -- are what excluded the record that then
+produced 4 CRITICAL. Gating on whether a record carries a `contract_edit` puts it on 40 of
+51.
+
+**`--auto` voids the assumption that licenses flw to verify nothing.** Assumption 4 at
+`specs/current.toml:48` reads "A human reads what an agent wrote before the work runs. Every
+mechanism flw might build to police an agent's description of its own change is redundant
+with that review". `flw-execute:141` says `--auto` skips both approvals "and skips them at
+every later boundary too". Both 2026-09-03 executor runs used it. `--yolo` received a whole
+task in `release-line-minor.toml` so that its report "cannot be mistaken for done at a
+glance"; `--auto` received none and prints the finished block byte for byte. This is the
+reason the record is major: an existing `--auto` run's report gains a line in its header.
+
+**A stat is not a diff.** `flw-execute:317` says "a diff you merely ran is a diff they never
+saw" and the command at `:303` is `git diff --stat --staged`, which prints a manifest. On
+the `checked-and-bounded` run, two of four commits carried no contract edit, so step 5's
+contract-diff rule never fired for them and 558 insertions reached the human as five stat
+lines. `flw test --no-stream` is not pasted either, so an unattended run with no contract
+edit shows a human zero lines of what it produced.
+
+**A failed check has no report block.** Rule 3 says stop on a failing check and step 5 says
+a stopped run does not move the contract, so a run that completed every phase and failed a
+check is stopped. The STOPPED block at `:330` is scoped to "stopped on a proposal" and its
+fields say so. The `--yolo` block is for skipped checks. The only block with a slot for
+`Checks: <p> passed · <q> failed` is at `:325`, the finished one -- and it is the only one of
+the three carrying no `Contract:` line, where STOPPED has "not moved -- the run did not
+finish" at `:338`.
+
+**The carve-out has two triggers and the contract carries the broad one.**
+`flw-review/SKILL.md:45` says "a knowledge file you find wrong"; `:143`, inside the block
+handed verbatim to every dispatched reviewer, says "a knowledge file `flw know` returned that
+the code has already falsified". `flw-spec:43`, `flw-execute:43` and `flw-research:67` all
+carry `:45`'s wording, and so does `specs/current.toml:192`. So four lanes may rewrite a
+store file on judgment, the store is gitignored, and neither `flw-review`'s summary block nor
+`flw-spec`'s close mentions a knowledge write at all. `flw know --check` reports 5 of 8 files
+changed here, so five are standing candidates on every run.
+
+**A number arrives without its provenance.** `a-rule-nothing-breaks` carries eleven figures
+from a transcript survey -- 284 transcripts, 1,014 replies, 109,344 words, emoji at 0.8%
+against 8.7% -- and names no command, no corpus path, no pattern and no revision. Its
+decision on the emoji rule turns on "a tenfold difference", which was re-measured a day
+later as 100% false because the pattern was counting `✓` and `✗`. `checked-and-bounded:44-46`
+already writes a number the other way and is the model this rule generalises.
+
+**A superseded report reads as a filed finding.** `.flw/extensions/flw-review.md` sends every
+round to read the reports covering its scope first. `2026-09-03T1731-style-checks.md` states
+71% and 156; `say-what-it-checks` re-measured both to 100% and 18 and both re-measurements
+changed what got built. The record cites the report by path and nothing in the report points
+at the record. `team-dispatch.md:189` already calls a report disposable once a record
+supersedes it, and no lane owns doing it.
+
+**Two multi-repo findings, both from the field session.** `flw-spec:161` requires one plan at
+the parent that every member record cites, and `ledger.py:100` bounds the plans glob to
+`root / "plans"`, so from inside the member where the record is written that plan is outside
+the corpus: `flw ledger fulfilment` in `acme/shop` answers "nothing written down here
+matches" and exits 0 while the same query at `acme` returns it. And `flw-research:98` writes
+a `shared.md` at the parent when a convention holds across members, while `:255` justifies it
+with "every checkout under a parent directory" -- true only when members nest, which
+`[project.roots]` does not require and `tests/test_cli.py:2385` says it does not.
+
+**Two code guards the contract already implies.** `cli/flw.py:2604` resolves
+`nearest_project() or Path.cwd()` and prints no root line, so a run from a member with no flw
+directory ranked an ancestor's directory the caller never named -- against the provides that
+a user is told which root a command resolved to "rather than silently answered by an
+ancestor". This is not the deliberate `flw scout <path>` rule at `:120`, which holds: the
+walk happens only when no path is given. And `knowledge.py:401` returns
+`{path.name: path for path in members.values()}`, so two members sharing a directory basename
+collapse and the later declaration wins -- `system.md` records one revision key while the
+other member sits at a different HEAD, and `flw know --check` reports `current`. The
+reframing found while reading the code: `specs/current.toml:298` states the revision table is
+keyed by member basename, so two members sharing one is an unrepresentable state rather than
+a promise the code breaks. flw already refuses the neighbouring unrepresentable state -- a
+root directory named `system`, assumption 10 at `:53` -- and refuses this one nowhere.
+
+**What this record is not.** It does not shorten the interview. The round's sharpest result is
+that 51 records produced 162 decisions and zero findings while every one of the 60 files in
+`.flw/reports/` came from a stage that reads code -- but "shorten the interview" is a
+conclusion, and the report states plainly that nobody has measured what an interview costs.
+That is a measurement to take, not an agreement to reach. It also leaves four things alone as
+this repository's own hygiene rather than shipped material: the stale test count in
+`.flw/extensions/flw-review.md`, the drifted line references in the one `flw kb` note, the
+`#### <role>` in `team-dispatch.md:162` that made this round's consolidated report fail flw's
+own style check, and the two-of-four ceiling enumeration at `specs/current.toml:317`. It does
+not widen the ledger's corpus, which would reopen open question 3.
+
+**Coverage carried from the round, because nothing here closes it.** No one could measure what
+an interview costs: the transcript corpus records 8 `flw-execute` and 1 `flw-review`
+invocation across its whole history and none on 2026-09-03, so no stage boundary could be
+anchored. The extension chain is tested two levels deep and never three, and the contract's
+phrase is unbounded. Nothing in the suite combines `[project.roots]` with the extension chain,
+which is why the parent-`shared.md` finding was reachable. `flw-research`'s multi-root survey
+is prose with nothing behind it -- the topology-first rule, the parent pass, the compose-file
+read -- and if it stopped being followed nothing would say so. Whether each review round's
+findings were correct was not checked; the round counted where they were caught. Windows
+paths, symlinked members and absolute member paths were not read.
+
+**And the limit on all of it:** one user, one project, flw reviewing itself with flw. The only
+outside evidence is a field session across several repositories that reached here
+second-hand, and the two multi-repo findings above were reproducible only because that
+session pointed at the area first.
+
+**One task was added mid-run, after phases 1 and 2 had landed.** The record specified 758
+bytes of prose for `core/skills/flw-execute/SKILL.md` against 415 bytes of headroom, and the
+executor stopped at the phase 3 boundary with `budget.py` reporting 21,343 of 21,000. That
+ceiling is a declared check, and the file is the one `budget.py`'s own docstring names as the
+reason the check exists. The record's author did not read the headroom at spec time, which is
+the error; the run caught it because the check is declared rather than remembered.
+`extract-reference` in group 3 is the repair, and the decision below carries the three
+options it beat.
+
+**One artifact of the run, which is a gap in the carve-out rather than in the code.** Three
+dispatched reviewers targeted `.flw/knowledge/flw.md` concurrently; two corrected 714 to 715
+and the third read it after a write had landed and reported every claim verified. The file
+survived intact. The permission each skill grants as "that one file is yours to correct"
+assumes a single writer, and a dispatched team is not one. Nothing in `team-dispatch.md`
+addresses it and this record does not either -- naming it here so the next round does not
+read the disagreement in the report as a disagreement about the code.
+'''
+
+contract_edit = '''
+Eight edits.
+
+1. In the "the skills" component's `provides`, replace
+
+   "Any skill that finds a knowledge file wrong may rewrite that one file and re-stamp it.
+   That permission is one sentence in each skill and not a rule in the shared context,
+   because a permission granted there reads as permission to write anything."
+
+   with
+
+   "Any skill may rewrite one knowledge file the code has already falsified, and re-stamp
+   it. The trigger is evidence rather than judgment, and the run says which file it
+   rewrote. That permission is one sentence in each skill and not a rule in the shared
+   context, because a permission granted there reads as permission to write anything."
+
+2. In the "the skills" component's `provides`, add after the sentence beginning "A user can
+   run a version's work without waiting for its checks":
+
+   "An unattended run and a run stopped by a failing check each get a report that says which
+   it is -- the mode named in the header, the check named where one failed, and the contract
+   stated as not moved -- so neither can be read at a glance as an attended run that
+   finished."
+
+3. In the "the skills" component's `provides`, add:
+
+   "A measurement a record carries from a review report arrives with the command that
+   produced it and the revision it was taken at, or with a sentence saying it cannot be
+   re-run there, so a decision resting on a number is a decision a later reader can re-take
+   rather than one they have to believe."
+
+4. In the "the skills" component's `provides`, add:
+
+   "A record that edits the contract gets a second reader before the work starts, rather
+   than only when someone judges the contract large enough to warrant one."
+
+5. In the "the skills" component's `provides`, add:
+
+   "A review report a record has superseded carries that record's name, so a later round
+   reading past reports first can tell a filed finding from one a re-measurement has already
+   overturned."
+
+6. In the "the skills" component's `provides`, add:
+
+   "A record citing a plan outside its own project quotes the decision it depends on, so the
+   ledger a session can reach from where it is standing holds the reasoning and not only a
+   path out of the corpus."
+
+7. In the "the flw CLI" component's `provides`, in the sentence beginning "A user can see
+   which of a repo's extensions a skill will actually read", extend the closing clause so it
+   reads
+
+   "... and which sit there read by nobody -- for the repository they name rather than only
+   the one they are standing in, and including a declared member that resolves outside the
+   parent's own directory and so reads none of the parent's extensions."
+
+8. In `assumptions`, add:
+
+   "Two declared members whose directories share a basename have no store between them:
+   system.md's revision table is keyed by member directory basename, so one entry would
+   stand for both, and flw know refuses the pair naming both config keys and both paths
+   rather than recording one and reporting it for the other."
+
+No component gains or loses a path, and no surface line changes: this record adds no
+subcommand and no flag. `flw scout` printing its resolved root needs no new sentence -- the
+"validation and checks" component already provides that a user is told which project root a
+command resolved to before it runs.
+'''
+
+[[decisions]]
+topic = "Which of the round's twenty findings this record takes"
+options = [
+  "All twenty, since every one was reproduced",
+  "The CRITICAL and the four findings whose fix is a single sentence, leaving the rest",
+]
+chosen = "The eleven that would bite a user who is not flw's author"
+rationale = '''
+Nine of the twenty are about this repository rather than about flw: a stale count in a local
+extension, drifted line numbers in one note, a template that only fails a check because the
+file was named explicitly, and a contract enumeration two entries behind its own function.
+Fixing them is worth doing and worth nothing to anyone who installs flw. The eleven taken
+here are all in shipped material or in code, and nine of them are single sentences in files
+every later run reads as instruction, where a wrong sentence is a wrong instruction repeated
+silently -- which is the mechanism that produced the round's CRITICAL. Taking all twenty
+would also have put the interview finding in, which is the one thing here nobody has
+evidence for.
+'''
+
+[[decisions]]
+topic = "The interview, which produced 162 decisions and zero findings across 51 records"
+options = [
+  "Shorten it: make --thrifty the default, or cut the section-by-section confirmation",
+  "Add a detection step to it, so the stage that writes the record also checks it",
+]
+chosen = "Change nothing, and record that what is missing is a measurement"
+rationale = '''
+The yield is measured and the remedy is not. Three records have cut the review on measured
+grounds -- narrow-what-a-reviewer-loads at ~31,000 tokens on the contract for a four-lens
+run, pay-the-opening-once at 9,168 bytes, review-opens-solo making the solo reader the
+default -- and no record has ever measured the interview. `--thrifty` has existed since v1.0
+and nothing has measured what it saves. Cutting a stage on a yield figure while its cost is
+unknown is the same error as citing a number nobody can re-take, which this record is partly
+about. The round tried to measure it from the transcripts and could not anchor a stage
+boundary. What the critic gate change does instead is add a reader before the build, which
+addresses the same defect class without touching the stage whose price is unknown.
+'''
+
+[[decisions]]
+topic = "The commits.md claim that an agent's shell cannot rebase"
+options = [
+  "Delete the sentence, since the consequence it draws is stated in the next paragraph",
+  "Keep it and add that a non-interactive rebase is possible, so both readings survive",
+]
+chosen = "Replace the false premise with the consequence that is true"
+rationale = '''
+The sentence exists to justify fold-by-default, and that justification holds without it: a
+rebase rewrites every commit above the one it touches, which is the real cost of folding
+after the fact. Keeping the false claim alongside a correction leaves an agent to decide
+which half to believe, and the observed failure is that agents believe the limitation --
+twice on 2026-09-03 an executor handed a commit partition back on the strength of it, and
+the orchestrator then did by hand what one `git apply --cached --unidiff-zero` does.
+'''
+
+[[decisions]]
+topic = "The cross-repo plan a member's ledger cannot reach"
+options = [
+  "Widen the corpus to the project chain, so a member's ledger reads the parent's plans",
+  "Leave it, and record the gap the way the extension half of it is already recorded",
+]
+chosen = "The record quotes the decision it depends on into approach, rather than only the path"
+rationale = '''
+Widening the corpus reopens open question 3, which asks whether the corpus is bounded by
+directory or by what the VCS tracks, and adds a second axis to it -- how far up it reaches --
+that nobody has asked. The corpus boundary is also a stated property, edited once already by
+`checked-and-bounded`, and editing it again in the same week for a second reason is how a
+guarantee stops meaning anything. Quoting the decision costs the record's author a paragraph
+and puts the reasoning inside the corpus every member session can reach. The path stays, so
+the parent plan is still findable by someone standing at the parent.
+'''
+
+[[decisions]]
+topic = "Two declared members sharing a directory basename"
+options = [
+  "Key the revision table by config key instead, so two basenames may collide harmlessly",
+  "Record both revisions under a disambiguated key derived from the member's path",
+]
+chosen = "Refuse the pair, naming both config keys and both paths"
+rationale = '''
+The basename key is deliberate and its docstring says why: renaming a member in
+`[project.roots]` must not orphan the store's revision for it. Keying by config key reverses
+that and reopens a problem already solved. Deriving a longer key makes `system.md`'s table
+unreadable for the ordinary case to serve a layout nobody has yet built. Refusing is what flw
+already does for the neighbouring unrepresentable state, a root directory named `system`, and
+it is the only option that cannot report one member's revision for another.
+'''
+
+[[decisions]]
+topic = "The byte ceiling flw-execute/SKILL.md breached mid-run"
+options = [
+  "Raise the ceiling for that file in success_criteria.criteria",
+  "Drop the stat-vs-diff task, which is the largest of the three phase 3 edits",
+  "Tighten phase 3's prose until it fits",
+]
+chosen = "Move step 4's exceptional path into core/skills/flw-execute/references/"
+rationale = """
+Two of the five capped skill files sit at their ceiling -- flw-execute at 21,343 of 21,000
+with this record's edits in, and flw-spec at 20,620 -- so raising one number or dropping one
+task leaves the next record meeting the same wall. Dropping stat-vs-diff does not even clear
+it: the file would sit at 21,075. Tightening recovers perhaps 300 of the 343 and is shrinking
+a diff by characters rather than by moving parts, which the style file names as the wrong
+move. The extraction is the precedent flw-review set by moving team dispatch into a
+reference, and flw-execute is the only skill of five with no references/ directory while
+being the largest. budget.py caps core/skills/*/SKILL.md and five shared files; a reference
+is uncapped, and the skills component's core/skills/ path already covers a new file there, so
+no contract sentence changes. flw-review's own reference is named in no contract sentence
+either, which is the precedent for leaving this one out.
+"""
+
+[[dag]]
+group = 1
+phase = "the premises in the files every run reads"
+tasks = [
+  { id = "rebase", desc = "core/shared/commits.md:47 -- replace `git rebase -i` is unavailable in an agent's shell` with the consequence that is true, that a rebase rewrites every commit above the one it touches. Check the surrounding paragraph still reads as a justification for folding rather than for a tool limit, and leave :85 alone: it becomes reachable once the premise goes." },
+  { id = "carve-out", desc = "Use core/skills/flw-review/SKILL.md:143's wording -- a knowledge file `flw know` returned that the code has already falsified -- at flw-review/SKILL.md:45, flw-spec/SKILL.md:43, flw-execute/SKILL.md:43 and flw-research/SKILL.md:67. Everything after the dash is already consistent in all four; only the trigger diverges." },
+  { id = "carve-out-visible", desc = "Name the rewritten file in the two report blocks that omit it: flw-review step 4's summary block and flw-spec's close. flw-execute step 6 already has a `Knowledge:` line and flw-research step 5 a `Wrote:` line. One line each.", depends_on = ["carve-out"] },
+]
+
+[[dag]]
+group = 2
+phase = "flw-spec's gate, and what a record carries"
+tasks = [
+  { id = "critic-gate", desc = "core/skills/flw-spec/SKILL.md:276-280 -- gate the second read on whether the record carries a contract_edit rather than on contract size. Keep the section's own point that it finds what validation structurally cannot, and drop `Skip it for small ones; do not manufacture ceremony`, which is the clause that excluded a-rule-nothing-breaks." },
+  { id = "number-rule", desc = "core/skills/flw-spec/SKILL.md:226, the `Speccing from a review report` bullet -- add that a number arrives with the command that produced it and the revision it was taken at, or with a sentence saying it cannot be re-run here, and that a decision resting on a number nobody can re-take has recorded a conclusion. checked-and-bounded:44-46 is the model to cite." },
+  { id = "supersede", desc = "core/skills/flw-spec/SKILL.md, the same bullet -- after speccing from a report, write this record's name into that report, one line at the top. The spec session is the only one holding the mapping. team-dispatch.md:189 already calls the report disposable at that point and does not say who marks it.", depends_on = ["number-rule"] },
+  { id = "parent-plan", desc = "core/skills/flw-spec/SKILL.md:161 -- a record citing a plan outside its own project quotes the decision it depends on into approach, not only the path, because ledger.py:100 bounds the plans glob to the resolved root and a member session cannot reach the parent's plans/." },
+]
+
+[[dag]]
+group = 3
+phase = "what an execute run's report says about itself"
+tasks = [
+  { id = "extract-reference", desc = "Move step 4's exceptional path out of core/skills/flw-execute/SKILL.md into core/skills/flw-execute/references/checks.md, leaving in SKILL.md the command, the three-row exit table and a pointer to the reference. What moves is what a run reads only when something is unusual: the --yolo rules, the missing-capability procedure with its reasoning about exit 127 and 101, and the [tests] yours proposal. Section 4 is 2,627 bytes today, and the file must end this phase under 21,000 with the three edits below applied. Cite the reference by absolute path the way the skill cites every other file, because a skill folder installs as a symlink." },
+  { id = "auto-header", desc = "core/skills/flw-execute/SKILL.md -- an --auto run's finished block names the mode in its header, the way the --yolo block does. Say why where --auto is defined at :141: it removes the human read that assumption 4 rests on, so a report that does not say so is a report claiming a review that did not happen.", depends_on = ["extract-reference"] },
+  { id = "stat-vs-diff", desc = "core/skills/flw-execute/SKILL.md:303,317 -- say that the stat is a manifest and name the command that shows the change, `git diff --staged <baseline> | cat`. The sentence at :317 argues for the reader seeing it and the command at :303 delivers file names, which is the mismatch.", depends_on = ["extract-reference"] },
+  { id = "stopped-check", desc = "core/skills/flw-execute/SKILL.md:325-330 -- widen the STOPPED block to cover a run that completed its phases and failed a check, with `Stopped at:` naming the check rather than a task id. The finished block is currently the only one with a slot for a failed check and the only one of the three with no `Contract:` line.", depends_on = ["extract-reference"] },
+]
+
+[[dag]]
+group = 4
+phase = "the multi-repo instructions"
+tasks = [
+  { id = "parent-shared", desc = "core/skills/flw-research/SKILL.md:98 and :255 -- write shared.md at the parent only when every declared member resolves under the parent's own directory, and otherwise say the convention goes into each member. [project.roots] does not require nesting; tests/test_cli.py:2385 declares a sibling and its docstring says a child is no more valid." },
+]
+
+[[dag]]
+group = 5
+phase = "the two guards"
+tasks = [
+  { id = "scout-root", desc = "cli/flw.py:2604 -- print the resolved root when no path was given, matching flw test's line. Do not print one when a path was given: flw scout <path> deliberately does not walk up, per specs/current.toml:120." },
+  { id = "basename", desc = "core/scripts/knowledge.py:401 -- members_by_basename raises when two values share path.name, naming both config keys and both paths, the way project_roots already refuses a malformed value. Check the callers at changed_system, undeclared_members, --stamp and fold/node_of, since all four read the collapsed mapping." },
+  { id = "guard-tests", desc = "One test that flw scout with no path prints its resolved root and with a path prints none, and one that two members sharing a basename are refused naming both. Nothing in the suite asserts a root for scout today, and the collision is reachable only through a fixture with two members.", depends_on = ["scout-root", "basename"] },
+]
+
+[[dag]]
+group = 6
+phase = "the contract"
+tasks = [
+  { id = "contract", desc = "Apply the eight contract edits above, in order. Print `git diff specs/current.toml` on its own before the run's staged diff.", depends_on = ["rebase", "carve-out-visible", "critic-gate", "supersede", "parent-plan", "auto-header", "stat-vs-diff", "stopped-check", "parent-shared", "guard-tests"] },
+]

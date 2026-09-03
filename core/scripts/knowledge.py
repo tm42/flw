@@ -403,8 +403,28 @@ def members_by_basename(members: dict[str, Path]) -> dict[str, Path]:
 
     The store reads the values only: a node and a revision key are the member
     directory's basename, so renaming the config key does not orphan a store.
+
+    Two members whose directories share a basename are refused rather than
+    collapsed. One key would stand for both, so `system.md` would record one
+    member's HEAD and report it for the other: `--check` answers `current` while
+    the unrecorded member sits at a different revision, and `flw map` folds both
+    members' edges onto one node. That is the same unrepresentable state as a
+    root directory named `system`, which is refused a few lines above.
     """
-    return {path.name: path for path in members.values()}
+    seen: dict[str, str] = {}
+    out: dict[str, Path] = {}
+    for key, path in members.items():
+        if path.name in seen:
+            first = seen[path.name]
+            raise Refused(
+                f"[project.roots] {first} and {key} both resolve to a directory "
+                f"named {path.name} ({members[first]}, {path}); system.md keys "
+                "one revision per member basename, so one would stand for both. "
+                "Rename a directory, or drop one from the map."
+            )
+        seen[path.name] = key
+        out[path.name] = path
+    return out
 
 
 def changed_system(concept: Concept, members: dict[str, Path]) -> dict[str, Diff]:
