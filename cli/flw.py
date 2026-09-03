@@ -3938,7 +3938,7 @@ PACKAGES are ordered by file count with no rank shown.""",
     )
     p.add_argument("path", nargs="?", help="repo root (default: found from cwd)")
     p.add_argument(
-        "-n", "--budget", type=int, default=20, help="definitions to show (default 20)"
+        "-n", "--budget", type=int, default=20, help="lines of output (default 20)"
     )
     p.set_defaults(handler=scout)
 

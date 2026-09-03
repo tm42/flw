@@ -425,6 +425,56 @@ def pagerank(nodes: list[Path], out: dict[Path, list[Path]]) -> dict[Path, float
     return rank
 
 
+def allocate(
+    sections: list[tuple[str, list[str]]], budget: int, first: str = ""
+) -> list[str]:
+    """Spend one budget across every section, round-robin rather than in order.
+
+    The budget used to guard the ranking alone, which is the last of six
+    sections, so the sections above it were bounded by fixed internal caps or by
+    nothing and the ranking a user actually asked for was pushed off the end. A
+    field run of `-n 12` produced 177 lines.
+
+    Round-robin, so every section that has something to say gets its first line
+    before any section gets a second. A small `-n` therefore answers "what
+    depends on what" with an edge rather than a bare heading, which the contract
+    promises alongside the definitions.
+
+    `first` takes its turn at the head of each rotation rather than in printed
+    order. It is the section the flag was named for, and a rotation in printed
+    order reaches it last: at `-n 1` the whole budget went to entry points and
+    the ranking, which is what `-n` has always meant, printed nothing. Serving it
+    first costs the other sections nothing above `-n 1` and makes "the ranking is
+    reached at every budget" true rather than nearly true.
+
+    A section that keeps fewer lines than it has says so, the way the ledger's
+    capped groups do: a truncated answer that does not admit it reads as a
+    complete one.
+    """
+    kept: dict[str, int] = {name: 0 for name, body in sections if body}
+    rotation = sorted(sections, key=lambda pair: pair[0] != first)
+    spend = budget
+    while spend > 0 and any(kept[name] < len(body) for name, body in sections if body):
+        for name, body in rotation:
+            if not body or kept[name] >= len(body):
+                continue
+            kept[name] += 1
+            spend -= 1
+            if spend == 0:
+                break
+
+    out: list[str] = []
+    for name, body in sections:
+        if not body or not kept[name]:
+            continue
+        out += ["", name]
+        out += body[: kept[name]]
+        rest = len(body) - kept[name]
+        if rest:
+            out.append(f"  … {rest} more, past the budget. Raise -n to see them.")
+    return out
+
+
 def scout(root: Path, budget: int = 20) -> str:
     facts = parse(root)
     files = list(facts.defs)
@@ -489,6 +539,10 @@ def scout(root: Path, budget: int = 20) -> str:
     if facts.unparsed:
         header += f" · {facts.unparsed} failed to parse"
     lines = [header]
+    # Every section builds its body in full and `allocate` decides how much of
+    # each is printed. Appending straight to `lines` is what let five of six
+    # sections escape the budget.
+    sections: list[tuple[str, list[str]]] = []
 
     # Entry points first. "How do I run this" is the question a stranger asks
     # before "what is central", and ranking cannot answer it.
@@ -496,19 +550,23 @@ def scout(root: Path, budget: int = 20) -> str:
         ((p, m) for p, m in facts.entries.items() if not is_test(p.relative_to(root))),
         key=lambda kv: -facts.lines[kv[0]],
     )
-    if entries:
-        lines += ["", "ENTRY POINTS"]
-        for path, marks in entries[:6]:
-            rel = str(path.relative_to(root))
-            lines.append(f"  {rel:<40} {facts.lines[path]:>5} lines   {', '.join(marks)}")
+    sections.append(
+        (
+            "ENTRY POINTS",
+            [
+                f"  {path.relative_to(root)!s:<40} {facts.lines[path]:>5} lines"
+                f"   {', '.join(marks)}"
+                for path, marks in entries[:6]
+            ],
+        )
+    )
 
-    lines += ["", "BUILT ON"]
     if facts.external:
         ranked = sorted(facts.external.items(), key=lambda kv: -kv[1])
-        for name, count in ranked[:10]:
-            lines.append(f"  {name:<40} {count:>5} imports")
+        built_on = [f"  {name:<40} {count:>5} imports" for name, count in ranked[:10]]
     else:
-        lines.append("  stdlib only — no third-party imports")
+        built_on = ["  stdlib only — no third-party imports"]
+    sections.append(("BUILT ON", built_on))
 
     # A single unnamed package is not a finding; skip the section entirely.
     cache: dict[Path, str] = {}
@@ -520,13 +578,19 @@ def scout(root: Path, budget: int = 20) -> str:
         packages[key] += rank[path]
         counts[key] += 1
     if len(packages) > 1:
+        # Ranked, and cut by the budget rather than by a 1%-of-top score floor
+        # guarded on how many lines happened to precede it. A repository whose
+        # packages all cleared that floor printed every one of them.
         ranked_pkgs = sorted(packages.items(), key=lambda kv: -kv[1])
-        floor = ranked_pkgs[0][1] * 0.01
-        lines += ["", "PACKAGES"]
-        for name, score in ranked_pkgs:
-            if score < floor and len(lines) > 18:
-                break
-            lines.append(f"  {name:<26} {counts[name]:>4} files   {score:.3f}")
+        sections.append(
+            (
+                "PACKAGES",
+                [
+                    f"  {name:<26} {counts[name]:>4} files   {score:.3f}"
+                    for name, score in ranked_pkgs
+                ],
+            )
+        )
 
     # Who uses whom across packages, which the per-file ranking never states.
     pkg_edges: dict[tuple[str, str], int] = defaultdict(int)
@@ -541,11 +605,15 @@ def scout(root: Path, budget: int = 20) -> str:
                 pkg_edges[pair] += 1
     if pkg_edges:
         ordered = sorted(pkg_edges.items(), key=lambda kv: (-kv[1], kv[0]))
-        lines += ["", "DEPENDS ON"]
-        for (a, b), count in ordered[:20]:
-            lines.append(f"  {a} -> {b}   {count} import{'s' if count != 1 else ''}")
-        if len(ordered) > 20:
-            lines.append(f"  … {len(ordered) - 20} more package edges not shown")
+        sections.append(
+            (
+                "DEPENDS ON",
+                [
+                    f"  {a} -> {b}   {count} import{'s' if count != 1 else ''}"
+                    for (a, b), count in ordered
+                ],
+            )
+        )
 
         # Only components of two or more, and only between packages: the same
         # section at file level prints one giant component on any real repo.
@@ -553,23 +621,25 @@ def scout(root: Path, budget: int = 20) -> str:
         for a, b in pkg_edges:
             graph.setdefault(a, set()).add(b)
             graph.setdefault(b, set())
-        cycles = [group for group in _components(graph) if len(group) > 1]
-        if cycles:
-            lines += ["", "CYCLES"]
-            for group in cycles:
-                members = sorted(group)
-                shown = " <-> ".join(members[:8])
-                if len(members) > 8:
-                    shown += f" <-> … {len(members) - 8} more"
-                lines.append(f"  {shown}")
-                inside = sorted(
-                    ((a, b, n) for (a, b), n in pkg_edges.items() if a in group and b in group),
-                    key=lambda t: (-t[2], t[0]),
-                )
-                for a, b, n in inside[:10]:
-                    lines.append(f"      {a} -> {b}   {n} import{'s' if n != 1 else ''}")
-                if len(inside) > 10:
-                    lines.append(f"      … {len(inside) - 10} more edges inside this cycle")
+        cycles = sorted(
+            (group for group in _components(graph) if len(group) > 1),
+            key=lambda g: -len(g),
+        )
+        cycle_lines: list[str] = []
+        for group in cycles:
+            inside = sorted(
+                ((a, b, n) for (a, b), n in pkg_edges.items() if a in group and b in group),
+                key=lambda t: (-t[2], t[0]),
+            )
+            # Size and strongest edges, not a member list. One component in the
+            # field joined more than 88 packages, and eight names with "… 80
+            # more" after them said only that the service is interconnected.
+            # An edge says which coupling to look at first.
+            cycle_lines.append(f"  {len(group)} packages in one cycle, {len(inside)} edges")
+            cycle_lines += [
+                f"      {a} -> {b}   {n} import{'s' if n != 1 else ''}" for a, b, n in inside
+            ]
+        sections.append(("CYCLES", cycle_lines))
 
     # PageRank orders the files. Within a file the names are ordered by how many
     # files import each — a plain count, which needs no weights to be comparable.
@@ -577,23 +647,16 @@ def scout(root: Path, budget: int = 20) -> str:
         (p for p in files if incoming[p] and not is_test(p.relative_to(root))),
         key=lambda p: -rank[p],
     )
-    if depended:
-        lines += ["", "MOST DEPENDED ON"]
-        printed = 0
-        for path in depended:
-            if printed >= budget:
-                break
-            lines.append(f"\n  {path.relative_to(root)}   {rank[path]:.4f}")
-            printed += 1
-            for name, count in sorted(named[path], key=lambda kv: (-kv[1], kv[0]))[:4]:
-                if printed >= budget:
-                    break
-                sig = next((s for n, _, s in facts.defs[path] if n == name), "")
-                plural = "s" if count != 1 else ""
-                lines.append(f"      {name}{sig}   {count} file{plural}")
-                printed += 1
+    ranked_lines: list[str] = []
+    for path in depended:
+        ranked_lines.append(f"\n  {path.relative_to(root)}   {rank[path]:.4f}")
+        for name, count in sorted(named[path], key=lambda kv: (-kv[1], kv[0]))[:4]:
+            sig = next((s for n, _, s in facts.defs[path] if n == name), "")
+            plural = "s" if count != 1 else ""
+            ranked_lines.append(f"      {name}{sig}   {count} file{plural}")
+    sections.append(("MOST DEPENDED ON", ranked_lines))
 
-    return "\n".join(lines)
+    return "\n".join(lines + allocate(sections, budget, first="MOST DEPENDED ON"))
 
 
 if __name__ == "__main__":

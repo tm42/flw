@@ -323,3 +323,48 @@ def test_a_specifier_import_is_shown_as_its_own_row(tmp_path):
     out = run(build(tmp_path, files), budget=40).stdout
     assert "src/helpers.ts" in out
     assert "helpers   2 files" in out
+
+
+# --- the budget bounds the whole output, the same as the Python scout -------- #
+
+
+def wide(root: Path, packages: int = 12) -> Path:
+    files = {}
+    for i in range(packages):
+        files[f"pkg{i}/package.json"] = f'{{"name": "pkg{i}"}}'
+        nxt = (i + 1) % packages
+        files[f"pkg{i}/mod.ts"] = (
+            f"import {{ Thing{nxt} }} from '../pkg{nxt}/mod';\n"
+            f"export class Thing{i} {{ use(): void {{ void Thing{nxt}; }} }}\n"
+        )
+    return build(root, files)
+
+
+def content(out: str) -> int:
+    return len(
+        [
+            line
+            for line in out.split("\n")[1:]
+            if line.strip() and line.startswith(" ") and "past the budget" not in line
+        ]
+    )
+
+
+def test_the_js_budget_bounds_the_whole_output(tmp_path):
+    """It guarded MOST IMPORTANT EXPORTS alone, the last of five sections."""
+    for budget in (2, 5, 15):
+        out = run(wide(tmp_path) if budget == 2 else tmp_path, budget).stdout
+        assert content(out) <= budget, budget
+
+
+def test_the_js_ranking_is_reached_at_every_budget(tmp_path):
+    wide(tmp_path)
+    for budget in (1, 3, 20):
+        assert "MOST IMPORTANT EXPORTS" in run(tmp_path, budget).stdout, budget
+
+
+def test_the_js_scout_prints_a_component_size_not_its_members(tmp_path):
+    wide(tmp_path)
+    out = run(tmp_path, 200).stdout
+    assert "12 packages in one cycle" in out
+    assert " <-> " not in out

@@ -196,6 +196,35 @@ function resolveSpec(spec, fromFile, root, topDirs, fileSet, aliases) {
   return null;
 }
 
+// Spend one budget across every section, round-robin rather than in order. The
+// budget used to guard MOST IMPORTANT EXPORTS alone, which prints last, so every
+// section above it was bounded by a fixed cap or by nothing. `first` takes its
+// turn at the head of each rotation: it is the section the flag was named for,
+// and a rotation in printed order reaches it last.
+function allocate(sections, budget, first) {
+  const kept = new Map(sections.filter(([, body]) => body.length).map(([name]) => [name, 0]));
+  const rotation = [...sections].sort((a, b) => (a[0] === first ? -1 : b[0] === first ? 1 : 0));
+  let spend = budget;
+  const unfinished = () =>
+    sections.some(([name, body]) => body.length && kept.get(name) < body.length);
+  while (spend > 0 && unfinished()) {
+    for (const [name, body] of rotation) {
+      if (!body.length || kept.get(name) >= body.length) continue;
+      kept.set(name, kept.get(name) + 1);
+      spend--;
+      if (spend === 0) break;
+    }
+  }
+  for (const [name, body] of sections) {
+    const take = kept.get(name) ?? 0;
+    if (!body.length || !take) continue;
+    console.log(`\n${name}`);
+    for (const line of body.slice(0, take)) console.log(line);
+    const rest = body.length - take;
+    if (rest) console.log(`  … ${rest} more, past the budget. Raise -n to see them.`);
+  }
+}
+
 function main(root, budget) {
   root = path.resolve(root);
   const require = createRequire(path.join(root, "noop.js"));
@@ -394,15 +423,23 @@ function main(root, budget) {
     const key = packageOfFile.get(f);
     packages.set(key, (packages.get(key) ?? 0) + 1);
   }
-  console.log("PACKAGES");
-  for (const [d, c] of [...packages].sort((a, b) => b[1] - a[1])) {
-    console.log(`  ${d.padEnd(28)} ${String(c).padStart(3)} files`);
-  }
+  // Every section builds its body in full and `allocate` decides how much of
+  // each is printed. Printing straight to stdout is what let four of five
+  // sections escape the budget.
+  const sections = [];
+  sections.push([
+    "PACKAGES",
+    [...packages]
+      .sort((a, b) => b[1] - a[1])
+      .map(([d, c]) => `  ${d.padEnd(28)} ${String(c).padStart(3)} files`),
+  ]);
 
-  console.log("\nEXTERNAL DEPENDENCIES");
-  for (const [pkg, c] of [...externals].sort((a, b) => b[1] - a[1]).slice(0, 8)) {
-    console.log(`  ${pkg.padEnd(28)} ${String(c).padStart(3)} imports`);
-  }
+  sections.push([
+    "EXTERNAL DEPENDENCIES",
+    [...externals]
+      .sort((a, b) => b[1] - a[1])
+      .map(([pkg, c]) => `  ${pkg.padEnd(28)} ${String(c).padStart(3)} imports`),
+  ]);
 
   // Who uses whom across packages, which the per-file ranking never states.
   const pkgEdges = new Map();
@@ -421,13 +458,10 @@ function main(root, budget) {
     const ordered = [...pkgEdges]
       .map(([k, n]) => [...k.split("\0"), n])
       .sort((x, y) => y[2] - x[2] || (x[0] < y[0] ? -1 : 1));
-    console.log("\nDEPENDS ON");
-    for (const [a, b, n] of ordered.slice(0, 20)) {
-      console.log(`  ${a} -> ${b}   ${n} import${plural(n)}`);
-    }
-    if (ordered.length > 20) {
-      console.log(`  … ${ordered.length - 20} more package edges not shown`);
-    }
+    sections.push([
+      "DEPENDS ON",
+      ordered.map(([a, b, n]) => `  ${a} -> ${b}   ${n} import${plural(n)}`),
+    ]);
 
     // Only components of two or more, and only between packages: the same
     // section at file level prints one giant component on any real repo.
@@ -437,44 +471,39 @@ function main(root, budget) {
       if (!graph.has(b)) graph.set(b, new Set());
       graph.get(a).add(b);
     }
-    const cycles = components(graph).filter((g) => g.length > 1);
-    if (cycles.length) {
-      console.log("\nCYCLES");
-      for (const group of cycles) {
-        const members = [...group].sort();
-        let shown = members.slice(0, 8).join(" <-> ");
-        if (members.length > 8) shown += ` <-> … ${members.length - 8} more`;
-        console.log(`  ${shown}`);
-        const inside = ordered.filter(([a, b]) => group.includes(a) && group.includes(b));
-        for (const [a, b, n] of inside.slice(0, 10)) {
-          console.log(`      ${a} -> ${b}   ${n} import${plural(n)}`);
-        }
-        if (inside.length > 10) {
-          console.log(`      … ${inside.length - 10} more edges inside this cycle`);
-        }
+    const cycles = components(graph)
+      .filter((g) => g.length > 1)
+      .sort((a, b) => b.length - a.length);
+    const cycleLines = [];
+    for (const group of cycles) {
+      const inside = ordered.filter(([a, b]) => group.includes(a) && group.includes(b));
+      // Size and strongest edges, not a member list: eight names with "… 80
+      // more" after them say only that the service is interconnected.
+      cycleLines.push(`  ${group.length} packages in one cycle, ${inside.length} edges`);
+      for (const [a, b, n] of inside) {
+        cycleLines.push(`      ${a} -> ${b}   ${n} import${plural(n)}`);
       }
     }
+    sections.push(["CYCLES", cycleLines]);
   }
 
   // PageRank orders the files. Within a file the names are ordered by how many
   // files import each — a plain count, which needs no weights to be comparable.
-  console.log("\nMOST IMPORTANT EXPORTS");
   const depended = files
     .filter((f) => (incoming.get(f) ?? 0) > 0 && !isTest(rel(f)))
     .sort((a, b) => rank.get(b) - rank.get(a));
-  let printed = 0;
+  const rankedLines = [];
   for (const file of depended) {
-    if (printed >= budget) break;
-    console.log(`\n  ${rel(file)}   ${rank.get(file).toFixed(4)}`);
-    printed++;
+    rankedLines.push(`\n  ${rel(file)}   ${rank.get(file).toFixed(4)}`);
     const names = (named.get(file) ?? []).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
     for (const [name, count] of names.slice(0, 4)) {
-      if (printed >= budget) break;
       const sig = defs.get(file)?.find((d) => d.name === name)?.sig ?? "";
-      console.log(`      ${name}${sig}   ${count} file${count === 1 ? "" : "s"}`);
-      printed++;
+      rankedLines.push(`      ${name}${sig}   ${count} file${count === 1 ? "" : "s"}`);
     }
   }
+  sections.push(["MOST IMPORTANT EXPORTS", rankedLines]);
+
+  allocate(sections, budget, "MOST IMPORTANT EXPORTS");
 }
 
 main(process.argv[2], Number(process.argv[3] ?? 20));

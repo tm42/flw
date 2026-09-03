@@ -589,7 +589,9 @@ def test_a_mutual_import_between_packages_is_reported_as_a_cycle(tmp_path):
         },
     )
     cycles = engine.scout(tmp_path).split("CYCLES", 1)[1]
-    assert "services/alpha <-> services/beta" in cycles
+    # Size and edges rather than a member list: at 88 packages the names said
+    # only that the service was interconnected, and the edges say where to look.
+    assert "2 packages in one cycle, 2 edges" in cycles
     assert "services/alpha -> services/beta   1 import" in cycles
     assert "services/beta -> services/alpha   1 import" in cycles
 
@@ -731,3 +733,80 @@ def test_a_reexport_barrel_ranks_the_definer_not_the_barrel(tmp_path):
     ranked = scores(engine.scout(tmp_path))
     assert "app/core.py" in ranked
     assert "app/barrel.py" not in ranked
+
+
+# --- the budget bounds the whole output -------------------------------------- #
+
+
+def wide_repo(root: Path, packages: int = 30) -> Path:
+    """Enough packages that the sections above the ranking overflow on their own.
+
+    Each package imports the next, so PACKAGES, DEPENDS ON and the ranking all
+    have more to say than any small budget can hold.
+    """
+    files = {}
+    for i in range(packages):
+        files[f"pkg{i}/pyproject.toml"] = f'[project]\nname = "pkg{i}"\n'
+        nxt = (i + 1) % packages
+        files[f"pkg{i}/mod.py"] = (
+            f"from pkg{nxt}.mod import Thing{nxt}\n\n\nclass Thing{i}:\n    pass\n"
+        )
+    return write(root, files)
+
+
+def content_lines(out: str) -> int:
+    """Every line the budget is spent on: not the header, headings, or blanks."""
+    body = [
+        line
+        for line in out.split("\n")[1:]
+        if line.strip()
+        and line.startswith(" ")
+        and "past the budget" not in line
+    ]
+    return len(body)
+
+
+@pytest.mark.parametrize("budget", [1, 4, 12, 40])
+def test_the_budget_bounds_the_whole_output(tmp_path, budget):
+    """It used to guard MOST DEPENDED ON alone, which is the last of six sections,
+    so a field run of -n 12 produced 177 lines."""
+    out = engine.scout(wide_repo(tmp_path), budget)
+    assert content_lines(out) <= budget
+
+
+def test_the_ranking_is_reached_at_every_budget(tmp_path):
+    """The section the flag was named for. Sections above it used to crowd it out
+    entirely; a rotation in printed order would reach it last."""
+    for budget in (1, 2, 3, 5, 20):
+        out = engine.scout(wide_repo(tmp_path), budget)
+        assert "MOST DEPENDED ON" in out, budget
+
+
+def test_every_section_with_content_gets_a_line_before_any_gets_a_second(tmp_path):
+    """A small -n must not answer `what depends on what` with a bare heading."""
+    out = engine.scout(wide_repo(tmp_path), 4)
+    for heading in ("PACKAGES", "DEPENDS ON", "MOST DEPENDED ON"):
+        assert heading in out, heading
+        after = out.split(heading, 1)[1].lstrip("\n")
+        assert after.startswith("  "), heading
+
+
+def test_a_truncated_section_says_it_was_truncated(tmp_path):
+    """A truncated answer that does not admit it reads as a complete one."""
+    out = engine.scout(wide_repo(tmp_path), 6)
+    assert "past the budget" in out
+
+
+def test_a_giant_component_prints_its_size_not_its_members(tmp_path):
+    out = engine.scout(wide_repo(tmp_path, packages=30), 200)
+    assert "30 packages in one cycle" in out
+    assert " <-> " not in out
+
+
+def test_allocate_serves_the_named_section_first():
+    """Printed order is unchanged; only the order of the rotation moves."""
+    sections = [("A", ["a1", "a2"]), ("B", ["b1", "b2"])]
+    assert engine.allocate(sections, 1, first="B")[1:3] == ["B", "b1"]
+    assert engine.allocate(sections, 1, first="A")[1:3] == ["A", "a1"]
+    both = engine.allocate(sections, 2, first="B")
+    assert both.index("A") < both.index("B")
