@@ -10,6 +10,7 @@ file exists to catch.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -265,6 +266,26 @@ def test_a_transcript_naming_the_project_after_another_cwd_still_matches(tmp_pat
     )
     found = style_lint.session_transcripts(project, home=home)
     assert [p.name for p in found] == ["later.jsonl"]
+
+
+def test_transcripts_come_back_newest_first(tmp_path):
+    """The caller takes the first that holds prose, so the order is the answer.
+
+    Nothing asserted this: deleting `reverse=True` left the whole suite green
+    while flw style check read the oldest matching session instead of this one.
+    """
+    home = tmp_path / "home"
+    project = tmp_path / "work"
+    project.mkdir()
+    directory = home / ".claude" / "projects" / "whatever-mangling"
+    directory.mkdir(parents=True)
+    record = json.dumps({"type": "assistant", "cwd": str(project)}) + "\n"
+    for name, mtime in (("older.jsonl", 1_000_000), ("newer.jsonl", 2_000_000)):
+        path = directory / name
+        path.write_text(record)
+        os.utime(path, (mtime, mtime))
+    found = style_lint.session_transcripts(project, home=home)
+    assert [p.name for p in found] == ["newer.jsonl", "older.jsonl"]
 
 
 def test_the_cap_counts_matches_not_candidates(tmp_path):
