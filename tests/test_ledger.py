@@ -1012,3 +1012,85 @@ def test_an_extension_above_the_project_root_is_not_read(tmp_path):
     (tmp_path / ".flw" / "extensions" / "shared.md").write_text("a peculiarword rule\n")
     corpus_ = ledger.corpus(project(root))
     assert corpus_.extensions == {}
+
+
+# --- a claim in a store that carries no revision ------------------------------ #
+#
+# An extension carries no revision by design, so nothing can say it drifted. The
+# lint reports the shape of a claim and never its truth: a line that is correct
+# today stays on the list, because a commit could falsify it tomorrow and the file
+# has no revision to say when it was taken.
+
+
+def extensions(tmp_path: Path, **files: str) -> Path:
+    root = project(tmp_path)
+    directory = root / ".flw" / "extensions"
+    directory.mkdir(parents=True)
+    for name, text in files.items():
+        (directory / f"{name.replace('_', '-')}.md").write_text(text)
+    return root
+
+
+def markers(tmp_path: Path, **files: str):
+    return ledger.extension_markers(ledger.corpus(extensions(tmp_path, **files)))
+
+
+def test_a_path_with_a_line_number_is_reported(tmp_path):
+    found = markers(tmp_path, shared="`tests/test_cli.py:3156` diffs the parser.\n")
+    assert [(m.line, m.kind, m.text) for m in found] == [
+        (1, "path:line", "tests/test_cli.py:3156")
+    ]
+
+
+def test_a_path_with_no_line_number_is_not_reported(tmp_path):
+    """A path is where to look; a line number is a claim about what is there."""
+    assert markers(tmp_path, shared="Run `.venv/bin/pytest -q tests/test_cli.py`.\n") == []
+
+
+def test_a_bare_count_is_reported(tmp_path):
+    found = markers(tmp_path, shared="638 tests in 7.3 seconds, so the loop is cheap.\n")
+    assert [(m.kind, m.text) for m in found] == [("version", "7.3"), ("count", "638")]
+
+
+def test_a_number_spelled_as_a_word_is_not_reported(tmp_path):
+    """The register is the signal. "in about eight seconds" is how a convention is
+    written; "638 tests in 7.3 seconds" is a measurement filed in the wrong store."""
+    assert markers(tmp_path, shared="Three checks, in about eight seconds together.\n") == []
+
+
+def test_a_version_string_that_is_currently_true_is_still_reported(tmp_path):
+    """The one line the rule was argued over. `Python 3.11` is the floor today and
+    a commit could raise it to 3.12, and the file carries no revision to date the
+    claim. Exempting it would mean reasoning about truth, which costs a run."""
+    found = markers(tmp_path, shared="**Python 3.11 is the floor**, for `tomllib`.\n")
+    assert [(m.kind, m.text) for m in found] == [("version", "3.11")]
+
+
+def test_an_extension_of_pure_prose_is_reported_nowhere(tmp_path):
+    text = (
+        "**Stdlib only, by construction.** Nothing under `cli/` may import a third\n"
+        "party. flw exists to stop a workflow assuming a package manager.\n"
+    )
+    assert markers(tmp_path, shared=text) == []
+
+
+def test_a_date_is_not_a_count(tmp_path):
+    """A date is none of the three shapes, and its parts read as bare integers to
+    a rule that does not look at what is beside them."""
+    assert markers(tmp_path, shared="Measured 2026-08-25 across the tree.\n") == []
+
+
+def test_every_extension_is_read_and_each_marker_names_its_file(tmp_path):
+    found = markers(
+        tmp_path,
+        shared="**Python 3.11 is the floor.**\n",
+        flw_execute="unremarkable prose\n`tests/test_cli.py:3156` diffs the parser.\n",
+    )
+    assert [(m.path.name, m.line, m.kind) for m in found] == [
+        ("flw-execute.md", 2, "path:line"),
+        ("shared.md", 1, "version"),
+    ]
+
+
+def test_a_project_with_no_extensions_has_no_markers(tmp_path):
+    assert ledger.extension_markers(ledger.corpus(project(tmp_path))) == []

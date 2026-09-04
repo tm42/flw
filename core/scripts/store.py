@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-from ledger import CAP, WIDTH, _capped, forms, pattern, window
+from ledger import CAP, MARKERS, WIDTH, _capped, forms, pattern, window
 
 MACHINE = "machine-wide"
 PROJECT = "this repository"
@@ -114,6 +114,18 @@ class Note:
             except ValueError:
                 return None
         return None
+
+    @property
+    def revision(self) -> str:
+        """The revision the note's claims were true at, if it records one.
+
+        `updated` is a date, and a date cannot be diffed against: two commits land
+        on one day and the second one is what moved the line the note cites. A note
+        that records no revision has nothing for a check to measure its citations
+        against, which is what `lint` reports.
+        """
+        value = self.meta.get("revision")
+        return value.strip() if isinstance(value, str) else ""
 
     @property
     def size(self) -> int:
@@ -630,6 +642,40 @@ def _duplicate_pairs(notes: list[Note]) -> list[str]:
     return pairs
 
 
+UNREVISIONED = "claims with no revision to date them"
+
+
+def unrevisioned(notes: list[Note]) -> list[str]:
+    """Notes carrying a claim a commit could falsify and no revision to date it.
+
+    Shape, never truth. A note citing `scout.py:478` for a row that has moved to
+    :528 reads exactly like one whose citation still holds, and telling the two
+    apart costs a checkout at the revision — which the note does not record, and
+    which is the finding. `updated` does not close it: a date is not something a
+    diff can be taken against, because two commits land on one day and the second
+    is what moved the line.
+
+    Separate from `lint` so that `stale` can fold the count without parsing the
+    text `lint` renders.
+    """
+    found: list[str] = []
+    for note_ in notes:
+        if note_.revision:
+            continue
+        claim = next(
+            (
+                match.group()
+                for _, rule in MARKERS
+                for match in [rule.search(note_.body)]
+                if match
+            ),
+            "",
+        )
+        if claim:
+            found.append(f"{note_.category}/{note_.slug} — e.g. {claim}")
+    return sorted(found)
+
+
 def lint(notes: list[Note], today: date | None = None, skipped: Skipped | None = None) -> str:
     """Pruning without flw making a judgment call. It reports; an agent or a human
     fixes — the same lane as flw-review and flw doctor.
@@ -671,6 +717,8 @@ def lint(notes: list[Note], today: date | None = None, skipped: Skipped | None =
     )
 
     rows.append(("near-duplicates", _duplicate_pairs(notes)))
+
+    rows.append((UNREVISIONED, unrevisioned(notes)))
 
     # Under the machine-wide root only. §4 refuses mtime as an age source because
     # git sets it to checkout time, and the project root is versioned by

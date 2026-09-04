@@ -789,3 +789,65 @@ def census(corpus_: Corpus) -> str:
         "  flw ledger --show <name>  one record or component, whole",
     ]
     return "\n".join(lines) + "\n"
+
+
+# --- a claim in a store that carries no revision ------------------------------ #
+#
+# An extension carries no revision by design: `core/shared/context.md` sorts the
+# three stores by one question — does a commit make it wrong? — and an extension is
+# the store for what only a decision makes wrong. So an extension carrying a
+# countable is a knowledge fact filed in the wrong place, and that is checkable
+# without knowing whether the claim still holds.
+#
+# The lint reads shape and never truth. Verifying a count costs a run, which is a
+# judgment `flw-research` makes and a command does not.
+
+MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    # A path with a line number. The extension names where to look and the line
+    # moves under it: `tests/test_cli.py:3156` was the parser-surface diff and the
+    # diff is now elsewhere in the same file.
+    ("path:line", re.compile(r"\b[\w./-]+\.[A-Za-z]{1,6}:\d+(?:-\d+)?\b")),
+    # A version string, including the two-part form a language floor takes.
+    ("version", re.compile(r"\bv?\d+\.\d+(?:\.\d+)*\b")),
+    # A bare count. The lookarounds keep this off the digits the two rules above
+    # already claimed, and off a date, whose parts are each preceded or followed
+    # by a hyphen and a digit.
+    ("count", re.compile(r"(?<![\w.:-])\d+(?![\w.:-])")),
+)
+
+
+@dataclass(frozen=True)
+class Marker:
+    """One line carrying a claim a commit could falsify, and what shape it is."""
+
+    path: Path
+    line: int
+    kind: str
+    text: str
+
+
+def extension_markers(corpus_: Corpus) -> list[Marker]:
+    """Every line of every extension that carries a countable.
+
+    A number spelled as a word is not reported, and that is the design rather than
+    a gap in the pattern. "in about eight seconds" and "the first fifteen lines"
+    are the register of a convention; "638 tests in 7.3 seconds" is a measurement,
+    and a measurement is what a commit can falsify.
+
+    One line yields at most one marker per shape, so a line carrying a count and a
+    version reports both and a line carrying two counts reports the first. The
+    reader is being pointed at a line to re-take, not given an inventory.
+    """
+    found: list[Marker] = []
+    for path in sorted(corpus_.extensions):
+        for number, text in enumerate(corpus_.extensions[path].splitlines(), start=1):
+            claimed: list[tuple[int, int]] = []
+            for kind, rule in MARKERS:
+                for match in rule.finditer(text):
+                    start, end = match.span()
+                    if any(start < b and a < end for a, b in claimed):
+                        continue
+                    claimed.append((start, end))
+                    found.append(Marker(path, number, kind, match.group()))
+                    break
+    return found

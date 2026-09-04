@@ -1477,3 +1477,82 @@ def test_searchable_is_built_once_and_kept(tmp_path):
     first = found.searchable
     assert found._searchable == first
     assert found.searchable is first
+
+
+# --- a note that cites something it cannot date ------------------------------ #
+#
+# `updated` is a date, and a date cannot be diffed against: two commits land on one
+# day and the second is what moved the line the note cites. So a note carrying a
+# measurement and no `revision` has nothing for a check to measure it against, and
+# that is what lint reports — the shape of the claim, never its truth.
+
+
+def linted(tmp_path: Path, *notes: tuple[str, str]) -> str:
+    hm = home(tmp_path)
+    for rel, text in notes:
+        note(hm / "kb", rel, text)
+    return store.lint(store.walk(hm, None))
+
+
+ROW = "claims with no revision to date them"
+
+
+def test_a_note_citing_a_path_and_line_with_no_revision_is_reported(tmp_path):
+    report = linted(
+        tmp_path,
+        (
+            "flw/counts.md",
+            (
+                "+++\ntitle = 'counts'\nupdated = 2026-09-02\n+++\n"
+                "The row is built at `core/scripts/scout.py:478`.\n"
+            ),
+        ),
+    )
+    assert ROW in report
+    assert "flw/counts — e.g. core/scripts/scout.py:478" in report
+
+
+def test_a_note_carrying_a_revision_is_not_reported(tmp_path):
+    """The negative that makes the row actionable: recording the revision the
+    measurement was taken at is what takes a note off the list."""
+    report = linted(
+        tmp_path,
+        (
+            "flw/counts.md",
+            (
+                "+++\ntitle = 'counts'\nrevision = 'f5d11a6'\n+++\n"
+                "The row is built at `core/scripts/scout.py:478`.\n"
+            ),
+        ),
+    )
+    assert ROW not in report
+
+
+def test_a_note_with_no_countable_claim_is_not_reported(tmp_path):
+    report = linted(
+        tmp_path,
+        (
+            "flw/prose.md",
+            (
+                "+++\ntitle = 'prose'\n+++\n"
+                "A call reached through the module is counted on the module's own row.\n"
+            ),
+        ),
+    )
+    assert ROW not in report
+
+
+def test_a_bare_count_with_no_revision_is_reported(tmp_path):
+    report = linted(
+        tmp_path,
+        ("flw/counts.md", "+++\ntitle = 'counts'\n+++\nThe sweep found 9 call sites.\n"),
+    )
+    assert "flw/counts — e.g. 9" in report
+
+
+def test_an_updated_date_is_not_a_revision(tmp_path):
+    """`updated` is the field a note already carries, and reading it as a revision
+    would report the store clean while every citation in it is undatable."""
+    hm = home(tmp_path)
+    note(hm / "kb", "flw/counts.md", "+++\ntitle = 'c'\nupdated = 2026-09-02\n+++\nat x.py:1\n")
+    assert store.walk(hm, None)[0].revision == ""
