@@ -73,6 +73,11 @@ class Host:
     # Only Claude Code has the slot; the others can only take the text in the
     # always-on instructions file, which is why `flw style` has two paths.
     styles: str = ""
+    # Where this host writes each session's transcript, empty when it writes none
+    # flw can read. Only Claude Code does; Codex and OpenCode keep no session
+    # record on disk in a form flw reads, which is why `flw style check` works on
+    # one host and `flw style lint`, which reads files, works on all three.
+    transcripts: str = ""
 
 
 # `roots` is every directory this host scans for global skills, preferred first.
@@ -88,6 +93,7 @@ HOSTS: tuple[Host, ...] = (
         "than one location.",
         "claude",
         "~/.claude/output-styles",
+        "~/.claude/projects",
     ),
     Host(
         "codex",
@@ -1227,6 +1233,10 @@ def style_lint(args: argparse.Namespace) -> int:
     Reports and exits 1 on a finding, unlike `kb lint`, which always exits 0.
     The difference is what a cheap green costs: deleting a note to quiet kb lint
     loses something, and rewording a sentence to quiet this one is the point.
+
+    2 for a target that could not be read. The verdict is the engine's rather than
+    written again here, because the contract declares the engine as a check in its
+    own right, so a project runs it both ways and the two must agree.
     """
     scripts = checkout() / "core" / "scripts"
     sys.path.insert(0, str(scripts))
@@ -1234,14 +1244,11 @@ def style_lint(args: argparse.Namespace) -> int:
 
     targets = [Path(p) for p in (args.paths or ["."])]
     root = nearest_project() or Path.cwd()
-    lines, total = engine.report(engine.walk(targets), root)
+    paths, missing = engine.walk(targets)
+    lines, total, unread = engine.report(paths, root)
     for line in lines:
         print(line)
-    if total:
-        print(f"\n{total} finding{'s' if total != 1 else ''}")
-        return 1
-    print("style lint: clean")
-    return 0
+    return engine.verdict(total, len(missing) + unread)
 
 
 def style_check(args: argparse.Namespace) -> int:
@@ -1259,14 +1266,44 @@ def style_check(args: argparse.Namespace) -> int:
     import style_lint as engine
 
     root = nearest_project() or Path.cwd()
-    candidates = engine.session_transcripts(root)
+    # The directories the hosts declare, de-duplicated and in HOSTS order. Never
+    # narrowed to the host running this session: nothing tells flw which one that
+    # is. `present()` answers whether a host is on the machine, which is a
+    # different question — all three binaries resolve on a machine with all three
+    # installed, so a message naming one would name it wrongly two times in three.
+    sources: list[Path] = []
+    for host in HOSTS:
+        if not host.transcripts:
+            continue
+        directory = expand(host.transcripts)
+        if directory not in sources:
+            sources.append(directory)
+    # The trigger is the directory, not the declaration. claude-code declares its
+    # directory unconditionally, so a test on what a host declares is never false
+    # and would never fire — including on the reproduction this was written for,
+    # where the binary is on PATH and only the directory is missing.
+    readable = [d for d in sources if d.is_dir() and os.access(d, os.R_OK)]
+    candidates: list[Path] = []
+    for directory in readable:
+        candidates += engine.session_transcripts(root, directory)
     if not candidates:
+        where = ", ".join(tilde(d) for d in sources)
         print(
-            f"style check: no transcript found for {tilde(root)}",
+            f"style check: nothing in {where} belongs to {tilde(root)}",
             file=sys.stderr,
         )
+        if not readable:
+            said = (
+                "that is the only directory flw reads transcripts from, and it is "
+                "absent or unreadable"
+                if len(sources) == 1
+                else "those are every directory flw reads transcripts from, and "
+                "none of them is readable"
+            )
+            print(f"         {said}", file=sys.stderr)
         print(
-            "         this host may keep none, or keep it somewhere flw does not read",
+            "         `flw style lint` reads files rather than transcripts and "
+            "works here either way",
             file=sys.stderr,
         )
         return 1

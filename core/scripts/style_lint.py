@@ -161,19 +161,27 @@ def findings(path: Path, text: str) -> list[tuple[int, str, str]]:
     return out
 
 
-def walk(targets: list[Path]) -> list[Path]:
-    """Every markdown and text file under the targets, sorted.
+def walk(targets: list[Path]) -> tuple[list[Path], list[Path]]:
+    """Every markdown and text file under the targets, sorted, and the targets that
+    could not be resolved.
 
     A path named explicitly is read whatever its suffix — someone who names one
     file means that file. Only a directory walk filters.
+
+    The unresolved list is returned as well as printed, because a caller that only
+    saw the print reported the run clean at exit 0 over a path it never opened,
+    and a project running this in CI against a directory that has since been
+    renamed passed on a walk of nothing.
     """
     found: list[Path] = []
+    missing: list[Path] = []
     for target in targets:
         if target.is_file():
             found.append(target)
             continue
         if not target.is_dir():
             print(f"style lint: no such path: {target}", file=sys.stderr)
+            missing.append(target)
             continue
         for path in sorted(target.rglob("*")):
             if any(part in SKIP_DIRS for part in path.parts):
@@ -182,18 +190,26 @@ def walk(targets: list[Path]) -> list[Path]:
                 continue
             if path.is_file() and path.suffix.lower() in MD_SUFFIXES | {".txt"}:
                 found.append(path)
-    return sorted(set(found))
+    return sorted(set(found)), missing
 
 
-def report(paths: list[Path], root: Path) -> tuple[list[str], int]:
-    """One line per finding, and how many there were."""
+def report(paths: list[Path], root: Path) -> tuple[list[str], int, int]:
+    """One line per finding, how many findings there were, and how many of the
+    files could not be read.
+
+    The two counts are separate because they mean different things to the caller:
+    a finding is prose that is wrong, and a file that would not open is a file
+    nothing was proved about.
+    """
     lines: list[str] = []
     total = 0
+    unread = 0
     for path in paths:
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
             lines.append(f"{path}: could not be read ({exc.strerror or exc})")
+            unread += 1
             continue
         for number, name, message in findings(path, text):
             try:
@@ -202,7 +218,7 @@ def report(paths: list[Path], root: Path) -> tuple[list[str], int]:
                 shown = path
             lines.append(f"{shown}:{number}: {name}: {message}")
             total += 1
-    return lines, total
+    return lines, total, unread
 
 
 def reply_findings(text: str) -> dict[str, list[str]]:
@@ -277,13 +293,19 @@ def reply_findings(text: str) -> dict[str, list[str]]:
     return out
 
 
-def session_transcripts(root: Path, home: Path | None = None) -> list[Path]:
-    """Every transcript whose own records say it ran in `root`, newest first.
+def session_transcripts(root: Path, base: Path) -> list[Path]:
+    """Every transcript under `base` whose own records say it ran in `root`, newest
+    first.
+
+    `base` is handed in rather than derived from HOME, because which directory a
+    host writes transcripts to is a fact about the host and the CLI is the only
+    part of flw that holds those. This engine reads whatever directory it is
+    given.
 
     Found by reading each candidate's `cwd` rather than by reconstructing the
     host's directory-naming scheme, which is undocumented and not ours. Empty
-    when nothing matches, which is the honest answer for a host that keeps no
-    transcript or keeps it somewhere else.
+    when nothing matches, which is the answer for a directory that is absent,
+    unreadable, or holds no session that ran here.
 
     A list rather than one path because several sessions run against one project
     and the newest is often one that has not said anything yet. The caller takes
@@ -295,7 +317,6 @@ def session_transcripts(root: Path, home: Path | None = None) -> list[Path]:
     the command reported it as the host keeping none. Reading all of them to
     find 40 costs about 0.1s over 477 files.
     """
-    base = (home or Path.home()) / ".claude" / "projects"
     matched: list[Path] = []
     if not base.is_dir():
         return matched
@@ -385,6 +406,34 @@ def recent_replies(path: Path, last: int) -> list[str]:
     return read_replies(path, last)[0]
 
 
+def verdict(findings: int, unread: int) -> int:
+    """The exit code, and the line that goes with it.
+
+    2 for a target that could not be read, which is what the contract's exit-code
+    surface already means for `flw test` with nothing runnable and for a file
+    `flw validate` could not check: the run proved nothing. Before this, a walk
+    that resolved nothing and a walk that found nothing wrong were the same
+    answer, so `style lint no-such-file.md` printed the path and then reported the
+    run clean at exit 0.
+
+    A finding still wins over an unreadable target, because prose that is wrong is
+    something the run did prove.
+
+    Shared by both entry points rather than written twice, because the CLI wraps
+    this engine and the contract also declares the engine itself as a check, so a
+    project runs it both ways and must get the same code.
+    """
+    if findings:
+        print(f"\n{findings} finding{'s' if findings != 1 else ''}")
+        return 1
+    if unread:
+        target = "target" if unread == 1 else "targets"
+        print(f"style lint: {unread} {target} could not be read — nothing checked there")
+        return 2
+    print("style lint: clean")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="style_lint",
@@ -395,14 +444,11 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     targets = [Path(p) for p in (args.paths or ["."])]
     root = Path.cwd()
-    lines, total = report(walk(targets), root)
+    paths, missing = walk(targets)
+    lines, total, unread = report(paths, root)
     for line in lines:
         print(line)
-    if total:
-        print(f"\n{total} finding{'s' if total != 1 else ''}")
-        return 1
-    print("style lint: clean")
-    return 0
+    return verdict(total, len(missing) + unread)
 
 
 if __name__ == "__main__":

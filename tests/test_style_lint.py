@@ -78,7 +78,70 @@ def test_the_style_file_is_never_walked(tmp_path):
     """It states its bans by quoting them, so it cannot be checked against itself."""
     (tmp_path / "terse_prose.md").write_text("#### deep\n")
     (tmp_path / "other.md").write_text("#### deep\n")
-    assert style_lint.walk([tmp_path]) == [tmp_path / "other.md"]
+    assert style_lint.walk([tmp_path])[0] == [tmp_path / "other.md"]
+
+
+# --- a target that could not be read is not a target that was clean --------- #
+
+
+def _lint(argv: list[str]) -> int:
+    return style_lint.main(["style_lint", *argv])
+
+
+def test_a_missing_path_exits_2_and_does_not_print_clean(tmp_path, capsys, monkeypatch):
+    """The finding: it printed the path, then reported the run clean at exit 0, so
+    a job running this against a renamed directory passed on a walk of nothing."""
+    monkeypatch.chdir(tmp_path)
+    assert _lint(["no-such-file.md"]) == 2
+    captured = capsys.readouterr()
+    assert "no such path: no-such-file.md" in captured.err
+    assert "clean" not in captured.out
+
+
+def test_a_file_that_will_not_open_exits_2_and_names_it(tmp_path, capsys, monkeypatch):
+    """Named explicitly, so the walk resolves it and `report` is where it fails."""
+    unreadable = tmp_path / "locked.md"
+    unreadable.write_text("# fine\n")
+    unreadable.chmod(0o000)
+    monkeypatch.chdir(tmp_path)
+    try:
+        code = _lint([str(unreadable)])
+    finally:
+        unreadable.chmod(0o644)
+    assert code == 2
+    out = capsys.readouterr().out
+    assert "locked.md" in out and "could not be read" in out
+    assert "clean" not in out
+
+
+def test_one_good_target_and_one_missing_still_exits_2(tmp_path, capsys, monkeypatch):
+    """A partial walk proves nothing about the target it never opened, so the good
+    half must not carry the run to 0."""
+    (tmp_path / "fine.md").write_text("# fine\n")
+    monkeypatch.chdir(tmp_path)
+    assert _lint(["fine.md", "gone.md"]) == 2
+    assert "clean" not in capsys.readouterr().out
+
+
+def test_a_finding_still_exits_1(tmp_path, capsys, monkeypatch):
+    (tmp_path / "deep.md").write_text("#### deep\n")
+    monkeypatch.chdir(tmp_path)
+    assert _lint(["deep.md"]) == 1
+    assert "1 finding" in capsys.readouterr().out
+
+
+def test_a_finding_beats_a_missing_target(tmp_path, capsys, monkeypatch):
+    """Prose that is wrong is something the run did prove, so 1 wins over 2."""
+    (tmp_path / "deep.md").write_text("#### deep\n")
+    monkeypatch.chdir(tmp_path)
+    assert _lint(["deep.md", "gone.md"]) == 1
+
+
+def test_a_clean_run_over_real_targets_still_exits_0(tmp_path, capsys, monkeypatch):
+    (tmp_path / "fine.md").write_text("# fine\n")
+    monkeypatch.chdir(tmp_path)
+    assert _lint([str(tmp_path)]) == 0
+    assert "style lint: clean" in capsys.readouterr().out
 
 
 # --- replies: vocabulary and reply-only geometry --------------------------- #
@@ -246,7 +309,7 @@ def test_transcripts_are_matched_by_their_own_cwd(tmp_path):
     (directory / "other.jsonl").write_text(
         json.dumps({"type": "assistant", "cwd": str(tmp_path / "elsewhere")}) + "\n"
     )
-    found = style_lint.session_transcripts(project, home=home)
+    found = style_lint.session_transcripts(project, home / ".claude" / "projects")
     assert [p.name for p in found] == ["match.jsonl"]
 
 
@@ -264,7 +327,7 @@ def test_a_transcript_naming_the_project_after_another_cwd_still_matches(tmp_pat
         + json.dumps({"type": "assistant", "cwd": str(project)})
         + "\n"
     )
-    found = style_lint.session_transcripts(project, home=home)
+    found = style_lint.session_transcripts(project, home / ".claude" / "projects")
     assert [p.name for p in found] == ["later.jsonl"]
 
 
@@ -284,7 +347,7 @@ def test_transcripts_come_back_newest_first(tmp_path):
         path = directory / name
         path.write_text(record)
         os.utime(path, (mtime, mtime))
-    found = style_lint.session_transcripts(project, home=home)
+    found = style_lint.session_transcripts(project, home / ".claude" / "projects")
     assert [p.name for p in found] == ["newer.jsonl", "older.jsonl"]
 
 
@@ -303,12 +366,12 @@ def test_the_cap_counts_matches_not_candidates(tmp_path):
     (directory / "mine.jsonl").write_text(
         json.dumps({"type": "assistant", "cwd": str(project)}) + "\n"
     )
-    found = style_lint.session_transcripts(project, home=home)
+    found = style_lint.session_transcripts(project, home / ".claude" / "projects")
     assert [p.name for p in found] == ["mine.jsonl"]
 
 
 def test_no_transcript_directory_is_not_an_error(tmp_path):
-    assert style_lint.session_transcripts(tmp_path, home=tmp_path / "nothing") == []
+    assert style_lint.session_transcripts(tmp_path, tmp_path / "nothing") == []
 
 
 # --- the repository itself ------------------------------------------------- #

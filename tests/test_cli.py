@@ -4130,3 +4130,87 @@ def test_stale_refuses_a_root_it_cannot_use(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert flw.main(["flw", "stale", "--root", str(tmp_path / "nope")]) == 1
     assert "no such path" in capsys.readouterr().err
+
+
+# --- flw style check names the directory it read ----------------------------- #
+
+
+def _style_check_project(tmp_path, monkeypatch) -> tuple[Path, Path]:
+    """A project to run in and a fake HOME the transcript directory hangs off.
+
+    HOME is faked because `expand("~/.claude/projects")` reads it, and a test that
+    fell through to the developer's own ~/.claude would pass or fail by what is on
+    the machine rather than by what the code does.
+    """
+    fake = tmp_path / "home"
+    fake.mkdir()
+    monkeypatch.setenv("HOME", str(fake))
+    root = tmp_path / "work"
+    (root / "specs").mkdir(parents=True)
+    monkeypatch.chdir(root)
+    return root, fake
+
+
+def _transcript(directory: Path, name: str, cwd: Path, text: str) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / name
+    path.write_text(
+        json.dumps({"type": "assistant", "cwd": str(cwd)})
+        + "\n"
+        + json.dumps(
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}}
+        )
+        + "\n"
+    )
+    return path
+
+
+def test_style_check_names_the_directory_when_it_does_not_exist(
+    tmp_path, capsys, monkeypatch
+):
+    """The reproduction this was written for: the binary is on PATH and only the
+    directory is missing, so a test on what a host DECLARES would never fire."""
+    _, fake = _style_check_project(tmp_path, monkeypatch)
+    assert flw.main(["flw", "style", "check"]) == 1
+    err = capsys.readouterr().err
+    assert str(fake / ".claude" / "projects") in err.replace("~", str(fake))
+    assert "may keep none" not in err
+    assert "absent or unreadable" in err
+    assert "`flw style lint` reads files rather than transcripts" in err
+
+
+def test_style_check_names_the_directory_when_it_holds_nothing_of_ours(
+    tmp_path, capsys, monkeypatch
+):
+    """A directory that exists and holds another project's sessions is the same
+    answer: flw read it, and nothing there was this project's."""
+    _, fake = _style_check_project(tmp_path, monkeypatch)
+    directory = fake / ".claude" / "projects" / "some-mangling"
+    _transcript(directory, "elsewhere.jsonl", tmp_path / "other", "a reply")
+    assert flw.main(["flw", "style", "check"]) == 1
+    err = capsys.readouterr().err
+    assert "nothing in" in err and "belongs to" in err
+    # It was readable, so the line about an absent directory would be false.
+    assert "absent or unreadable" not in err
+
+
+def test_style_check_reads_a_transcript_the_declared_directory_holds(
+    tmp_path, capsys, monkeypatch
+):
+    root, fake = _style_check_project(tmp_path, monkeypatch)
+    directory = fake / ".claude" / "projects" / "some-mangling"
+    _transcript(directory, "mine.jsonl", root, "This is a robust and elegant fix.")
+    assert flw.main(["flw", "style", "check"]) == 0
+    out = capsys.readouterr().out
+    assert "evaluative" in out
+    assert str(directory / "mine.jsonl") in out.replace("~", str(fake))
+
+
+def test_style_check_never_names_a_host(tmp_path, capsys, monkeypatch):
+    """Nothing tells flw which host is running the session, so the message names
+    the directory it read and never an identity flw cannot establish."""
+    _style_check_project(tmp_path, monkeypatch)
+    assert flw.main(["flw", "style", "check"]) == 1
+    err = capsys.readouterr().err.lower()
+    for host in flw.HOSTS:
+        assert host.name not in err
