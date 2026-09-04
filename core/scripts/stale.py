@@ -179,6 +179,7 @@ class Knowledge:
     orphaned: list[str] = field(default_factory=list)
     malformed: list[str] = field(default_factory=list)
     unstamped: list[str] = field(default_factory=list)
+    unverifiable: list[str] = field(default_factory=list)
 
 
 def knowledge_state(
@@ -189,12 +190,21 @@ def knowledge_state(
     The primitives rather than the CLI's row builder: this needs how many files
     the code has moved under, and that handler renders one line per file. It is
     the same four measurements — `concepts`, `load`, `changed`, `orphans`.
+
+    The state decides which list a file lands in, rather than one state being
+    tested and the other two falling through. `Diff.state` is one of four words
+    and `system_state` returns the same four, so testing only for `changed` sent
+    `unverifiable` to no row at all. That is never one file: a rebase, a squash or
+    a force-push invalidates every stamp in the store at once, so the whole store
+    read as clean on exactly the run where a reader most needed telling.
     """
     files = 0
     changed: list[str] = []
     orphaned: list[str] = []
     malformed: list[str] = []
     unstamped: list[str] = []
+    unverifiable: list[str] = []
+    by_state = {"changed": changed, "unstamped": unstamped, "unverifiable": unverifiable}
     for owner, store in stores:
         if not store.is_dir():
             continue
@@ -211,13 +221,20 @@ def knowledge_state(
                 unstamped.append(where)
             elif concept.level == "System":
                 per_member = knowledge.changed_system(concept, members)
-                if knowledge.system_state(per_member) == "changed":
-                    changed.append(where)
+                row = by_state.get(knowledge.system_state(per_member))
+                if row is not None:
+                    row.append(where)
             else:
                 diff = knowledge.changed(concept)
-                if diff.state == "changed":
+                row = by_state.get(diff.state)
+                if row is changed:
+                    # The one state that carries a measurement. An unverifiable
+                    # file carries none, because the revision it names is gone and
+                    # there is nothing left to diff it against.
                     changed.append(f"{where} — {diff.summary()}")
-    return Knowledge(files, changed, orphaned, malformed, unstamped)
+                elif row is not None:
+                    row.append(where)
+    return Knowledge(files, changed, orphaned, malformed, unstamped, unverifiable)
 
 
 def _rows(lines: list[str], label: str, count: int, entries: list[str], gloss: str = "") -> None:
@@ -265,6 +282,13 @@ def render(
         _rows(lines, "orphaned", len(know.orphaned), know.orphaned)
         _rows(lines, "malformed", len(know.malformed), know.malformed)
         _rows(lines, "unstamped", len(know.unstamped), know.unstamped)
+        _rows(
+            lines,
+            "unverifiable",
+            len(know.unverifiable),
+            know.unverifiable,
+            "the revision it records is no longer in the repository",
+        )
     else:
         lines += [f"KNOWLEDGE  {knowledge.DASH} no store", ""]
 

@@ -10,8 +10,12 @@ carry a record's name whose prose never names its path.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core" / "scripts"))
 import ledger
@@ -236,6 +240,79 @@ def test_a_knowledge_file_describing_a_path_that_is_gone_is_orphaned(tmp_path):
     assert state.files == 1
     assert state.orphaned == [f"{root.name}/src/engine.md"]
     assert state.changed == []
+
+
+# --- a stamp the repository can no longer resolve ---------------------------- #
+
+GIT = shutil.which("git")
+
+
+def stamped_repo(root: Path) -> None:
+    """A repository with one stamped knowledge file, then a replaced history.
+
+    The stamp is taken from a real commit and then that commit is put out of
+    reach, which is what a rebase, a squash or a force-push does to every stamp
+    in a store at once. Replacing `.git` outright rather than expiring the reflog
+    and garbage-collecting: the state under test is that the revision cannot be
+    resolved, and this reaches it in two `git init`s rather than a `gc`.
+    """
+    ident = [
+        "-c", "user.email=flw@example.invalid",
+        "-c", "user.name=flw",
+        "-c", "commit.gpgsign=false",
+    ]
+
+    def run(*args):
+        return subprocess.run(
+            [GIT, *ident, *args], cwd=root, capture_output=True, text=True, check=True
+        )
+
+    (root / "src").mkdir()
+    (root / "src" / "engine.py").write_text("x = 1\n")
+    store = root / ".flw" / "knowledge"
+    store.mkdir(parents=True)
+    (store / "src").mkdir()
+    # An Area file repeats its directory name, so this one mirrors src/.
+    file = store / "src" / "src.md"
+
+    subprocess.run([GIT, "init", "--initial-branch=main", str(root)],
+                   capture_output=True, check=True)
+    file.write_text(
+        '+++\ntype = "Area"\ndescription = "the source"\nrevision = "0000000"\n+++\n'
+        "# src\n"
+    )
+    run("add", "-A")
+    run("commit", "-m", "first")
+    revision = run("rev-parse", "--short", "HEAD").stdout.strip()
+    file.write_text(
+        f'+++\ntype = "Area"\ndescription = "the source"\nrevision = "{revision}"\n+++\n'
+        "# src\n"
+    )
+    run("add", "-A")
+    run("commit", "-m", "stamped")
+
+    shutil.rmtree(root / ".git")
+    subprocess.run([GIT, "init", "--initial-branch=main", str(root)],
+                   capture_output=True, check=True)
+    run("add", "-A")
+    run("commit", "-m", "history replaced")
+
+
+@pytest.mark.skipif(GIT is None, reason="git not on PATH")
+def test_a_stamp_the_repository_cannot_resolve_reaches_its_own_row(tmp_path):
+    """The finding: `knowledge_state` tested for `changed` and let the other two
+    states fall through, so a store whose every stamp had gone unverifiable read
+    byte for byte like a store where everything was current \u2014 on the run right
+    after the rewrite, which is the run a reader most needs told about."""
+    root = project(tmp_path, first='summary = "s"\n')
+    stamped_repo(root)
+    state = stale.knowledge_state([(root, root / ".flw" / "knowledge")], {})
+    assert state.files == 1
+    assert state.unverifiable == [f"{root.name}/src/src.md"]
+    assert state.changed == []
+    assert "unverifiable  (1)" in stale.render(
+        root, stale.Reports(root / ".flw" / "reports"), state, [], [], 0
+    )
 
 
 # --- the extension and note halves are folded, not re-implemented ------------- #
