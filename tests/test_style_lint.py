@@ -14,6 +14,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core" / "scripts"))
 import style_lint
 
@@ -112,6 +114,75 @@ def test_a_file_that_will_not_open_exits_2_and_names_it(tmp_path, capsys, monkey
     out = capsys.readouterr().out
     assert "locked.md" in out and "could not be read" in out
     assert "clean" not in out
+
+
+def _unreadable(directory: Path) -> bool:
+    """Whether chmod actually took. It does not for root, and not on every
+    filesystem, and a test that cannot build its own fixture is a skip."""
+    directory.chmod(0o000)
+    try:
+        list(directory.iterdir())
+    except PermissionError:
+        return True
+    return False
+
+
+def test_a_directory_that_cannot_be_walked_exits_2_and_is_named(tmp_path, capsys, monkeypatch):
+    """rglob swallows a PermissionError on a directory and yields nothing, and a
+    walk that yielded nothing is indistinguishable from a directory holding no
+    prose. This is the same false green a missing path was fixed for, one level
+    up."""
+    locked = tmp_path / "docs"
+    locked.mkdir()
+    (locked / "a.md").write_text("# fine\n")
+    if not _unreadable(locked):
+        locked.chmod(0o755)
+        pytest.skip("chmod cannot make a directory unreadable here")
+    monkeypatch.chdir(tmp_path)
+    try:
+        code = _lint(["docs"])
+    finally:
+        locked.chmod(0o755)
+    assert code == 2
+    captured = capsys.readouterr()
+    assert "docs" in captured.err
+    assert "clean" not in captured.out
+
+
+def test_an_unreadable_subdirectory_under_the_walk_root_exits_2(tmp_path, capsys, monkeypatch):
+    """The case that matters, because `style_lint.py .` is a declared check and any
+    subdirectory under it is in the walk. Reproduced at exit 0 before this."""
+    (tmp_path / "fine.md").write_text("# fine\n")
+    locked = tmp_path / "docs"
+    locked.mkdir()
+    (locked / "a.md").write_text("# fine\n")
+    if not _unreadable(locked):
+        locked.chmod(0o755)
+        pytest.skip("chmod cannot make a directory unreadable here")
+    monkeypatch.chdir(tmp_path)
+    try:
+        code = _lint(["."])
+    finally:
+        locked.chmod(0o755)
+    assert code == 2
+    assert "docs" in capsys.readouterr().err
+
+
+def test_a_readable_tree_still_walks_every_level(tmp_path, capsys, monkeypatch):
+    """The other half of the walk change: nesting, SKIP_DIRS and the suffix filter
+    all still hold, and a finding below the root still reaches exit 1."""
+    (tmp_path / "fine.md").write_text("# fine\n")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "ok.md").write_text("# also fine\n")
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "vendored.md").write_text("#### deep\n")
+    monkeypatch.chdir(tmp_path)
+    assert _lint(["."]) == 0
+    assert "clean" in capsys.readouterr().out
+
+    (tmp_path / "docs" / "deep.md").write_text("#### deep\n")
+    assert _lint(["."]) == 1
+    assert "1 finding" in capsys.readouterr().out
 
 
 def test_one_good_target_and_one_missing_still_exits_2(tmp_path, capsys, monkeypatch):

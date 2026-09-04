@@ -32,8 +32,11 @@ tidy session and it is not a reason to look harder.
 
 ## When it cannot find a transcript
 
-`flw style check` exits 1 and says so. That means this host keeps no transcript where flw
-reads them, and there is nothing to measure. Say that; do not guess at your own prose from
+`flw style check` exits 1 and names which of three it hit: no transcript directory it reads
+belongs to this project, the newest transcript holds only a dispatched agent's replies, or no
+transcript holds a main-agent reply yet. Repeat the one it named rather than concluding the
+host keeps no transcript, which is at most one of the three. `flw style lint <paths>` reads
+files rather than transcripts and works either way. Do not guess at your own prose from
 memory, which is the bias the command exists to route around.
 
 Under concurrent sessions on one project it reports the newest transcript holding prose,

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -172,6 +173,15 @@ def walk(targets: list[Path]) -> tuple[list[Path], list[Path]]:
     saw the print reported the run clean at exit 0 over a path it never opened,
     and a project running this in CI against a directory that has since been
     renamed passed on a walk of nothing.
+
+    `os.walk` with an `onerror` callback rather than `rglob`, because rglob
+    swallows a PermissionError on a subdirectory and yields nothing for it, and a
+    walk that yielded nothing is indistinguishable from a directory holding no
+    prose: `chmod 000` on one subdirectory made `style lint .` — a declared check —
+    print clean at exit 0. The callback puts that directory in the same list a
+    missing target goes in, so the run says what it could not read.
+    `core/scripts/scout.py:163` already walks this way here; `Path.walk(on_error=)`
+    would be neater and needs 3.12, above this project's 3.11 floor.
     """
     found: list[Path] = []
     missing: list[Path] = []
@@ -183,14 +193,24 @@ def walk(targets: list[Path]) -> tuple[list[Path], list[Path]]:
             print(f"style lint: no such path: {target}", file=sys.stderr)
             missing.append(target)
             continue
-        for path in sorted(target.rglob("*")):
-            if any(part in SKIP_DIRS for part in path.parts):
+
+        def refused(error: OSError, named: Path = target) -> None:
+            where = Path(error.filename) if error.filename else named
+            print(f"style lint: could not read: {where}", file=sys.stderr)
+            missing.append(where)
+
+        for parent, dirs, files in os.walk(target, onerror=refused):
+            here = Path(parent)
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+            if any(part in SKIP_DIRS for part in here.parts):
                 continue
-            if path.name in SKIP_FILES:
-                continue
-            if path.is_file() and path.suffix.lower() in MD_SUFFIXES | {".txt"}:
-                found.append(path)
-    return sorted(set(found)), missing
+            for name in files:
+                path = here / name
+                if name in SKIP_FILES:
+                    continue
+                if path.is_file() and path.suffix.lower() in MD_SUFFIXES | {".txt"}:
+                    found.append(path)
+    return sorted(set(found)), sorted(set(missing))
 
 
 def report(paths: list[Path], root: Path) -> tuple[list[str], int, int]:
