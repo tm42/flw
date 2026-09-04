@@ -337,6 +337,15 @@ Then run `flw doctor`, which will tell you whether the extensions you just wrote
 actually read by an installed skill. A file named for a skill that does not exist is read
 by nobody and looks fine forever.
 
+## Re-check mode
+
+**When the ask is whether what was recorded is still true, rather than to survey again,
+read `$FLW/core/skills/flw-research/references/recheck.md` and follow it.** It reads the
+files a survey already wrote, reports what moved under them, and skips step 1's scout and
+any step 2 probe whose answer is already in `.flw/config.toml`. It rewrites no tree and
+corrects only what a diff falsified. It takes a list of paths, which is what `flw stale`
+produces. Triggered by the ask, never by a flag.
+
 ## Rules
 
 1. **Never write `specs/`.** Not the contract, not a version file. That is `flw-spec`.
