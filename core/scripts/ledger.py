@@ -844,17 +844,38 @@ MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
     # A path with a line number. The extension names where to look and the line
     # moves under it: `tests/test_cli.py:3156` was the parser-surface diff and the
     # diff is now elsewhere in the same file.
-    ("path:line", re.compile(r"\b[\w./-]+\.[A-Za-z]{1,6}:\d+(?:-\d+)?\b")),
+    #
+    # Not a host and port. `https://api.example.com:8080` has the shape exactly,
+    # and this rule is first in MARKERS, so it claimed the span and no other rule
+    # got the line. The guard is the lookbehind, which requires the match to begin
+    # a path rather than continue one: a leading `/` is now inside the match, so
+    # `/usr/lib/foo.py:12` still matches whole, and every start position inside a
+    # URL's authority is preceded by a character the lookbehind refuses.
+    ("path:line", re.compile(r"(?<![\w:./-])[\w./-]+\.[A-Za-z]{1,6}:\d+(?:-\d+)?\b")),
     # A version string, including the two-part form a language floor takes.
     ("version", re.compile(r"\bv?\d+\.\d+(?:\.\d+)*\b")),
     # A count, written as digits or as a word. The lookarounds keep the digit half
     # off the digits the two rules above already claimed, and off a date, whose
     # parts are each preceded or followed by a hyphen and a digit.
     #
+    # Thousands groups first, because the rule stops at the first match on a line:
+    # without them `1,049 lines and 21,000 bytes` reported `1`, and what reached a
+    # reader through `stale.render` was `shared.md:4  1` — a digit that is not a
+    # number in the sentence, with both real countables unnamed. Comma grouping is
+    # this repository's own style.
+    #
     # `one` is not in the spelled list. It is an article as often as it is a
     # count — "one file, not the tree" — and a rule that reports it reports most
     # sentences in these files.
-    ("count", re.compile(rf"(?<![\w.:-])\d+(?![\w.:-])|\b(?:{SPELLED})\b", re.IGNORECASE)),
+    (
+        "count",
+        re.compile(
+            rf"(?<![\w.:-])\d{{1,3}}(?:,\d{{3}})+(?![\w.:-])"
+            rf"|(?<![\w.:-])\d+(?![\w.:-])"
+            rf"|\b(?:{SPELLED})\b",
+            re.IGNORECASE,
+        ),
+    ),
 )
 
 

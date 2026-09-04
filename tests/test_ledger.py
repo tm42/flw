@@ -1092,6 +1092,46 @@ def test_one_is_not_a_spelled_cardinal(tmp_path):
     assert markers(tmp_path, shared="Rewrite one file, not the tree.\n") == []
 
 
+def test_a_comma_grouped_number_is_reported_whole(tmp_path):
+    """The count rule keeps its first match on a line, so without thousands groups
+    `1,049 lines and 21,000 bytes` reported `1` — a digit that is not a number in
+    the sentence, with both real countables unnamed. Comma grouping is this
+    repository's own style: scripts.md writes (1,049)."""
+    found = markers(tmp_path, shared="1,049 lines and 21,000 bytes.\n")
+    assert [(m.kind, m.text) for m in found] == [("count", "1,049")]
+
+
+def test_a_host_and_port_is_not_a_path_with_a_line_number(tmp_path):
+    """`api.example.com:8080` has the shape exactly, and path:line is first in
+    MARKERS, so it claimed the span and no other rule got the line."""
+    found = markers(
+        tmp_path,
+        shared="See https://api.example.com:8080/v1, 7.3 seconds over 638 tests.\n",
+    )
+    assert [(m.kind, m.text) for m in found] == [("version", "7.3"), ("count", "638")]
+
+
+def test_a_real_path_with_a_line_number_still_matches_from_its_first_character(tmp_path):
+    """The three shapes the guard must not cost: a repository-relative path, one
+    beginning with a dot, and an absolute one, which now matches whole rather than
+    from the character after its leading slash."""
+    found = markers(
+        tmp_path,
+        shared="tests/test_cli.py:3156\n.flw/config.toml:3\nsee /usr/lib/foo.py:12 there\n",
+    )
+    assert [(m.line, m.text) for m in found] == [
+        (1, "tests/test_cli.py:3156"),
+        (2, ".flw/config.toml:3"),
+        (3, "/usr/lib/foo.py:12"),
+    ]
+
+
+def test_a_date_is_still_not_a_count(tmp_path):
+    """The exclusion the count rule's lookarounds exist for, re-checked against
+    the widened rule: a thousands group must not open a way in."""
+    assert markers(tmp_path, shared="Written 2026-09-04, revised 2026-09-05.\n") == []
+
+
 def test_a_version_string_that_is_currently_true_is_still_reported(tmp_path):
     """The one line the rule was argued over. `Python 3.11` is the floor today and
     a commit could raise it to 3.12, and the file carries no revision to date the
