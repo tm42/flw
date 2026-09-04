@@ -114,6 +114,60 @@ def test_a_name_with_no_file_behind_it_is_a_dead_citation(tmp_path):
     assert found.total == 1
 
 
+# --- a project that moved its reports directory ------------------------------ #
+
+
+def moved(root: Path, directory: str, name: str) -> Path:
+    """A reports directory somewhere other than the default, with one report in
+    it. The fold is handed the directory string exactly as `[paths] reports` gives
+    it to the CLI."""
+    where = root / directory
+    where.mkdir(parents=True, exist_ok=True)
+    (where / name).write_text("# a review\n")
+    return where
+
+
+def test_a_citation_naming_the_configured_directory_is_spent(tmp_path):
+    """The finding: with the matcher hardcoded to .flw/reports this reported 0
+    spent and 1 nobody has read, for a report the record names in its own prose."""
+    root = project(
+        tmp_path, first='summary = "acted on reviews/2026-09-04T1200-eng.md"\n'
+    )
+    where = moved(root, "reviews", "2026-09-04T1200-eng.md")
+    found = stale.reports(where, ledger.corpus(root).records, "reviews")
+    assert found.spent == ["2026-09-04T1200-eng.md"]
+    assert found.unread == []
+
+
+def test_the_default_directory_still_matches_in_such_a_project(tmp_path):
+    """A project that moved its reports directory still holds records citing the
+    old location, so the default stays as a second alternation."""
+    root = project(
+        tmp_path, first='summary = "acted on .flw/reports/2026-09-04T1200-eng.md"\n'
+    )
+    where = moved(root, "reviews", "2026-09-04T1200-eng.md")
+    found = stale.reports(where, ledger.corpus(root).records, "reviews")
+    assert found.spent == ["2026-09-04T1200-eng.md"]
+
+
+def test_a_directory_name_with_a_regex_metacharacter_is_escaped(tmp_path):
+    """A project may name the directory anything. Unescaped, `a.c` would match
+    `abc` as well, and the fold's value is that a spent report is one a record
+    actually acted on."""
+    pattern = stale.citation("a.c")
+    assert pattern.findall("abc/2026-09-04T1200-eng.md") == []
+    assert pattern.findall("a.c/2026-09-04T1200-eng.md") == [
+        "a.c/2026-09-04T1200-eng.md"
+    ]
+
+
+def test_an_absolute_reports_directory_folds_on_the_default_alone(tmp_path):
+    """`[paths] reports` is taken raw, so `root / reports_dir` discards the root
+    for an absolute value and no record would ever spell the result."""
+    pattern = stale.citation("/var/reports")
+    assert pattern.pattern == stale.citation().pattern
+
+
 # --- the mark a report carries ----------------------------------------------- #
 
 

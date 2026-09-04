@@ -35,10 +35,42 @@ import ledger
 import store as note_store
 from ledger import WIDTH, _capped
 
-# A report path as a record writes it, in `sources` or in prose. The character
-# class is what a report name is made of: an ISO stamp, the lens name, and the
-# `:14` a record sometimes appends to cite one line of one.
-CITATION = re.compile(r"[\w./-]*\.flw/reports/[A-Za-z0-9T:._-]+")
+# Where reports live when a project has not said otherwise. Kept as a second
+# alternation whatever the project declares, because a project that has moved its
+# reports directory still holds records citing the old one.
+DEFAULT_REPORTS = ".flw/reports"
+
+
+def citation(reports_dir: str = DEFAULT_REPORTS) -> re.Pattern[str]:
+    """A report path as a record writes it, in `sources` or in prose.
+
+    Built from the directory the fold was handed rather than hardcoded, because
+    `[paths] reports` is configurable and a matcher that is not saw every citation
+    in such a project as unread — the whole directory, counted as nobody having
+    read it.
+
+    The character class after the directory is what a report name is made of: an
+    ISO stamp, the lens name, and the `:14` a record sometimes appends to cite one
+    line of one. The directory itself reaches the pattern escaped, because a
+    project may name it anything and a `.` or `+` in it would otherwise match
+    something else.
+
+    A declared directory contributes a pattern only when it is relative and stays
+    inside the root. `[paths] reports` is taken raw at `cli/flw.py`, unlike
+    `[paths] flw`, which the contract refuses when absolute — so `root / reports_dir`
+    discards the root for an absolute value, and a pattern built from a
+    machine-specific absolute path matches nothing any record would ever spell.
+    Such a project folds on the default alone. Bounding the setting itself is a
+    separate change.
+    """
+    directories = [DEFAULT_REPORTS]
+    given = reports_dir.strip().rstrip("/")
+    inside = given and not Path(given).is_absolute() and ".." not in Path(given).parts
+    if inside and given != DEFAULT_REPORTS:
+        directories.append(given)
+    body = "|".join(re.escape(d) for d in directories)
+    return re.compile(rf"[\w./-]*(?:{body})/[A-Za-z0-9T:._-]+")
+
 
 # The mark flw-spec writes above a report's own heading: one line naming the
 # record specced from it, in backticks.
@@ -64,7 +96,7 @@ def record_names(records: list) -> set[str]:
     return {r.name for r in records if r.name}
 
 
-def cited(records: list) -> set[str]:
+def cited(records: list, pattern: re.Pattern[str] | None = None) -> set[str]:
     """Every report name a record points at, from both places it can point from.
 
     Both, because a record carries `sources` where it has one and prose where it
@@ -73,12 +105,13 @@ def cited(records: list) -> set[str]:
     a different report, and a match with no `.md` in it is dropped as an artifact
     of reading prose with a pattern.
     """
+    matcher = pattern or citation()
     found: set[str] = set()
     for record in records:
         declared = record.document.get("sources", [])
         given = [s for s in declared if isinstance(s, str)]
         try:
-            given += CITATION.findall(record.path.read_text(errors="replace"))
+            given += matcher.findall(record.path.read_text(errors="replace"))
         except OSError:
             pass
         for one in given:
@@ -110,7 +143,9 @@ def marked(directory: Path, names: set[str]) -> set[str]:
     return found
 
 
-def reports(directory: Path, records: list) -> Reports:
+def reports(
+    directory: Path, records: list, reports_dir: str = DEFAULT_REPORTS
+) -> Reports:
     """Split the reports directory into spent, unread, and dead citations.
 
     Both directions, because neither is complete on its own. A record can name a
@@ -125,7 +160,7 @@ def reports(directory: Path, records: list) -> Reports:
     if not directory.is_dir():
         return Reports(directory)
     on_disk = {path.name for path in directory.glob("*.md")}
-    names = cited(records)
+    names = cited(records, citation(reports_dir))
     spent = (names & on_disk) | marked(directory, record_names(records))
     return Reports(
         directory,
@@ -278,7 +313,7 @@ def fold(
     dir`, `[project] roots` and `[kb] category`.
     """
     corpus = ledger.corpus(root, specs_dir)
-    found = reports((root / reports_dir), corpus.records)
+    found = reports((root / reports_dir), corpus.records, reports_dir)
     know = knowledge_state(knowledge_stores or [], members or {})
     markers = ledger.extension_markers(corpus)
     given = notes or []
