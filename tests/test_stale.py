@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core" / "scripts"))
+import knowledge
 import ledger
 import stale
 
@@ -58,9 +59,15 @@ def fold(root: Path) -> stale.Reports:
 
 
 def test_a_report_named_in_sources_is_spent(tmp_path):
+    """The fixture names the report by its bare filename, which no citation pattern
+    reaches, so `sources` is the only route to spent. Written the obvious way — the
+    full path in the field — the field could be deleted from `cited()` and this test
+    still passed, because the pattern matched that same line as the record's raw
+    text. `sources` is the field this record and its two neighbours are the first
+    to use, so it is worth holding before it carries weight."""
     root = project(
         tmp_path,
-        first='summary = "s"\nsources = [".flw/reports/2026-09-03T2050-process.md"]\n',
+        first='summary = "s"\nsources = ["2026-09-03T2050-process.md"]\n',
     )
     report(root, "2026-09-03T2050-process.md")
     found = fold(root)
@@ -223,6 +230,18 @@ def test_an_absolute_reports_directory_folds_on_the_default_alone(tmp_path):
     for an absolute value and no record would ever spell the result."""
     pattern = stale.citation("/var/reports")
     assert pattern.pattern == stale.citation().pattern
+
+
+def test_fold_carries_the_declared_directory_into_the_matcher(tmp_path):
+    """`fold` takes the directory twice — once to list and once to match — and
+    dropping the second left every test green while a project that moved its
+    reports directory read every citation as unread."""
+    root = project(
+        tmp_path, first='summary = "acted on reviews/2026-09-04T1200-eng.md"\n'
+    )
+    moved(root, "reviews", "2026-09-04T1200-eng.md")
+    text = stale.fold(root, reports_dir="reviews")
+    assert "1 spent, 0 nobody has read" in text
 
 
 # --- the mark a report carries ----------------------------------------------- #
@@ -414,6 +433,70 @@ def test_a_stamp_the_repository_cannot_resolve_reaches_its_own_row(tmp_path):
     assert "unverifiable  (1)" in stale.render(
         root, stale.Reports(root / ".flw" / "reports"), state, [], [], 0
     )
+
+
+# --- every branch of the knowledge fold ------------------------------------- #
+
+
+def concept(store: Path, rel: str, body: str) -> None:
+    path = store / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body)
+
+
+def test_each_knowledge_state_reaches_its_own_row(tmp_path):
+    """Only `orphaned` was held. Deleting the changed, malformed or unstamped
+    branch left the suite green, and the unverifiable branch is newer than every
+    test that touched this function."""
+    root = project(tmp_path, first='summary = "s"\n')
+    store = root / ".flw" / "knowledge"
+    for name in ("orphan", "malformed", "unstamped", "unverifiable"):
+        (root / name).mkdir()
+    concept(
+        store,
+        "orphan/orphan.md",
+        '+++\ntype = "Area"\ndescription = "gone"\nrevision = "abc1234"\n+++\n# orphan\n',
+    )
+    (root / "orphan").rmdir()
+    concept(store, "malformed/malformed.md", '+++\ntype = "Module"\n+++\n# malformed\n')
+    concept(
+        store, "unstamped/unstamped.md", '+++\ntype = "Area"\ndescription = "d"\n+++\n# u\n'
+    )
+    concept(
+        store,
+        "unverifiable/unverifiable.md",
+        '+++\ntype = "Area"\ndescription = "d"\nrevision = "abc1234"\n+++\n# v\n',
+    )
+
+    state = stale.knowledge_state([(root, store)], {})
+    assert state.files == 4
+    assert state.orphaned == [f"{root.name}/orphan/orphan.md"]
+    assert state.malformed and state.malformed[0].startswith(f"{root.name}/malformed")
+    assert state.unstamped == [f"{root.name}/unstamped/unstamped.md"]
+    # No repository here, so the diff cannot run and every stamped file is
+    # unverifiable — which is exactly the state that reached no row before.
+    assert state.unverifiable == [f"{root.name}/unverifiable/unverifiable.md"]
+    assert state.changed == []
+
+
+def test_a_knowledge_file_the_code_has_moved_under_reaches_the_changed_row(tmp_path, monkeypatch):
+    """The `changed` branch, which carries a measurement where the other three
+    carry only a name. Stubbed at knowledge.numstat rather than run against a real
+    repository, the way test_knowledge.py cans every other diff."""
+    root = project(tmp_path, first='summary = "s"\n')
+    store = root / ".flw" / "knowledge"
+    (root / "src").mkdir()
+    concept(
+        store,
+        "src/src.md",
+        '+++\ntype = "Area"\ndescription = "d"\nrevision = "abc1234"\n+++\n# src\n',
+    )
+    monkeypatch.setattr(
+        knowledge, "numstat", lambda *a, **k: knowledge.Diff("changed", 3, 41, 12)
+    )
+    state = stale.knowledge_state([(root, store)], {})
+    assert state.changed == [f"{root.name}/src/src.md — 3 files · +41 −12"]
+    assert state.unverifiable == []
 
 
 # --- the extension and note halves are folded, not re-implemented ------------- #

@@ -4126,6 +4126,40 @@ def test_stale_outside_any_project_exits_0(tmp_path, capsys, monkeypatch):
     assert "Nothing here is a failure" in capsys.readouterr().out
 
 
+def test_stale_reads_the_declared_reports_directory(tmp_path, capsys, monkeypatch):
+    """The plumbing, from [paths] reports to the fold. Every other test of this
+    passes the directory to stale.reports directly, so hardcoding it in the
+    handler left the suite green and turned this fixture from 1 spent back to
+    0 spent, 1 nobody has read."""
+    root = _spec_project(
+        tmp_path,
+        "",
+        {"acted-minor.toml": 'name = "acted"\nsummary = "acted on reviews/2026-09-04T1200-eng.md"\n'},
+    )
+    (root / ".flw" / "config.toml").write_text('[paths]\nreports = "reviews"\n')
+    (root / "reviews").mkdir()
+    (root / "reviews" / "2026-09-04T1200-eng.md").write_text("# a review\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert flw.main(["flw", "stale", "--root", str(root)]) == 0
+    assert "1 spent, 0 nobody has read" in capsys.readouterr().out
+
+
+def test_style_lint_through_the_subcommand_exits_2_on_a_path_it_cannot_read(
+    tmp_path, capsys, monkeypatch
+):
+    """Every other exit-code test drives style_lint.main, so the subcommand's own
+    half of the verdict was unheld: replacing `len(missing) + unread` with `unread`
+    at the CLI left the suite green while `flw style lint` returned to
+    `style lint: clean` at exit 0. The contract states the surface as the
+    subcommand."""
+    monkeypatch.chdir(tmp_path)
+    assert flw.main(["flw", "style", "lint", "no-such-file.md"]) == 2
+    captured = capsys.readouterr()
+    assert "no such path: no-such-file.md" in captured.err
+    assert "clean" not in captured.out
+
+
 def test_stale_refuses_a_root_it_cannot_use(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert flw.main(["flw", "stale", "--root", str(tmp_path / "nope")]) == 1
