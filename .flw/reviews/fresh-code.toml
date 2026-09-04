@@ -1,0 +1,133 @@
+name        = "fresh-code"
+description = "Four lenses on one day's output: 24 files and +2,373 lines written by unattended subagents across three records, including 320 lines of a new command no review has seen. Where the code is wrong, where three agents editing one file collided, whether the matcher claims what it cannot know, and whether 56 new tests fail when the code they check is broken."
+
+[[reviewer]]
+role   = "unread-code"
+effort = "high"
+probes = true
+perspective = """
+Your lens is whether the code written today is correct. Not whether it works on the fixtures
+it shipped with — it does, and every one of those was re-run — but whether it can report
+something false.
+
+Read `core/scripts/stale.py` whole. It is 320 lines, written in one unattended run, and no
+review has ever seen it. Then `extension_markers` and `MARKERS` in `core/scripts/ledger.py`
+around :805-870, and the `unrevisioned` row and `Note.revision` in `core/scripts/store.py`.
+
+What makes this worth a lens rather than a skim: `flw stale` is the first flw command whose
+entire output is a claim about what a human should believe about their own repository. Every
+other command either does something or prints what it read. This one counts, classifies and
+concludes. A wrong count there is worse than no command, because the reader has no second
+source — that is the whole reason they ran it.
+
+Probe rather than reason. Suggested, and find your own:
+
+- a reports directory that is a file, or a symlink, or absent
+- a record citing itself, or citing a report whose name matches a record
+- a report whose name collides with another under a different directory
+- a knowledge store with one file, with none, and with an unreadable one
+- `[paths] reports` set to `.`, to `..`, to an absolute path, to a name with a regex
+  metacharacter in it
+- a record whose prose contains something that looks like a citation and is not
+
+Run `flw stale` against each and say what it claimed. The fixtures from today's records are
+under the session scratchpad and you may build your own anywhere.
+
+Out of your lane: whether the design is right, whether the contract says the right thing,
+and anything about the tests — three other lenses have those.
+"""
+
+[[reviewer]]
+role   = "three-agents-one-file"
+effort = "high"
+probes = true
+perspective = """
+Your lens is collision. `cli/flw.py` was edited by three of today's nine commits and
+`core/scripts/style_lint.py` by two, hours apart, by different agents, none of which saw
+another's diff. Each change passed every check on its own. The question is what the union
+does that no author intended.
+
+Read the three commits' diffs together rather than in sequence:
+
+  git log --oneline bc1ada5..HEAD
+  git diff bc1ada5..HEAD -- cli/flw.py core/scripts/style_lint.py
+
+Two specific seams, and look for the ones nobody named:
+
+- `walk()` in `style_lint.py` gained a tuple return in one record; `session_transcripts`
+  changed signature in another. Both have callers inside the CLI and inside the engine's
+  own `main`, which the contract declares as a check in its own right.
+- `verdict()` is now shared by the CLI handler and the engine's `main`. Two entry points
+  reaching one function, added by an agent that was told they must agree.
+
+The failure worth finding is a path where the two changes are individually right and jointly
+wrong — a caller updated for one signature and not the other, a state that only arises when
+both new branches are live, an exit code that means one thing to the CLI and another to
+`run_tests.py`, whose `Result.state` at :59 is `"pass" if self.code == 0 else "fail"`.
+
+Out of your lane: whether `stale.py` is correct, and the quality of the tests.
+"""
+
+[[reviewer]]
+role   = "the-matcher"
+effort = "high"
+probes = true
+perspective = """
+Your lens is one object: `MARKERS` in `core/scripts/ledger.py`, three regexes deciding which
+lines of prose carry a claim a commit could falsify. It reports to a human as fact, across
+two stores, and nothing downstream checks it.
+
+Measured at HEAD, over the eight knowledge bodies: 36 counts, 1 version, 1 path:line. Over
+the four extensions: 2, both in `shared.md`, both currently true. Re-take those numbers
+before you start.
+
+Attack it from both directions and weight them equally:
+
+- **What it claims that is not a measurement.** A port number, a year, an HTTP status, a
+  heading level, a version inside a URL, a number in a code span, an ordinal. Each one it
+  reports is a line a human is told to go and re-check, and a lint that cries wolf is one
+  people stop reading.
+- **What it misses that is.** A number spelled as a word — the docstring says that is
+  deliberate, so test whether the reasoning holds against real extension prose. A range. A
+  count expressed as a fraction. A path with no line number, which rots exactly as hard.
+
+The design says it reports shape and never truth. Hold it to that: find any place it decides
+something is or is not true, and any place a reader would reasonably read a shape report as a
+truth claim.
+
+Out of your lane: whether the knowledge store should be linted at all — that was measured and
+deliberately not built, and the reasoning is in this session's history, not in a record.
+"""
+
+[[reviewer]]
+role   = "do-the-tests-bite"
+effort = "high"
+probes = true
+perspective = """
+The suite went from 715 to 771 today. Every one of those 56 tests was written by the same
+agent that wrote the code it checks, in an unattended run, and exactly one was independently
+verified to fail when its production line was reverted.
+
+Your lens is mutation, and it is the method this repository already uses: revert one
+production line in a clone, run `.venv/bin/pytest -q`, and a green suite is the finding.
+
+  git diff bc1ada5..HEAD -- cli/flw.py core/scripts/ tests/
+
+Work through the production lines today added or changed. For each, revert it and name the
+test that fails. A line whose revert leaves the suite green is a finding, and the executors'
+own reports claimed fail-on-revert for some tests and regression-pin for others — check both
+claims rather than accepting the labels.
+
+Two specific claims to verify, both made in reports and not by you:
+
+- Reverting the store resolve in `_know_stamp` fails exactly
+  `test_a_store_reached_through_a_symlink_can_be_stamped`.
+- `the-four-that-work` is a regression pin and passes in a tree with the fix reverted, which
+  is what a pin should do rather than a defect.
+
+Also worth a look: a test that asserts on a message string rather than on behaviour, and a
+test whose fixture is built by the code it is testing.
+
+Out of your lane: whether the code is correct where a test does cover it — that is
+`unread-code`. You are looking for what nothing would catch.
+"""
