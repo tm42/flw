@@ -118,6 +118,59 @@ def test_a_name_with_no_file_behind_it_is_a_dead_citation(tmp_path):
     assert found.total == 1
 
 
+# --- what is not a citation -------------------------------------------------- #
+
+
+def test_a_path_inside_a_dag_description_is_not_a_citation(tmp_path):
+    """A task describing a fixture writes a report path and cites nothing. `y.md`
+    was one of this repository's ten dead citations for exactly this reason, and
+    `mark-what-is-spent-minor.toml:33` had already named it as an artifact to
+    drop."""
+    root = project(
+        tmp_path,
+        first=(
+            'summary = "s"\n\n'
+            "[[dag]]\ngroup = 1\nphase = \"p\"\n"
+            'tasks = [ { id = "t", desc = "a fixture carrying .flw/reports/y.md" } ]\n'
+        ),
+    )
+    report(root, "2026-08-31T1205-eng.md")
+    found = fold(root)
+    assert found.dead == []
+    assert found.spent == []
+    assert found.unread == ["2026-08-31T1205-eng.md"]
+
+
+def test_a_directory_merely_ending_in_the_declared_one_is_not_it(tmp_path):
+    """The prefix class absorbed whatever preceded the name, so `previews` ended in
+    `reviews` and matched. `plans/notes/` against a project declaring `notes` is the
+    same shape, and the contract declares `notes/` as the project note store."""
+    assert stale.citation("reviews").findall("docs/previews/X.md") == []
+    assert stale.citation("notes").findall("plans/notes/2026-09-04T1200-eng.md") == []
+    assert stale.citation("reviews").findall("see reviews/2026-09-04T1200-eng.md") == [
+        "reviews/2026-09-04T1200-eng.md"
+    ]
+
+
+def test_a_record_naming_a_report_in_prose_is_still_a_citation(tmp_path):
+    """The half that must survive both changes: `approach` is a prose field and a
+    path at the start of its own token is a citation."""
+    root = project(
+        tmp_path,
+        first=(
+            'summary = "s"\n'
+            'approach = "read .flw/reports/2026-08-31T1205-eng.md first"\n'
+            'contract_edit = "see .flw/reports/2026-09-01T0900-eng.md"\n'
+        ),
+    )
+    report(root, "2026-08-31T1205-eng.md")
+    report(root, "2026-09-01T0900-eng.md")
+    assert fold(root).spent == [
+        "2026-08-31T1205-eng.md",
+        "2026-09-01T0900-eng.md",
+    ]
+
+
 # --- a project that moved its reports directory ------------------------------ #
 
 

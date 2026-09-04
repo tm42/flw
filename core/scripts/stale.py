@@ -62,6 +62,14 @@ def citation(reports_dir: str = DEFAULT_REPORTS) -> re.Pattern[str]:
     machine-specific absolute path matches nothing any record would ever spell.
     Such a project folds on the default alone. Bounding the setting itself is a
     separate change.
+
+    The lookbehind is what makes the directory a directory. The pattern used to
+    open with a prefix character class that absorbed whatever preceded the name,
+    so `citation("reviews")` matched `docs/previews/X.md` and `citation("notes")`
+    matched `plans/notes/X.md` — and the contract declares `notes/` as the project
+    note store, so a project setting `[paths] reports = "notes"` read every note
+    citation as a report citation. A record writes a report path from the project
+    root, so the directory begins the path or the path is not this directory's.
     """
     directories = [DEFAULT_REPORTS]
     given = reports_dir.strip().rstrip("/")
@@ -69,7 +77,7 @@ def citation(reports_dir: str = DEFAULT_REPORTS) -> re.Pattern[str]:
     if inside and given != DEFAULT_REPORTS:
         directories.append(given)
     body = "|".join(re.escape(d) for d in directories)
-    return re.compile(rf"[\w./-]*(?:{body})/[A-Za-z0-9T:._-]+")
+    return re.compile(rf"(?<![\w./-])(?:{body})/[A-Za-z0-9T:._-]+")
 
 
 # The mark flw-spec writes above a report's own heading: one line naming the
@@ -96,6 +104,11 @@ def record_names(records: list) -> set[str]:
     return {r.name for r in records if r.name}
 
 
+# The record fields a session writes prose into. A path anywhere else in the file
+# is describing something rather than citing it.
+PROSE = ("summary", "approach", "contract_edit")
+
+
 def cited(records: list, pattern: re.Pattern[str] | None = None) -> set[str]:
     """Every report name a record points at, from both places it can point from.
 
@@ -104,16 +117,27 @@ def cited(records: list, pattern: re.Pattern[str] | None = None) -> set[str]:
     `:14` line anchor is stripped, because it cites a line of a report rather than
     a different report, and a match with no `.md` in it is dropped as an artifact
     of reading prose with a pattern.
+
+    The prose fields rather than the whole file. Reading the file matched paths in
+    `dag` task descriptions, which describe a fixture rather than cite a report:
+    `y.md`, one of this repository's dead citations, comes from a task describing a
+    test that writes `.flw/reports/y.md`. A record that does not parse contributes
+    nothing now where it used to contribute its text, and that is the same record
+    `flw validate` refuses.
+
+    It still cannot see a negation. "Nobody has read `.flw/reports/X.md`" counts X
+    as spent, and that is the standing argument for `sources` carrying this over
+    time rather than the pattern.
     """
     matcher = pattern or citation()
     found: set[str] = set()
     for record in records:
         declared = record.document.get("sources", [])
         given = [s for s in declared if isinstance(s, str)]
-        try:
-            given += matcher.findall(record.path.read_text(errors="replace"))
-        except OSError:
-            pass
+        for key in PROSE:
+            value = record.document.get(key)
+            if isinstance(value, str):
+                given += matcher.findall(value)
         for one in given:
             name = one.split("/")[-1].split(":")[0]
             if name.endswith(".md"):
