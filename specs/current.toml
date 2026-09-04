@@ -162,7 +162,7 @@ surfaces = [
   "flw kb [-c|--category CAT] [-t|--tag TAG] [--type TYPE] [--here] [--global] [-T|--tree] [-s|--stats] [-p|--paths]",
   "flw kb search <term...> [-c|--category CAT] [-t|--tag TAG] [--type TYPE] [--here] [--global] [-T|--tree] [-s|--stats] [-p|--paths]",
   "flw kb show <slug>",
-  "flw kb write <category> <title> [-d|--description DESC] [--type TYPE] [--tags a,b] [--here]",
+  "flw kb write <category> <title> [-d|--description DESC] [--type TYPE] [--tags a,b] [--here] [--revision REV]",
   "flw kb lint",
   "flw know [PATH] [--root PATH] [--full] [--check|--reindex|--stamp PATH...]",
   "flw map [NODE] [--root PATH] [--format text|mermaid|dot]",

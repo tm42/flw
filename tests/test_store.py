@@ -1552,6 +1552,57 @@ def test_a_bare_count_with_no_revision_is_reported(tmp_path):
     assert "flw/counts — e.g. 9" in report
 
 
+def test_a_revision_that_is_not_a_revision_silences_nothing(tmp_path):
+    """`unrevisioned` skips on truthiness, so any non-empty string cleared the row.
+    mark-what-is-spent rejected an opt-out marker because it hands an agent a way
+    to silence the check, and an unvalidated field is that marker."""
+    report = linted(
+        tmp_path,
+        (
+            "flw/counts.md",
+            (
+                "+++\ntitle = 'counts'\nrevision = 'not a revision at all'\n+++\n"
+                "The row is built at `core/scripts/scout.py:478`.\n"
+            ),
+        ),
+    )
+    assert ROW in report
+    assert "flw/counts — e.g. core/scripts/scout.py:478" in report
+
+
+def test_a_malformed_revision_reads_as_none_rather_than_as_an_error(tmp_path):
+    """Every other frontmatter defect in this store degrades a surface rather than
+    failing a read, and this one does the same."""
+    hm = home(tmp_path)
+    note(hm / "kb", "flw/counts.md", "+++\ntitle = 'c'\nrevision = 'zzz'\n+++\nat x.py:1\n")
+    walked = store.walk(hm, None)
+    assert walked[0].revision == ""
+    assert walked[0].title == "c"
+
+
+def test_kb_write_records_the_revision_and_the_note_then_clears_the_row(tmp_path):
+    """The row was 6 of 6 in flw's own store by construction: write() never emitted
+    the key, there was no flag, and `flw kb write --help` never named it, so the
+    only routes off the row were hand-editing an undocumented key or writing
+    something untrue into it."""
+    hm = home(tmp_path)
+    path, _size = store.write(
+        hm / "kb", "flw", "counts", "what the row counts",
+        "The row is built at `core/scripts/scout.py:478`.",
+        revision="f5d11a6",
+    )
+    assert "revision    = \"f5d11a6\"" in path.read_text()
+    walked = store.walk(hm, None)
+    assert walked[0].revision == "f5d11a6"
+    assert ROW not in store.lint(walked)
+
+
+def test_kb_write_without_a_revision_emits_no_key(tmp_path):
+    hm = home(tmp_path)
+    path, _size = store.write(hm / "kb", "flw", "counts", "d", "a body")
+    assert "revision" not in path.read_text()
+
+
 def test_an_updated_date_is_not_a_revision(tmp_path):
     """`updated` is the field a note already carries, and reading it as a revision
     would report the store clean while every citation in it is undatable."""

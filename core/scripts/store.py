@@ -51,6 +51,11 @@ def _tokens(chars: int) -> str:
     return f"{n / 1000:.1f}k tokens" if n >= 1000 else f"{n} tokens"
 
 
+# A git revision as a note records one: an abbreviated or full hash. Seven is
+# git's own shortest abbreviation and forty is a full SHA-1.
+REVISION = re.compile(r"[0-9a-fA-F]{7,40}")
+
+
 @dataclass
 class Note:
     path: Path
@@ -123,9 +128,18 @@ class Note:
         on one day and the second one is what moved the line the note cites. A note
         that records no revision has nothing for a check to measure its citations
         against, which is what `lint` reports.
+
+        Read only when it looks like a revision, because `unrevisioned` skips on
+        truthiness: any non-empty string cleared the row, so a sentence in the
+        field silenced the check. `mark-what-is-spent` rejected an opt-out marker
+        because it hands an agent a way to silence the check, and an unvalidated
+        `revision` is that marker. A malformed value reads as no revision rather
+        than as an error, which is how every other frontmatter defect here is
+        handled.
         """
         value = self.meta.get("revision")
-        return value.strip() if isinstance(value, str) else ""
+        text = value.strip() if isinstance(value, str) else ""
+        return text if REVISION.fullmatch(text) else ""
 
     @property
     def size(self) -> int:
@@ -559,6 +573,7 @@ def write(
     body: str,
     type_: str = "",
     tags: list[str] | None = None,
+    revision: str = "",
     today: date | None = None,
 ) -> tuple[Path, str]:
     """Emit one note, and never over anything already at its path.
@@ -586,6 +601,8 @@ def write(
     if tags:
         rendered = ", ".join(json.dumps(t) for t in tags)
         meta.append(f"tags        = [{rendered}]")
+    if revision:
+        meta.append(f"revision    = {json.dumps(revision)}")
     meta.append(f"updated     = {when.isoformat()}")
 
     path = root.joinpath(*category_parts(category)) / f"{slug(title)}.md"

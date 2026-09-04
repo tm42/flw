@@ -2505,6 +2505,13 @@ RULES = """what to write
      raised" survives a library upgrade as evidence; "pydantic unions are broken"
      does not.
 
+     `--revision` records where the measurement was taken, and it is what gets a
+     note off `flw stale`'s unrevisioned row. `updated` cannot: a date is not
+     something a diff can be taken against, because two commits land on one day
+     and the second is what moved the line the note cites. A value that does not
+     look like a hash reads as no revision at all, so writing a sentence there
+     silences nothing.
+
   3. Contradiction is reconciled in the open, never overwritten. When a new finding
      disagrees with a note, quote both and say which was measured when — or write
      the new note with `supersedes` pointing at the old. Erasing the old reading
@@ -3345,6 +3352,7 @@ def kb_write(args: argparse.Namespace) -> int:
         path, size = engine.write(
             target, where if not args.here else "", title, args.description,
             body, type_=args.type or "", tags=tags,
+            revision=(args.revision or "").strip(),
         )
     except ValueError as exc:
         # The store's own last refusal: something is at the note's path that the
@@ -4212,6 +4220,8 @@ title and description is accepted, and the title sets the filename.""",
     q.add_argument("--tags", metavar="a,b", help="comma-separated, open vocabulary")
     q.add_argument("--here", action="store_true",
                    help="write into this project\'s plans/notes/ instead of ~/.flw/kb/")
+    q.add_argument("--revision", metavar="REV",
+                   help="the revision the note\'s claims were measured at")
     q.set_defaults(handler=kb_write)
 
     q = kbsub.add_parser(
