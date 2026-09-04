@@ -1,0 +1,250 @@
+name = "say-what-was-not-read"
+base = "resolve-before-comparing"
+
+summary = """
+Three commands print an outcome they did not earn. flw style check looks for a transcript
+in one host's directory and, finding none, says the host "may" keep none — when flw knows
+it looked in exactly one place and that place belongs to Claude Code. flw stale's prose
+citation matcher is hardcoded to .flw/reports while the directory it folds is configurable,
+so a project that moved its reports directory sees every citation as unread. flw style lint
+names a path it could not open and then reports the run clean at exit 0. Each learns to say
+what it could not read: a host with no transcript source is named as such, the matcher is
+built from the directory it was handed, and a target that could not be read exits 2.
+"""
+
+approach = """
+Three field findings from a live session, each reproduced here at f495f6d before this
+record was written. Two of the three needed narrowing, and the narrowing is in the evidence
+below rather than in the reports as received.
+
+FINDING 1, REPORTED AS CRITICAL: flw style check cannot inspect a Codex session
+
+  grep -c 'codex\\|opencode' core/scripts/style_lint.py        0
+  core/scripts/style_lint.py:298
+    base = (home or Path.home()) / ".claude" / "projects"
+  HOME=<an empty directory> flw style check
+    exit 1
+    style check: no transcript found for <root>
+             this host may keep none, or keep it somewhere flw does not read
+
+There is no host branching anywhere in the engine. The narrowing: it fails rather than
+passing, so the reported "just failed to return a transcript" is the command working as
+written. What is wrong is that the message hedges where flw knows the answer — it looked in
+one place, and that place is Claude Code's — and that `flw install` links flw-style into
+all three hosts at `cli/flw.py:82`, so a command that can work on one is installed on three.
+
+The reported fix was to stop exposing the skill on a host with no adapter. That overshoots:
+flw-style carries both `lint` and `check`, and `lint` works on every host. Removing the
+skill would take a working command away to hide a broken one. Decision 1 takes the other
+half of the fix.
+
+FINDING 2, REPORTED AS MAJOR: a custom reports directory hides every prose citation
+
+  core/scripts/stale.py:41
+    CITATION = re.compile(r"[\\w./-]*\\.flw/reports/[A-Za-z0-9T:._-]+")
+  core/scripts/stale.py:269,281
+    def stale(..., reports_dir: str = ".flw/reports", ...)
+    found = reports((root / reports_dir), corpus.records)
+
+The directory is parameterised and the matcher is not. Reproduced on a fixture with
+`[paths] reports = "reviews"`, one report at `reviews/2026-09-04T1200-eng.md`, and a record
+citing that path in its summary:
+
+  flw stale
+    REPORTS  (1)  · 0 spent, 1 nobody has read
+      unread  (1)
+      - 2026-09-04T1200-eng.md
+
+This falsifies a contract sentence `mark-what-is-spent` shipped this morning, which promises
+that records written before the `sources` field are still read. For a project that moved its
+reports directory they are not, and the report it cannot match is the one it lists as unread.
+
+FINDING 3, REPORTED AS MAJOR: a missing lint target is named and then cleared
+
+  flw style lint no-such-file.md
+    style lint: no such path: no-such-file.md
+    style lint: clean
+    exit 0
+
+Same through `core/scripts/style_lint.py` directly. `cli/flw.py:1224` branches only on the
+finding count, so a walk that resolved nothing and a walk that found nothing wrong are the
+same answer.
+
+WHY ONE RECORD
+
+Each prints a result it did not earn — a style check on a session it never read, a fold that
+cannot match a citation it was handed the directory for, a lint that clears a file it never
+opened. The contract already draws this distinction for two commands: exit 2 means the run
+proved nothing, for `flw test` and for a file `flw validate` could not check. Two of the
+three fixes are that sentence applied where it was missing.
+
+WHAT THIS IS NOT
+
+Not a transcript reader for Codex or OpenCode. Neither writes a session transcript flw can
+read, and this record does not invent one; it records which host has a source and says so
+when the answer is none. If a host gains one later, it is a field on an existing record
+rather than a new mechanism.
+
+Not a change to what flw style lint reports about prose. The vocabulary and geometry rules,
+what they match and what they skip, are untouched. Only the exit code for a target that was
+never read changes.
+
+Not a widening of what counts as a citation. The matcher gains the directory it was handed
+and keeps the default; it does not learn to match a report by name anywhere in the tree.
+
+WHY MAJOR
+
+`flw style lint` currently exits 0 for a path it could not read. A project running it in CI
+against a directory that has since been renamed passes today and exits 2 after this. The
+reliance was on a defect, but the exit code is a published surface and something branches on
+it — which is the same reasoning `stale-claims` recorded for test-reporting: "a full run
+stopped meaning what it meant, and flw-execute branches on that exit code". `flw stale`'s
+counts also change on any project that moved its reports directory, from all-unread to the
+real split.
+"""
+
+contract_edit = """
+1. Replace the assumption at specs/current.toml:57, which currently reads "A host writes
+   each session's transcript to disk as the session runs, so a session can read its own
+   recent replies. flw style check depends on it and reports nothing if a host stops doing
+   it." — with:
+
+     "Some hosts write each session's transcript to disk as the session runs, and flw
+     records the directory to read for each. flw style check depends on that source: it
+     names the directory it read, and when there is nothing to read it names the directory
+     it looked in, rather than reporting a session it never opened. What it names is the
+     source and never the host, because nothing tells flw which host is running it. A host
+     that stops writing a transcript, or moves it, takes the command with it."
+
+   Keep the rest of that assumption's text — the sentence about several sessions against one
+   project and the dispatched-agent refusal — unchanged and in place.
+
+2. In the CLI component's `provides`, replace the sentence beginning "A user can ask what
+   the agent's own recent replies broke in that style" with:
+
+     "A user can ask what the agent's own recent replies broke in that style, and gets the
+     rule and an example rather than the rule restated, because a model that can recite a
+     constraint it is breaking is not helped by hearing it again. Where there is no
+     transcript to read, they are told which directory flw looked in and that nothing there
+     belonged to this project, instead of a bare report that none was found — and the
+     file-checking half of the same skill works whether or not a transcript exists."
+
+3. In the CLI component's `surfaces`, in the "Exit codes:" line, at the very END of it —
+   after "and 0 for a project that has no contract yet, which is a state and not a fault."
+   and not after the `flw validate` clause that precedes it — add:
+
+     " `flw style lint` uses 2 for a target it could not read, so a path that no longer
+     exists is distinguishable from prose that is clean."
+
+   Inserting mid-sentence would reattach "and 0 for a project that has no contract yet" to
+   flw style lint, which reads no contract at all.
+
+4. In the "validation and checks" component's `provides`, in the sentence beginning "A
+   review report a version record has acted on is distinguishable from one nobody has
+   read", replace "its prose where it does not, so records written before the field are
+   still read" with:
+
+     "its prose where it does not, read against the reports directory the project declared
+     and against the default, so records written before the field are still read and a
+     project that moved that directory does not lose every citation naming the old one"
+"""
+
+[[decisions]]
+topic = "What a host with no transcript source does"
+options = [
+  "Reword the failure so it stops hedging, and leave discovery hardcoded",
+  "Record the source per host, say so definitely when there is none, and keep the skill installed everywhere",
+  "That, plus decline to install flw-style on a host with no transcript source",
+]
+chosen = "Record the source per host, say so definitely, keep the skill installed"
+rationale = """
+`cli/flw.py:66`'s `Host` already carries `styles: str = ""` with the comment "Only Claude
+Code has the slot; the others can only take the text in the always-on instructions file,
+which is why `flw style` has two paths." A transcript source is the same shape of fact about
+a host, so it is a field beside that one rather than a new mechanism, and the engine keeps
+taking a path it is handed — the shape `flw stale` already uses for its readers.
+
+What this decision cannot buy, and the first draft promised: naming the host. Nothing in flw
+tells it which host is running the session. `present()` at `cli/flw.py:126` answers whether a
+host is installed on the machine, by `shutil.which(host.binary)` or by an ambient file flw did
+not write, and on the author's machine `claude`, `codex` and `opencode` all resolve. So the
+command names the transcript directory it read or looked in, which it does know, and the
+contract says so rather than claiming an identity flw cannot establish.
+
+Declining to install was the reported fix and it overshoots. flw-style carries `flw style
+lint` as well as `flw style check`, and lint reads files rather than transcripts, so it works
+on every host. Skipping the skill on Codex would remove a working command to hide a broken
+one. Rewording alone was rejected because it fixes the sentence and records nothing: the next
+host added asks the same question with nothing on disk to answer it.
+"""
+
+[[decisions]]
+topic = "How the prose citation matcher finds a report path"
+options = [
+  "Build it from the reports directory the fold was handed, and only that",
+  "Build it from that directory and keep .flw/reports as a second pattern",
+  "Match any path whose final component names a file in the reports directory",
+]
+chosen = "The configured directory and the default, both"
+rationale = """
+Building it from the configured directory alone was the reported fix and it leaves the same
+failure one move later: a project that moves its reports directory has records citing the old
+location, and those go silently uncounted, which is what this finding is. Keeping both
+patterns costs one alternation and catches the history.
+
+Matching by basename against the directory listing was rejected as too loose. It survives any
+number of moves, but it counts a record naming any file that happens to share a report's name,
+and the fold's whole value is that a spent report is one a record actually acted on. Reports
+are timestamped so a collision is unlikely, and unlikely is not a property worth building the
+matcher on.
+"""
+
+[[decisions]]
+topic = "The exit code for a lint target that could not be read"
+options = [
+  "1, the same as a style violation",
+  "2, the code the contract already uses for a run that proved nothing",
+]
+chosen = "2"
+rationale = """
+The contract's exit-code surface already says 2 means the run proved nothing — for `flw test`
+with nothing runnable, and for a file `flw validate` was given and could not check. A target
+that does not exist is that case rather than a style violation, and `flw style lint` is a
+declared check in `success_criteria.tests`, so the distinction is one a job acts on: prose is
+wrong, or the paths are.
+
+One thing that argument cannot lean on, and the first draft did: flw's own runner does not act
+on it. `core/scripts/run_tests.py:59` is `return "pass" if self.code == 0 else "fail"`, so
+`flw test` sees 2 and 1 as the same answer and this record does not change that — deliberately,
+because that function's comment says nothing is inferred from an exit code. The distinction is
+for a caller invoking `flw style lint` directly, which is how a project's own job runs it, and
+for a human reading the line. 1 was the reported fix and stops the false green just as well; it
+loses a distinction the contract already draws for the other two commands.
+"""
+
+[[dag]]
+group = 1
+phase = "Say which host keeps a transcript"
+tasks = [
+  { id = "host-transcripts", desc = "cli/flw.py: `Host` gains a transcripts field beside `styles`, holding the directory that host writes session transcripts to and empty when it has none — `~/.claude/projects` for claude-code, empty for codex and opencode. Comment it the way `styles` is commented, saying which hosts have the slot and why." },
+  { id = "engine-takes-a-base", desc = "core/scripts/style_lint.py:298: `session_transcripts` takes the base directory rather than deriving it from HOME, keeping the engine free of any knowledge of hosts. The CLI passes what the Host record carries." , depends_on = ["host-transcripts"] },
+  { id = "name-the-source", desc = "cli/flw.py `style_check`: the trigger is a transcript directory that is absent or unreadable on disk, NOT a host that declares none — claude-code declares ~/.claude/projects unconditionally, so a declaration test is never false and would never fire, including on this record's own reproduction where the binary is on PATH and only the directory is missing. Name the directory flw looked in, say nothing there belonged to this project, and say that flw style lint still works, because the skill carries both commands and only one is unavailable. Never name a host: nothing tells flw which host is running it, and `present()` at cli/flw.py:126 answers a different question — all three binaries resolve on the author's machine. Still exit 1: the command was asked for and could not run.", depends_on = ["engine-takes-a-base"] },
+  { id = "source-tests", desc = "tests/: a declared transcript directory that does not exist gets the definite message naming it, and exit 1; one that exists but holds nothing for this project gets the same; one that exists and holds this project's transcript reads it as before. No test may depend on the developer's own ~/.claude.", depends_on = ["name-the-source"] },
+]
+
+[[dag]]
+group = 2
+phase = "Match a citation where the reports actually are"
+tasks = [
+  { id = "citation-from-config", desc = "core/scripts/stale.py:41: build the citation pattern from the reports directory the fold was handed, keeping `.flw/reports` as a second alternation so a record written before a move still matches. Two things about that directory string: it reaches a regex escaped, because a project may name it anything; and it contributes a pattern only when it is relative and stays inside the root. `[paths] reports` is taken raw at cli/flw.py:3805 — unlike `[paths] flw`, which the contract refuses when absolute — so `root / reports_dir` silently discards the root for an absolute value, and a pattern built from a machine-specific absolute path matches nothing any record would ever spell. Such a project folds on the default alone. Bounding the setting itself is a separate change and not this record's." },
+  { id = "citation-tests", desc = "tests/test_stale.py: a project with `[paths] reports = \"reviews\"` and a record citing `reviews/<name>.md` reports it spent rather than unread — the reproduction in `approach`, which gives 0 spent and 1 unread today. A second test that a record citing `.flw/reports/<name>.md` in such a project is still matched. A third that a directory name containing a regex metacharacter does not become a pattern.", depends_on = ["citation-from-config"] },
+]
+
+[[dag]]
+group = 3
+phase = "A lint that says what it could not read"
+tasks = [
+  { id = "lint-exit-two", desc = "core/scripts/style_lint.py and cli/flw.py:1224: a target that could not be resolved or read is carried out of the walk rather than only printed, and the handler exits 2 when any occurred and 0 only when every requested target was checked and nothing was found. A finding still exits 1. Both entry points behave the same, because the engine is run directly as a declared check." },
+  { id = "lint-tests", desc = "tests/test_style_lint.py: a missing path exits 2 and does not print clean; an unreadable file exits 2 and names it; a mix of one good target and one missing exits 2; a clean run over real targets still exits 0 and still prints clean. Verify each fails with the change reverted.", depends_on = ["lint-exit-two"] },
+  { id = "contract-check-still-green", desc = "`.venv/bin/python core/scripts/style_lint.py .` is one of the contract's four declared checks. Confirm it still exits 0 on this repository after the change, because a walk of `.` resolves and a new exit path must not fire on it.", depends_on = ["lint-exit-two"] },
+]

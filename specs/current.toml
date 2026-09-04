@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.15.2"
+spec_version = "0.16.0"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -36,6 +36,7 @@ applied = [
   "no-false-premises",
   "mark-what-is-spent",
   "resolve-before-comparing",
+  "say-what-was-not-read",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -54,7 +55,7 @@ assumptions = [
   "The user's project may use any version control system, or none; flw proposes commits but does not make them, and reads no VCS state except to locate a project root when nothing nearer is found.",
   "Not every tracked path belongs to a component. specs/, .flw/ and pyproject.toml are read by flw and by hosts and delivered by no component; a path claimed by none is a state, not a gap, and flw validate does not check for it.",
   "A repository or parent whose directory is named `system` has no store: its repository file and the system file share a name, and flw know refuses it naming the collision rather than pick a reading.",
-  "A host writes each session's transcript to disk as the session runs, so a session can read its own recent replies. flw style check depends on it and reports nothing if a host stops doing it. Where several sessions run against one project it cannot identify its own, so it names the path it read; a transcript whose replies are all a dispatched agent's is refused rather than skipped, because that prose never received the style.",
+  "Some hosts write each session's transcript to disk as the session runs, and flw records the directory to read for each. flw style check depends on that source: it names the directory it read, and when there is nothing to read it names the directory it looked in, rather than reporting a session it never opened. What it names is the source and never the host, because nothing tells flw which host is running it. A host that stops writing a transcript, or moves it, takes the command with it. Where several sessions run against one project it cannot identify its own, so it names the path it read; a transcript whose replies are all a dispatched agent's is refused rather than skipped, because that prose never received the style.",
   "Two declared members whose directories share a basename have no store between them: system.md's revision table is keyed by member directory basename, so one entry would stand for both, and flw know refuses the pair naming both config keys and both paths rather than recording one and reporting it for the other.",
 ]
 
@@ -112,7 +113,7 @@ provides = [
   "A user can declare the repositories a project spans in its config, and flw context and flw doctor list them with whether each exists, so a session rooted at the parent of several checkouts knows what it is standing above.",
   "A user can put flw's per-project directory under any relative name — an already-ignored directory the repository has — with one machine-wide setting, and flw doctor says which name is in force and where it came from.",
   "A user can check any prose file in the repository against the writing style's document-geometry rules — heading depth, untagged code fences, and the trailing spaces that become a <br> in a file — and is told the path, the line and the rule for each violation rather than a count. The vocabulary rules never read a file, because the same words are almost always right in a hand-written document.",
-  "A user can ask what the agent's own recent replies broke in that style, and gets the rule and an example rather than the rule restated, because a model that can recite a constraint it is breaking is not helped by hearing it again.",
+  "A user can ask what the agent's own recent replies broke in that style, and gets the rule and an example rather than the rule restated, because a model that can recite a constraint it is breaking is not helped by hearing it again. Where there is no transcript to read, they are told which directory flw looked in and that nothing there belonged to this project, instead of a bare report that none was found — and the file-checking half of the same skill works whether or not a transcript exists.",
 ]
 properties = [
   "Every subcommand and flag the CLI accepts is declared in surfaces, and every declared one exists: the parser and the contract cannot drift apart unnoticed.",
@@ -166,7 +167,7 @@ surfaces = [
   "flw map [NODE] [--root PATH] [--format text|mermaid|dot]",
   "flw stale [--root PATH]",
   "flw version",
-  "Exit codes: 0 success, 1 something failed or was refused. `flw test` also uses 2 for a run that proved nothing — nothing declared to run, nothing left runnable here, a full run with a check the project handed back, or a full run with no contract to read. `flw validate` uses 2 for a file it was given and could not check, and 0 for a project that has no contract yet, which is a state and not a fault.",
+  "Exit codes: 0 success, 1 something failed or was refused. `flw test` also uses 2 for a run that proved nothing — nothing declared to run, nothing left runnable here, a full run with a check the project handed back, or a full run with no contract to read. `flw validate` uses 2 for a file it was given and could not check, and 0 for a project that has no contract yet, which is a state and not a fault. `flw style lint` uses 2 for a target it could not read, so a path that no longer exists is distinguishable from prose that is clean.",
   "~/.flw/kb/ — the machine-wide note store. A directory tree of markdown files where a category is a directory; flw creates it on first write, holds no index of it, and reads no VCS in it.",
   "<project root>/plans/notes/ — the project's note store, created by flw kb write --here. plans/*.md above it belongs to flw ledger and is not read by flw kb.",
   "Skill symlinks into ~/.claude/skills, ~/.agents/skills and ~/.config/opencode/skills.",
@@ -239,7 +240,7 @@ provides = [
   "A user is told what a note costs before opening it and how old it is, so following a title into a note is a decision rather than a surprise.",
   "A user can find where a store is going wrong — notes with no description, no date, near duplicates of each other, or a slug that resolves to several — without flw deciding which of them to delete.",
   "A user is told when the store holds a file flw could not read, rather than searching a store that silently answers from part of itself.",
-  "A review report a version record has acted on is distinguishable from one nobody has read, from both directions: the paths the records name — the sources field where a record carries one and its prose where it does not, so records written before the field are still read — and the record name flw-spec writes at the top of the report it specced from. One fact and one fold, so neither half has to be complete. A report a record names with no file behind it is reported as a dead citation rather than counted, because a citation is not evidence a file exists.",
+  "A review report a version record has acted on is distinguishable from one nobody has read, from both directions: the paths the records name — the sources field where a record carries one and its prose where it does not, read against the reports directory the project declared and against the default, so records written before the field are still read and a project that moved that directory does not lose every citation naming the old one — and the record name flw-spec writes at the top of the report it specced from. One fact and one fold, so neither half has to be complete. A report a record names with no file behind it is reported as a dead citation rather than counted, because a citation is not evidence a file exists.",
   "A claim a commit could falsify — a bare count, a path with a line number, a version string — is reported when it sits in a store that carries no revision, which is every extension and any note whose frontmatter records only a date. The report is of shape and never of truth: nothing checks whether the claim still holds, because that costs a run and is a judgment a command does not make.",
 ]
 properties = [
