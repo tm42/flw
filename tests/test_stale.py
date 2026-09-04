@@ -255,6 +255,33 @@ def test_a_backticked_name_that_is_no_record_marks_nothing(tmp_path):
     assert fold(root).spent == []
 
 
+def test_a_first_line_mentioning_a_record_without_the_mark_is_not_the_mark(tmp_path):
+    """Any first line carrying a backticked record name counted, so a report
+    opening with an instruction read as marked in a project holding a record of
+    that name. The mark is the sentence flw-spec writes, not any sentence."""
+    root = project(tmp_path, flw_test='summary = "s"\n')
+    report(root, "2026-09-01T2321-eng.md", "Run `flw-test` before reading this.\n\n# eng\n")
+    found = fold(root)
+    assert found.spent == []
+    assert found.unread == ["2026-09-01T2321-eng.md"]
+
+
+def test_the_extensions_header_counts_files_and_the_row_counts_lines(tmp_path):
+    """`EXTENSIONS (n)` counted marker lines while REPORTS, KNOWLEDGE and NOTES
+    each counted documents, and it repeated the row's own number one line above
+    it. flw ledger printed 4 extensions in the repository where flw stale printed
+    2."""
+    root = project(tmp_path, first='summary = "s"\n')
+    directory = root / ".flw" / "extensions"
+    directory.mkdir(parents=True)
+    (directory / "shared.md").write_text("**Python 3.11 is the floor**, for `tomllib`.\n")
+    (directory / "flw-spec.md").write_text("# no countable here\n")
+    (directory / "flw-execute.md").write_text("# nor here\n")
+    text = stale.fold(root)
+    assert "EXTENSIONS  (3)" in text
+    assert "claims with no revision  (1)" in text
+
+
 def test_a_record_whose_sources_is_not_a_list_does_not_raise(tmp_path):
     """flw validate refuses such a record, but this command does not validate
     first and the contract says it exits 1 only for a bad --root."""

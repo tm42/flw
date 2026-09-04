@@ -81,7 +81,11 @@ def citation(reports_dir: str = DEFAULT_REPORTS) -> re.Pattern[str]:
 
 
 # The mark flw-spec writes above a report's own heading: one line naming the
-# record specced from it, in backticks.
+# records specced from it, in backticks. Every one of this repository's marks
+# reads "Specced as `<name>` … under specs/versions/.", and the opening is what
+# the line is anchored on — a first line that merely mentions a record in
+# backticks is prose about a record, not a mark saying this report was acted on.
+MARK = re.compile(r"^\s*specced as\b", re.IGNORECASE)
 BACKTICKED = re.compile(r"`([^`]+)`")
 
 
@@ -155,6 +159,11 @@ def marked(directory: Path, names: set[str]) -> set[str]:
     it reviewed — `# Adversarial pass — \\`opening-is-one-call\\`` — and that is the
     report of a record rather than a report a record acted on. Reading headings too
     marked 20 of the 66 reports here instead of 3.
+
+    Strictly the opening words too. Any first line carrying a backticked record
+    name counted, so a report opening "Run `flw test` before reading this" read as
+    marked by a project holding a record of that name — the third place this
+    command believed something it had not checked.
     """
     found: set[str] = set()
     for path in sorted(directory.glob("*.md")):
@@ -163,7 +172,7 @@ def marked(directory: Path, names: set[str]) -> set[str]:
         except OSError:
             continue
         first = next((line for line in text.splitlines() if line.strip()), "")
-        if first.lstrip().startswith("#"):
+        if first.lstrip().startswith("#") or not MARK.match(first):
             continue
         if any(t in names for t in BACKTICKED.findall(first)):
             found.add(path.name)
@@ -281,6 +290,7 @@ def render(
     markers: list,
     note_claims: list[str],
     note_count: int,
+    extension_count: int = 0,
 ) -> str:
     """One block, a row per store. Nothing here is a verdict and nothing is a failure."""
     lines = [f"  root: {root}", ""]
@@ -319,8 +329,11 @@ def render(
     else:
         lines += [f"KNOWLEDGE  {knowledge.DASH} no store", ""]
 
+    # The header counts documents, because REPORTS, KNOWLEDGE and NOTES all do.
+    # Counting marker lines here printed EXTENSIONS (2) in a project holding four
+    # extension files, and repeated the row's own number one line above it.
     shown = [f"{m.path.name}:{m.line}  {m.text}" for m in markers]
-    lines.append(f"EXTENSIONS  ({len(shown)})")
+    lines.append(f"EXTENSIONS  ({extension_count})")
     lines.append("")
     _rows(
         lines,
@@ -368,4 +381,12 @@ def fold(
     know = knowledge_state(knowledge_stores or [], members or {})
     markers = ledger.extension_markers(corpus)
     given = notes or []
-    return render(root, found, know, markers, note_store.unrevisioned(given), len(given))
+    return render(
+        root,
+        found,
+        know,
+        markers,
+        note_store.unrevisioned(given),
+        len(given),
+        len(corpus.extensions),
+    )
