@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.16.1"
+spec_version = "0.16.2"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -38,6 +38,7 @@ applied = [
   "resolve-before-comparing",
   "say-what-was-not-read",
   "nothing-falls-through",
+  "a-shape-is-not-a-judgment",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -242,7 +243,7 @@ provides = [
   "A user can find where a store is going wrong — notes with no description, no date, near duplicates of each other, or a slug that resolves to several — without flw deciding which of them to delete.",
   "A user is told when the store holds a file flw could not read, rather than searching a store that silently answers from part of itself.",
   "A review report a version record has acted on is distinguishable from one nobody has read, from both directions: the paths the records name — the sources field where a record carries one and its prose where it does not, read against the reports directory the project declared and against the default, so records written before the field are still read and a project that moved that directory does not lose every citation naming the old one, and matched over the record's own written fields, so a path inside a task description or a quoted fixture is not a citation, and at a directory boundary, so a directory whose name merely ends in the declared one is not the reports directory — and the record name flw-spec writes at the top of the report it specced from. One fact and one fold, so neither half has to be complete. A report a record names with no file behind it is reported as a dead citation rather than counted, because a citation is not evidence a file exists.",
-  "A claim a commit could falsify — a bare count, a path with a line number, a version string — is reported when it sits in a store that carries no revision, which is every extension and any note whose frontmatter records only a date. The report is of shape and never of truth: nothing checks whether the claim still holds, because that costs a run and is a judgment a command does not make.",
+  "A claim a commit could falsify — a count written as digits or as a word, a path with a line number, a version string — is reported when it sits in a store that carries no revision, which is every extension and any note whose frontmatter records only a date. A note clears that row by recording the revision it was measured at, which flw kb write can put there and which is read only when it looks like one, so a sentence in the field does not silence the check. The report is of shape and never of truth: nothing checks whether the claim still holds, because that costs a run and is a judgment a command does not make.",
 ]
 properties = [
   "A contract whose applied list names only records that exist validates clean; a record no applied list names is a version in flight rather than an error.",

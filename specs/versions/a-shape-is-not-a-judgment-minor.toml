@@ -1,0 +1,165 @@
+name = "a-shape-is-not-a-judgment"
+base = "nothing-falls-through"
+sources = [
+  ".flw/reports/2026-09-04T1934-fresh-code.md",
+  ".flw/reports/2026-09-04T1934-fresh-code-the-matcher.md",
+]
+
+summary = """
+The marker rules say they report shape and never truth, and in one place they decide truth:
+a number spelled as a word is exempted as register, which is a claim about what an author
+meant. That exemption missed the one drifted claim in this repository that needed a human,
+and a test pins the miss using the false sentence as its fixture. Three narrower faults sit
+with it — a thousands separator splits a count so the reader is handed `1` for a line about
+1,049 lines, a host and port in a URL matches the path-with-a-line-number rule and outranks
+every other shape, and any non-empty string in a note's revision silences its row while
+flw kb write cannot put one there at all.
+"""
+
+approach = """
+Specced from the fresh-code review's the-matcher lens, which read one object: MARKERS at
+core/scripts/ledger.py:805-816 and its two callers. Every finding was reproduced by the
+reviewer; the author re-verified the CRITICAL against the extensions as they stood at the
+commit that added the lint.
+
+THE ONE REAL SAMPLE, AND WHAT IT CAUGHT
+
+`c2f86ec` fixed three drifted claims in this repository's extensions. Running MARKERS over
+those files as they stood at `082af59`, the commit that added the lint:
+
+  .flw/extensions/flw-execute.md:3   MISSED    "Three checks, all of which run here"
+  .flw/extensions/flw-execute.md:9   path:line  tests/test_cli.py:3156
+  .flw/extensions/flw-review.md:5    version    7.3
+  .flw/extensions/flw-review.md:5    count      638
+
+Two of three. The miss is the one whose count was wrong — four checks written as "Three" —
+and it was fixed only because a person read the file. `core/scripts/ledger.py:832-835`
+defends the exemption with two examples, and one of them, "in about eight seconds", sits on
+that same line 3 beside the false count. `tests/test_ledger.py:1054-1057` then asserts that
+exact sentence is correctly ignored, with a docstring calling it register.
+
+The header comment at `core/scripts/ledger.py:802` says the rules report shape and never
+truth. "Spelled as a word means register" is not a statement about the shape of a line; it is
+a statement about what the author meant by it. The date exclusion at `:815` is the same kind
+of judgment and it holds, because a date's shape is decidable. This one is not.
+
+THE PRICE, STATED RATHER THAN DISCOVERED
+
+Adding spelled cardinals reports `.flw/extensions/shared.md:16`, "the first fifteen lines",
+which is register and true. That is one standing false positive, and it is the same price
+`mark-what-is-spent`'s decision already accepted for `shared.md:11`. Say it in the record so
+nobody re-litigates it as a defect.
+
+THE THREE SMALLER ONES, EACH REPRODUCED
+
+  count rule, thousands separator     "1,049 lines and 21,000 bytes"  ->  count '1'
+  path:line rule, a URL               "https://api.example.com:8080"  ->  path:line 'api.example.com:8080'
+  Note.revision, any string           revision = "not a revision at all"  ->  row silenced
+
+`core/scripts/stale.py:271` renders `path:line  text`, so what reaches a human for the first
+is `shared.md:4  1` — a digit that is not a number in the sentence, with the two real
+countables unnamed. Comma-grouped numbers are this repository's own style: `scripts.md`
+writes `(1,049)` and the notes write `276,281`.
+
+The revision one has two halves and both matter. `Note.revision` returns any non-empty string
+and `unrevisioned` skips on truthiness, so a sentence clears the row. And `write()` at
+`core/scripts/store.py:554-601` never emits the key, there is no flag, and `flw kb write
+--help` never names it — so every note flw writes is on that row by construction, which is
+why the row is 6 of 6 today. `mark-what-is-spent` rejected an opt-out marker "because it
+hands an agent a way to silence the check"; an unvalidated `revision` is that marker.
+
+WHAT THIS IS NOT
+
+Not a lint over the knowledge store. That was measured — 43 counts, 3 versions, 1 path:line
+across eight bodies, against 2 markers in four extensions — and deliberately not built,
+because a check that fires on 8 of 8 files is close to no check. The reasoning is here rather
+than in an earlier record, which is where it should have been.
+
+Not a change to what the rules mean by a version or a count. `Marker.kind` mislabels a
+percentage as a version, and the field is never rendered — `stale.py:271` prints path, line
+and text only — so the fix is to delete the field, not to teach it. Out of scope and named
+here so the next reader does not file it again.
+"""
+
+contract_edit = """
+1. In the CLI component's `surfaces`, replace the `flw kb write` line with:
+
+     "flw kb write <category> <title> [-d|--description DESC] [--type TYPE] [--tags a,b] [--here] [--revision REV]"
+
+2. In the "validation and checks" component's `provides`, in the sentence beginning "A claim
+   a commit could falsify", replace "a bare count, a path with a line number, a version
+   string" with:
+
+     "a count written as digits or as a word, a path with a line number, a version string"
+
+   and after "which is every extension and any note whose frontmatter records only a date",
+   add:
+
+     " A note clears that row by recording the revision it was measured at, which flw kb
+     write can put there and which is read only when it looks like one, so a sentence in the
+     field does not silence the check."
+"""
+
+[[decisions]]
+topic = "Whether a number spelled as a word is a claim a commit could falsify"
+options = [
+  "No — the register is the signal, as the docstring argues and a test pins",
+  "Yes — report spelled cardinals, and accept one standing false positive",
+]
+chosen = "Yes"
+rationale = """
+The exemption is the only place these rules decide what an author meant rather than what a
+line looks like, and the header comment says they never do that. It is also the only place
+with evidence against it: of the three claims this repository had actually drifted, the
+exemption missed exactly one, and that one — "Three checks" against four — is the one a
+person had to catch by reading. Two of three is the lint's entire measured hit rate.
+
+The price is `shared.md:16`, "the first fifteen lines", reported forever while true. That is
+the same trade `mark-what-is-spent` took knowingly for `shared.md:11`, and it is recorded
+here so it is not re-opened as a defect. The alternative was to keep the exemption and accept
+that a countable written as a word is invisible, which is a rule that reads well and does not
+work.
+"""
+
+[[decisions]]
+topic = "How a note gets off the unrevisioned row"
+options = [
+  "Validate the field's shape only, and leave the row unclearable through the CLI",
+  "Validate the shape and give flw kb write a --revision flag",
+  "Leave both, and treat the row as permanently informational",
+]
+chosen = "Validate the shape and add the flag"
+rationale = """
+Validation alone leaves the row at 6 of 6 forever, because the only routes off it would be
+hand-editing an undocumented key or writing something untrue into it. A check that fires on
+every row is the failure this record's own `approach` gives as the reason not to lint the
+knowledge store; shipping it in the note store instead would be the same mistake with a
+smaller denominator. The flag is a surface, so its line goes into the contract at spec time
+rather than at the end — flw has deadlocked on that twice.
+"""
+
+[[dag]]
+group = 1
+phase = "The rule that judged"
+tasks = [
+  { id = "spelled-cardinals", desc = "core/scripts/ledger.py: a MARKERS entry matching spelled cardinals — two through twenty and the tens — reported as `count`. It must report `Three checks` and `Nine survived mutations`, and it will report `the first fifteen lines` in shared.md:16, which is accepted. Rewrite the docstring at :832-835: the exemption it defends is gone, and the reason is that the exemption was the one place these rules decided what an author meant." },
+  { id = "retire-the-pinned-miss", desc = "tests/test_ledger.py:1054-1057: `test_a_number_spelled_as_a_word_is_not_reported` asserts the drifted sentence is correctly ignored, using that sentence as its fixture. It is now false and must be replaced by its inverse — the same fixture, asserted as reported — so the test that pinned the miss becomes the test that pins the catch.", depends_on = ["spelled-cardinals"] },
+]
+
+[[dag]]
+group = 2
+phase = "Two rules that match the wrong thing"
+tasks = [
+  { id = "grouped-counts", desc = "core/scripts/ledger.py:815: the count rule does not span a comma, and the break at :852 keeps the first match, so `1,049 lines and 21,000 bytes` reports `1`. Widen it to carry thousands groups. Check the widened rule against the date exclusion, which the comment at :812-814 depends on and which must keep working." },
+  { id = "no-host-and-port", desc = "core/scripts/ledger.py:809: the path:line rule matches `api.example.com:8080` inside a URL, and it is first in MARKERS so it outranks every other shape on that line. Guard it so a match preceded by `//` is not taken. It must keep matching tests/test_cli.py:3156, core/scripts/scout.py:478 and /usr/lib/foo.py:12." },
+  { id = "rule-tests", desc = "tests/test_ledger.py: a comma-grouped number reports whole rather than as its leading digit; a URL with a port reports nothing from the path:line rule and still reports the version and count on that line; a date still reports nothing. Each fails with its own change reverted.", depends_on = ["grouped-counts", "no-host-and-port"] },
+]
+
+[[dag]]
+group = 3
+phase = "A row a note can leave"
+tasks = [
+  { id = "revision-shape", desc = "core/scripts/store.py:118-128: Note.revision returns the value only when it looks like a git revision — hex, seven to forty characters — so a sentence in the field does not silence unrevisioned(). A malformed value reads as no revision rather than as an error, which is how every other frontmatter defect in this store is handled." },
+  { id = "kb-write-revision", desc = "core/scripts/store.py:554-601 and cli/flw.py: `flw kb write --revision REV` writes the key into the note's frontmatter. The surface line is already in the contract, written at spec time, so the parser-surface check holds the two together. Say in `flw kb write --help` what the field is for, beside the rule about recording what was measured." },
+  { id = "revision-tests", desc = "tests/test_store.py: a note whose revision is a sentence is still reported; one whose revision is a plausible sha is not; `flw kb write --revision` puts the key in the file and the note then clears the row. Verify each by reverting its own change.", depends_on = ["revision-shape", "kb-write-revision"] },
+]
