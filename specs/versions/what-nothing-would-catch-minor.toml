@@ -1,0 +1,121 @@
+name = "what-nothing-would-catch"
+base = "a-shape-is-not-a-judgment"
+sources = [
+  ".flw/reports/2026-09-04T1934-fresh-code.md",
+  ".flw/reports/2026-09-04T1934-fresh-code-do-the-tests-bite.md",
+  ".flw/reports/2026-09-04T1934-fresh-code-three-agents-one-file.md",
+]
+
+summary = """
+A mutation pass over the code written in bc1ada5..HEAD reverted 76 production lines one at a
+time and found 33 that left the suite green across 30 distinct lines. Four of those are the
+work: the CLI half of flw style lint's exit 2 reverts to a false green with 771 still
+passing, the [paths] reports plumbing is proved only at its innermost function, three of four
+knowledge_state measurements are unheld, and the one test named for the sources field passes
+with the field never read. Beside them sit two things nothing would catch either — a
+directory flw style lint cannot read walks as empty and reports clean, and the skill wrapping
+that command still tells an agent to say what the command stopped saying.
+"""
+
+approach = """
+Specced from the fresh-code review's do-the-tests-bite and three-agents-one-file lenses. The
+mutation numbers are the reviewer's, taken in a copy at /tmp/flw-mut against a baseline of
+771 passed: 76 mutations, 73 applied cleanly, 33 survived across 30 production lines. The
+author independently re-verified the sources one, which is the sharpest.
+
+WHY THE SOURCES TEST PROVES NOTHING
+
+  core/scripts/stale.py:111   declared = record.document.get("sources", [])
+  core/scripts/stale.py:114   given += matcher.findall(record.path.read_text(...))
+
+`cited()` reads the field and also regexes the record's raw text. The fixture in
+`test_a_report_named_in_sources_is_spent` writes `sources = [".flw/reports/X.md"]` into the
+record file, and that line is text the regex matches. Replace the field read with `declared =
+[]` and the suite stays at 771 and the test still passes. `sources` is the schema property
+`2a937b3` added; the tests it got check that the schema accepts it and never that the fold
+reads it.
+
+This record is itself specced with `sources`, which is the field's first use anywhere in 57
+records. That makes the test worth fixing before the field carries weight, not after.
+
+THE FALSE GREEN THIS RANGE DID NOT CLOSE
+
+`say-what-was-not-read` fixed flw style lint naming a path it could not open and then
+reporting clean. The file case is closed — `report()` catches the OSError per file. The
+directory case is not: `Path.rglob` swallows a PermissionError on a subdirectory and yields
+nothing, and a walk that yielded nothing is indistinguishable from a directory holding no
+prose.
+
+  chmod 000 demo/docs                   flw style lint docs   ->  style lint: clean, exit 0
+                                        flw style lint .      ->  style lint: clean, exit 0
+  chmod 755 demo/docs                   flw style lint docs   ->  1 finding, exit 1
+
+The second call is the one that matters, because `style_lint.py .` is a declared check and is
+how it actually runs. Both entry points agree here — on the wrong answer.
+
+THE PROSE THAT UNDID THE FIX
+
+`bdb2a27` changed flw style check's message from a hedge about the host to one naming the
+directory, and `45b604f` wrote that into the contract. `core/skills/flw-style/SKILL.md:35` was
+touched by no commit in the range and still reads "That means this host keeps no transcript
+where flw reads them". Exit 1 now has three causes and that sentence describes at most one;
+the reviewer hit the third while writing its report, on a transcript flw had read.
+
+WHAT THIS IS NOT
+
+Not a mutation-testing pass over the whole suite. The 30 surviving lines are in bc1ada5..HEAD
+only, and the other 27 are in the review report rather than in this record because a test for
+each would be padding, not coverage. The four here are the ones whose absence lets a shipped
+fix revert silently.
+
+Not a rewrite of knowledge_state. `nothing-falls-through` restructures that function, so these
+tests are written against its shape after that record lands, which is why this one is third.
+"""
+
+contract_edit = """
+1. In the CLI component's `provides`, in the sentence beginning "A user can check any prose
+   file in the repository against the writing style's document-geometry rules", after "and is
+   told the path, the line and the rule for each violation rather than a count", add:
+
+     " A target it could not read is named and the run says so, whether the thing it could
+     not read is a file or a directory it was not permitted to walk into, so a tree the
+     checker skipped is never reported as a tree with nothing wrong in it."
+"""
+
+[[decisions]]
+topic = "How flw style lint learns about a directory it cannot walk"
+options = [
+  "A guard before the walk, catching the named target only",
+  "os.walk with an error callback, catching every directory under the walk",
+  "Leave it: an unreadable directory is rare and the file case is closed",
+]
+chosen = "os.walk with an error callback"
+rationale = """
+The guard closes the case where the unreadable directory is the one named on the command
+line, and leaves the nested case open — which is the case that matters, because
+`style_lint.py .` is a declared check and any subdirectory under it is in the walk.
+`core/scripts/scout.py:163` already uses os.walk with an onerror callback in this
+repository, so this is the shape flw already has rather than a new one. `Path.walk(on_error=)`
+would be neater and needs 3.12, above this project's 3.11 floor. Leaving it was rejected
+because it is the same false green `say-what-was-not-read` was written to remove, one level
+up from the case that record closed.
+"""
+
+[[dag]]
+group = 1
+phase = "Two fixes nothing would have caught"
+tasks = [
+  { id = "walk-sees-refusals", desc = "core/scripts/style_lint.py:171: replace the rglob walk with os.walk and an onerror callback that carries the unreadable directory out as `missing`, keeping the SKIP_DIRS and suffix filtering and the sorted order the current code returns. A chmod 000 subdirectory under `.` must make the run exit 2 and name it, rather than printing clean." },
+  { id = "style-skill-stops-interpreting", desc = "core/skills/flw-style/SKILL.md:35: the two sentences under `When it cannot find a transcript` tell the agent to conclude the host keeps none. Exit 1 has three causes now — no directory declared, a directory holding nothing for this project, and a transcript whose replies are all a dispatched agent's. Replace them with one sentence saying to repeat which of the three the command named, and that flw style lint still works. The command already prints the distinction; the skill only has to stop overwriting it." },
+  { id = "walk-tests", desc = "tests/test_style_lint.py: an unreadable directory named directly exits 2 and is named; an unreadable subdirectory under a readable walk root does the same; a readable tree still exits 0 on clean prose and 1 on a finding. Skip on a platform where chmod cannot make a directory unreadable rather than failing there. Verify by reverting the change.", depends_on = ["walk-sees-refusals"] },
+]
+
+[[dag]]
+group = 2
+phase = "The four survivors"
+tasks = [
+  { id = "cli-verdict-test", desc = "tests/test_cli.py: assert flw.main([\"flw\", \"style\", \"lint\", \"<a path that does not exist>\"]) == 2. Every existing exit-code test drives style_lint.main; tests/test_cli.py never invokes flw style lint at all, so replacing engine.verdict(total, len(missing) + unread) with engine.verdict(total, unread) leaves 771 green while the subcommand returns to `style lint: clean` at exit 0. The contract states the surface as the subcommand." },
+  { id = "reports-dir-test", desc = "tests/test_stale.py and tests/test_cli.py: one test calling stale.fold(root, reports_dir=\"reviews\") and one writing [paths] reports = \"reviews\" into a project's config and running the command. Dropping the third argument from fold, or hardcoding the directory at cli/flw.py:3843, leaves 771 green today — and turns the fixture from `1 spent` back to `0 spent, 1 nobody has read`, which is the wording an existing test's own docstring names as the finding it exists for." },
+  { id = "knowledge-state-tests", desc = "tests/test_stale.py: extend the orphan fixture so the changed, malformed and unstamped branches of knowledge_state are each held, plus the unverifiable row nothing-falls-through adds. Only `orphaned` is covered today; deleting any of the other branches leaves 771 green. Written against the function's shape after nothing-falls-through, which is why this record is third.", depends_on = ["cli-verdict-test"] },
+  { id = "sources-really-read", desc = "tests/test_stale.py: give test_a_report_named_in_sources_is_spent a sources entry the citation regex cannot reach — a bare filename, or a path under a directory that is neither the default nor the declared one — so the field is the only route to spent. Verify by setting declared = [] in cited() and watching this test, and only this test, fail.", depends_on = ["reports-dir-test"] },
+]

@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.16.2"
+spec_version = "0.16.3"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -39,6 +39,7 @@ applied = [
   "say-what-was-not-read",
   "nothing-falls-through",
   "a-shape-is-not-a-judgment",
+  "what-nothing-would-catch",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -114,7 +115,7 @@ provides = [
   "flw install --ambient writes its block between markers and replaces it whole on reinstall. Nothing between installs is tracked or verified, and text outside the markers is never touched. The style is verified by digest and the ambient block deliberately is not: every skill carries its own opening, so the block serves only the session that invokes none, and a stale one costs that session a line it would have run anyway.",
   "A user can declare the repositories a project spans in its config, and flw context and flw doctor list them with whether each exists, so a session rooted at the parent of several checkouts knows what it is standing above.",
   "A user can put flw's per-project directory under any relative name — an already-ignored directory the repository has — with one machine-wide setting, and flw doctor says which name is in force and where it came from.",
-  "A user can check any prose file in the repository against the writing style's document-geometry rules — heading depth, untagged code fences, and the trailing spaces that become a <br> in a file — and is told the path, the line and the rule for each violation rather than a count. The vocabulary rules never read a file, because the same words are almost always right in a hand-written document.",
+  "A user can check any prose file in the repository against the writing style's document-geometry rules — heading depth, untagged code fences, and the trailing spaces that become a <br> in a file — and is told the path, the line and the rule for each violation rather than a count. A target it could not read is named and the run says so, whether the thing it could not read is a file or a directory it was not permitted to walk into, so a tree the checker skipped is never reported as a tree with nothing wrong in it. The vocabulary rules never read a file, because the same words are almost always right in a hand-written document.",
   "A user can ask what the agent's own recent replies broke in that style, and gets the rule and an example rather than the rule restated, because a model that can recite a constraint it is breaking is not helped by hearing it again. Where there is no transcript to read, they are told which directory flw looked in and that nothing there belonged to this project, instead of a bare report that none was found — and the file-checking half of the same skill works whether or not a transcript exists.",
 ]
 properties = [
