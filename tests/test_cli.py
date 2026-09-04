@@ -4093,3 +4093,40 @@ def test_a_legacy_numbered_record_is_not_pending(tmp_path, capsys, monkeypatch):
     )
     assert _context(tmp_path, monkeypatch, root=str(root)) == 0
     assert "pending:" not in capsys.readouterr().out
+
+
+# --- flw stale reports and never fails --------------------------------------- #
+#
+# Nothing it prints is a failure, and a non-zero exit invites someone to wire this
+# into a check whose cheapest green is to delete the documents it names.
+
+
+def test_stale_exits_0_where_every_document_it_read_is_stale(tmp_path, capsys, monkeypatch):
+    root = _spec_project(
+        tmp_path, "", {"in-flight-minor.toml": 'name = "in-flight"\nsummary = "s"\n'}
+    )
+    reports = root / ".flw" / "reports"
+    reports.mkdir(parents=True)
+    (reports / "2026-09-01T2321-eng.md").write_text("# a review nobody has read\n")
+    (root / ".flw" / "extensions").mkdir(parents=True, exist_ok=True)
+    (root / ".flw" / "extensions" / "shared.md").write_text("**Python 3.11 is the floor.**\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert flw.main(["flw", "stale", "--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "REPORTS  (1)" in out and "0 spent, 1 nobody has read" in out
+    assert "EXTENSIONS  (1)" in out
+
+
+def test_stale_outside_any_project_exits_0(tmp_path, capsys, monkeypatch):
+    """A directory with no contract and no configuration is a state rather than a
+    fault, which is the reading flw context already takes."""
+    monkeypatch.chdir(tmp_path)
+    assert flw.main(["flw", "stale"]) == 0
+    assert "Nothing here is a failure" in capsys.readouterr().out
+
+
+def test_stale_refuses_a_root_it_cannot_use(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert flw.main(["flw", "stale", "--root", str(tmp_path / "nope")]) == 1
+    assert "no such path" in capsys.readouterr().err

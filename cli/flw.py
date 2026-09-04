@@ -3763,6 +3763,61 @@ def know_map(args: argparse.Namespace) -> int:
     return 0
 
 
+def stale(args: argparse.Namespace) -> int:
+    """Which of this project's own documents are spent, and which nobody has read.
+
+    The four stores read once and folded into one block. Every path and setting
+    the engine needs is resolved here, because each comes from a configuration
+    merge the engine deliberately knows nothing about: `[paths] reports` and
+    `specs`, `[knowledge] dir`, `[project] roots` and `[kb] category`.
+
+    Exit 0 whenever it ran, including when every document it read is stale.
+    Nothing it reports is a failure, and a non-zero exit invites someone to wire
+    this into a check whose cheapest green is to delete the documents.
+    """
+    refused = _refuse_a_bad_root(args.root)
+    if refused is not None:
+        return refused
+
+    scripts = checkout() / "core" / "scripts"
+    sys.path.insert(0, str(scripts))
+    import stale as engine
+    import store as notes
+
+    start = Path(args.root).resolve() if args.root else None
+    # A directory that is no project is a state rather than a fault, the reading
+    # flw context already takes: the machine-wide note store is still readable
+    # from it, so there is something to print.
+    root = nearest_project(start) or (start or Path.cwd())
+    os.environ["FLW_DIR"] = flw_dir_name()
+
+    members = project_roots(root)
+    paths = _section_config(root, "paths")
+    declared = paths.get("reports")
+    reports_dir = declared if isinstance(declared, str) and declared.strip() else (
+        f"{flw_dir_name()}/reports"
+    )
+
+    skipped: list = []
+    found = notes.walk(
+        FLW_HOME, root, project_category=_kb_category(root), skipped=skipped
+    )
+    _kb_skipped(skipped)
+
+    print(
+        engine.fold(
+            root,
+            specs_dir=_specs_dir(root),
+            reports_dir=reports_dir,
+            knowledge_stores=_knowledge_stores(root, members),
+            members=members,
+            notes=found,
+        ),
+        end="",
+    )
+    return 0
+
+
 def tilde(path: Path) -> str:
     try:
         return f"~/{path.relative_to(Path.home())}"
@@ -4191,6 +4246,32 @@ edges touching it in either direction; a target no file describes is counted, no
         help="default: text",
     )
     p.set_defaults(handler=know_map)
+
+    p = sub.add_parser(
+        "stale",
+        help="which of the project's own documents are spent, and which nobody read",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""flw writes four kinds of document and could close none of them. This
+folds all four into one block: which review reports a version record has already acted on
+and which are still open, which knowledge files the code has moved under, and which
+extensions and notes carry a claim a commit could falsify while carrying no revision to
+date it against.
+
+It reports the shape of a claim and never its truth — verifying one costs a run, which is
+flw-research's lane. It deletes nothing: a reports directory is gitignored in most
+projects, so a wrong deletion is unrecoverable, and an uncited report is a backlog item
+with a decision attached rather than refuse.
+
+Exit 0 whenever it ran, including when every document it read is stale.""",
+        epilog="""examples
+
+  flw stale                          every store, folded
+  flw stale --root ../other          the same, for another checkout""",
+    )
+    p.add_argument(
+        "--root", metavar="PATH", help="the project to read, instead of $PWD's"
+    )
+    p.set_defaults(handler=stale)
 
     p = sub.add_parser("version", help="git describe")
     p.set_defaults(handler=version)

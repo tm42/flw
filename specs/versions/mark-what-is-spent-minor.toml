@@ -1,0 +1,356 @@
+name = "mark-what-is-spent"
+base = "no-false-premises"
+
+summary = """
+flw writes four kinds of document and can close none of them. A review report is spent the
+moment a record fixes what it found. no-false-premises gave flw-spec the rule that puts the
+record name at the top of the report it specced from, and 3 of 66 reports carry it — but
+nothing reads the mark back, no record before that rule left one, and
+.flw/extensions/flw-review.md still tells the next round to read past reports first. A knowledge file knows when the code moved under it; an
+extension and a kb note carry no revision by design and so can never say they drifted. This
+record adds the one thing each store is missing and one command that folds all four: an
+optional sources field naming the reports a record came from, a fold that splits reports
+into spent and open, a lint for a claim a commit could falsify sitting in a store that
+carries no revision, and flw stale, which prints the four together and deletes nothing.
+"""
+
+approach = """
+Every number below was taken at bc1ada5 with the command beside it.
+
+WHAT IS OPEN, AND HOW IT WAS MEASURED
+
+  ls .flw/reports | wc -l                                                        66
+  du -sh .flw/reports                                                          996K
+  grep -l '\\.flw/reports' specs/versions/*.toml | wc -l                          21
+  grep -ho '\\.flw/reports/[A-Za-z0-9T:._-]*' specs/versions/*.toml \\
+    | sed 's|.*reports/||' | sort -u | wc -l                                     26
+
+That 26 counts citation STRINGS and not reports, which is the trap the fold has to avoid.
+Intersected with the directory:
+
+  10  names records cite that are no longer on disk   2026-08-23T1336-eng.md, 2026-08-27T-adopt.md, ...
+   3  one report cited with a line anchor             2026-08-22T1959-final.md:14, :18, :97-98
+   2  regex artifacts                                 "." and "y.md"
+
+The real split is 12 spent and 54 open. The fold strips a :line suffix, drops a match with no
+.md in it, and drops a name with no file behind it — those 10 dead citations are evidence that
+reports get deleted informally, so a citation is not proof of a file.
+
+Reading the mark at the top of a report is the second half of the same fold, because neither
+source is complete alone: a record can name a report that has been deleted, and a report can
+carry a record name whose prose never names the path. The fold reads what is already on disk
+rather than asking for a new discipline, so it works retroactively on all 66.
+
+  flw know --check          8 files · 7 changed · 0 unstamped · 1 current · 0 orphans
+  flw kb lint               6 notes, nothing to report.
+
+The kb line is the finding. The one note in this project's category cites
+core/scripts/scout.py:478 for a row that is now at :528, plus cli/flw.py:2617 and :2574
+where the code is at :2744 and :2701, and its 9/5/4 count does not reproduce even at the
+revision the prose names. Its frontmatter carries `updated = 2026-09-02` and no revision,
+so lint has nothing to check the citations against and reports clean.
+
+Extensions are the same failure with a different cause. Three of four carry a claim a
+commit could falsify and two of the three are already false:
+
+  .flw/extensions/flw-review.md:5    "638 tests in 7.3 seconds"
+                                    .venv/bin/pytest -q gives 717 passed in 9.35s
+  .flw/extensions/flw-execute.md:9   "tests/test_cli.py:3156"
+                                    the parser-surface diff is at :3210
+  .flw/extensions/shared.md:11-12    "Python 3.11", "first 30 lines"   both still true,
+                                    and both reported: a floor a commit could raise, in a
+                                    file with no revision to date it against
+
+core/shared/context.md:76-80 sorts the stores by one question — does a commit make it
+wrong? An extension carries no revision because a commit is not supposed to be able to
+falsify it, so an extension carrying a countable is a knowledge fact in the wrong store.
+That is what makes the check mechanical: the lint flags the SHAPE of a claim, never its
+truth. Verifying it costs a run and is the judgment layer, which is flw-research's lane.
+
+WHAT THIS IS NOT
+
+Not a garbage collector. flw stale prints and the user acts, the same way flw stages and
+never commits. Reports are gitignored, so a wrong deletion is unrecoverable, and the 40
+uncited reports are a backlog with a decision attached to each rather than refuse.
+
+Not an age check. A knowledge file 200 commits old covering an untouched folder is fine and
+one 3 commits old covering the folder those commits rewrote is stale, so a threshold on age
+or commit distance fires on the wrong files. flw know --check already measures the right
+thing — a git diff scoped to the paths the file claims — and needs no change here beyond
+stamping more often than once a session.
+
+Not a sixth skill, and not a rewrite of any store's reader. Each store keeps its own lint
+and flw stale folds them.
+
+WHAT READING THE CODE CHANGED
+
+The design agreed in conversation put the report fold in flw ledger and left the extension
+lint homeless. core/scripts/ledger.py:58-61 says the opposite of the first half:
+"Nothing under .flw/ is read except reviews/ and extensions/. Review *reports* live in
+.flw/reports/, which this repository gitignores. A report's durable half is copied into a
+version record's approach when the version is specced, so what survives is already here."
+The corpus excludes reports deliberately and Corpus.extensions is already a loaded tier, so
+the two homes are the other way round: the extension lint goes to ledger, which holds the
+text, and the report fold goes to the aggregator, which is the only thing that may list
+.flw/reports/ at all.
+
+core/scripts/store.py:633 already returns a list of (label, rows) mechanical checks under a
+docstring saying "Every check is mechanical and deterministic. Nothing here is a verdict."
+The kb row is an addition to that list, not a new shape.
+
+WHAT WILL BE TIGHT
+
+  .venv/bin/python core/scripts/budget.py
+    core/skills/flw-spec/SKILL.md      20620 / 21000   (+380)
+    core/skills/flw-research/SKILL.md  20341 / 21000   (+659)
+
+Both files this record edits are near their ceiling, and a run stopped on exactly this a
+record ago. flw-spec's addition is one sentence inside the bullet that already exists, so
+380 bytes is probably enough; flw-research's re-check mode is a section, and Thrifty mode in
+flw-spec is about 1,400 bytes, so 659 is probably not. Both tasks name the fallback rather
+than leaving the executor to invent one: move the material to a reference file under that
+skill's references/, which is uncapped, and leave a pointer in SKILL.md. flw-research
+already has a references/ directory.
+
+WHERE THE SURFACE LINE WENT
+
+The CLI component's `surfaces` gained "flw stale [--root PATH]" at spec time, in
+specs/current.toml directly, rather than through this record's contract_edit.
+core/skills/flw-spec/SKILL.md:254 requires that of any record adding a subcommand, because
+tests/test_cli.py diffs build_parser() against those lines in both directions: a record that
+defers the declaration leaves every commit red from the one that adds the parser onward, and
+commits.md forbids a commit that cannot pass its own checks alone. flw hit this on 4.2 and
+on knowledge-base; the first draft of this record hit it a third time and the executor found
+it. The contract_edit below therefore does not add that line — it has already landed — and
+the six edits it does carry move at step 5 like any other.
+
+WHY THIS RECORD CARRIES NO sources FIELD
+
+version.schema.json sets additionalProperties false, and this is the record that adds the
+field, so it cites its reports the way every record does today. The reports it was specced
+from are .flw/reports/2026-09-03T2050-process.md and its five lens files, in particular
+2026-09-03T2050-process-whose-number.md, which filed the kb note and the extension test
+count, and 2026-09-03T2050-process-the-lanes.md, which filed the report that no record
+disposes of. Their coverage line is the limit that matters: one user, one project, flw
+reviewing itself with flw, and the only outside evidence a second-hand field session.
+"""
+
+contract_edit = """
+1. In the CLI component's `provides`, after the flw context --brief sentence, add:
+
+     "A user can ask which of the project's own documents are spent: which review reports a
+     version record has already acted on and which are still open, which knowledge files the
+     code has moved under, and which extensions and notes carry a claim a commit could
+     falsify while carrying no revision to date it against. It reports and deletes nothing,
+     because a report is gitignored in most projects and an uncited one is a backlog item
+     rather than refuse."
+
+2. In the "validation and checks" component's `paths`, add "core/scripts/stale.py" after
+   "core/scripts/style_lint.py".
+
+3. In the "validation and checks" component's `provides`, add:
+
+     "A review report a version record has acted on is distinguishable from one nobody has
+     read, from both directions: the paths the records name — the sources field where a record
+     carries one and its prose where it does not, so records written before the field are
+     still read — and the record name flw-spec writes at the top of the report it specced
+     from. One fact and one fold, so neither half has to be complete. A report a record names
+     with no file behind it is reported as a dead citation rather than counted, because a
+     citation is not evidence a file exists."
+
+     "A claim a commit could falsify — a bare count, a path with a line number, a version
+     string — is reported when it sits in a store that carries no revision, which is every
+     extension and any note whose frontmatter records only a date. The report is of shape
+     and never of truth: nothing checks whether the claim still holds, because that costs a
+     run and is a judgment a command does not make."
+
+4. In the "the schemas" component's `provides`, add:
+
+     "A version record may name the review reports it came from in an optional sources
+     field, so the mapping from a report to the record that acted on it survives in the one
+     artifact that is versioned, rather than in a directory most projects ignore."
+
+5. In the CLI component's `properties`, add:
+
+     "flw stale exits 0 whenever it ran — including a project with no reports directory, no
+     knowledge store and no notes, and including one where every document it read is stale —
+     and 1 only for a --root it was given and could not use. Nothing it reports is a failure,
+     which is the reading flw context already takes at the other end of a run."
+
+6. In the "the skills" component's `provides`, after the flw-research sentence, add:
+
+     "A user can ask flw-research to re-check what a survey already recorded rather than run
+     one again: it reads the recorded files, reports what moved, and skips the orientation
+     and the probes whose answers are already in config."
+"""
+
+[[decisions]]
+topic = "Where the staleness aggregator lives"
+options = [
+  "flw ledger --stale, folding reports into the ledger's corpus as a sixth tier",
+  "Its own subcommand, flw stale, which lists the reports itself and asks each store's own reader for the rest",
+  "No aggregator: four separate lints and no single view",
+]
+chosen = "Its own subcommand, flw stale"
+rationale = """
+core/scripts/ledger.py:58-61 states that the corpus reads nothing under .flw/ except
+reviews/ and extensions/, and gives the reason: a report's durable half is copied into a
+record's approach at spec time. Putting the fold in ledger means breaching a boundary the
+file documents, to read a directory the same file explains why it does not read. The
+aggregator has the symmetry argument as well: flw context is already the aggregator for a
+run's opening, and this is the same shape at its closing. Four separate lints was rejected
+because it answers every question except the one a user has, which is what is stale here.
+"""
+
+[[decisions]]
+topic = "Where the extension rot-marker lint lives"
+options = [
+  "In the aggregator, which would read .flw/extensions/ directly",
+  "In flw doctor, which already prints an extensions block",
+  "In flw ledger, whose Corpus already carries extensions as a tier",
+]
+chosen = "In flw ledger"
+rationale = """
+Corpus.extensions is a loaded tier on every ledger call, so the text is already in hand and
+the lint is a read of it. flw doctor is install-plane: it checks that an extension is read
+by an installed skill and would say the same of a file claiming the moon is cheese, and two
+commands printing extension sections is worse than one. Keeping each store's lint with the
+store is also what makes the aggregator a fold rather than a fifth reader.
+"""
+
+[[decisions]]
+topic = "What triggers a staleness report for a store that carries no revision"
+options = [
+  "Age, or distance in commits or changed lines since the file was written",
+  "The shape of the claim: a count, a path with a line number, a version string",
+]
+chosen = "The shape of the claim"
+rationale = """
+Age fires on the wrong files. A knowledge file 200 commits old describing a folder nobody
+touched is fine, and one 3 commits old describing the folder those commits rewrote is
+stale; flw know --check already measures that correctly by scoping the diff to the paths
+the file claims. For extensions and kb notes there is no revision to measure from at all,
+and adding one to an extension would contradict core/shared/context.md:76-80, which says an
+extension carries none because a commit is not supposed to be able to falsify it. Shape
+turns that rule into the check: an extension carrying a countable is a knowledge fact in
+the wrong store, which is a stronger finding than "this file is old".
+"""
+
+[[decisions]]
+topic = "What shape flw-research's re-check takes"
+options = [
+  "A --recheck flag on the invocation",
+  "Both a flag and a prose trigger, mirroring --thrifty",
+  "A mode the skill recognises in the ask, like Thrifty mode",
+]
+chosen = "A mode the skill recognises in the ask"
+rationale = """
+It adds no CLI surface, so it needs no line in the contract's CLI component and no parser
+change, and it composes with being handed a list of paths a staleness report flagged. The
+skill already carries Thrifty mode as a section written the same way. A flag was rejected
+because flw-research is invoked as a skill rather than as a command, so the flag would live
+in prose anyway and merely look like a surface.
+"""
+
+[[decisions]]
+topic = "How a report acted on without a contract change gets marked"
+options = [
+  "A receipt written after the fix, with its own mark so it cannot be mistaken for an agreement",
+  "An ordinary small record written before the fix, carrying sources and nothing else",
+]
+chosen = "An ordinary small record written before the fix"
+rationale = """
+version.schema.json requires only name and summary, so such a record is four lines and
+moves spec_version by one in its third slot, which is already only a count. The fork is
+about ordering rather than shape: written first it is a normal record and needs no new
+mechanism, and written afterwards it is a receipt sitting in applied looking identical to
+work that was agreed in advance. Keeping one meaning for applied is worth a minute per fix,
+and the alternative is the --yolo problem again — a second block that exists to say the
+first one cannot be trusted.
+"""
+
+[[decisions]]
+topic = "Whether flw stale may delete what it finds"
+options = [
+  "A --prune flag that removes reports every record has already acted on",
+  "It lists and never deletes",
+]
+chosen = "It lists and never deletes"
+rationale = """
+.gitignore:9 ignores .flw/reports/, so a wrong deletion is unrecoverable rather than a
+revert. The command also cannot tell a spent report from one whose citation it merely
+failed to parse, since the fold falls back to a regex over prose for the records written
+before the sources field, nor a citation whose report has already been deleted from one whose
+report is still there. flw already draws this line elsewhere: it stages files and leaves the
+commit to the user.
+"""
+
+[[decisions]]
+topic = "Whether the judgment pass is a sixth skill"
+options = [
+  "A new skill that sweeps every store and decides what is obsolete",
+  "A mode of flw-research, which already owns re-surveying a repository",
+]
+chosen = "A mode of flw-research"
+rationale = """
+The five SKILL.md files total 75,004 bytes and a sixth costs every host another opening. The
+sweep's output is either nothing or "re-survey these paths", and a skill whose product is an
+invocation of another skill is a mode of that skill. flw-research already declares itself
+re-runnable when what was recorded has gone stale, so the mode is a subtraction from a lane
+that exists rather than a new lane.
+"""
+
+[[decisions]]
+topic = "Whether the lint reports a claim that is currently true"
+options = [
+  "Drop version strings from the rule, so the only shapes reported are counts and path:line references",
+  "Report the shape whatever the claim's truth, and let a correct line stay on the list",
+  "Report it, but let a line opt out with a marker the lint honours",
+]
+chosen = "Report the shape whatever the claim's truth"
+rationale = """
+The spec critic found the contract sentence and this record's own test fixture disagreeing:
+edit 4 says a version string is reported and the extension-markers task said shared.md's
+`Python 3.11` must not be. The fixture was wrong rather than the sentence. A commit could
+raise that floor to 3.12 and the file carries no revision to say so, which is the whole
+condition the check describes; exempting it means reasoning about truth, and reasoning about
+truth is what costs a run and belongs to flw-research. The price is accepted openly:
+shared.md:11 stays on the list while it is correct. An opt-out marker was rejected because it
+is a convention nothing else in flw uses and it hands an agent a way to silence the check.
+"""
+
+[[dag]]
+group = 1
+phase = "The field a record carries"
+tasks = [
+  { id = "sources-field", desc = "core/schemas/version.schema.json: add an optional `sources` property, an array of strings holding the review report paths this record came from, relative to the project root. Optional, so the 43 applied records stay valid; additionalProperties is false, so nothing else changes. The description says what the field is for: the fold from a report to the record that acted on it." },
+  { id = "spec-writes-sources", desc = "core/skills/flw-spec/SKILL.md, step 5's `Speccing from a review report` bullet: one sentence saying the report paths go in `sources` as well as the prose. The file is at 20,620 of its 21,000 ceiling, so budget.py is the check that matters. If it does not fit, trim the bullet rather than adding elsewhere, and if it still does not fit, move the whole bullet into core/skills/flw-spec/references/ with a pointer, the way flw-execute's check path was moved." },
+  { id = "schema-tests", desc = "tests/: a record carrying `sources` validates and one carrying an unknown field still does not.", depends_on = ["sources-field"] },
+]
+
+[[dag]]
+group = 2
+phase = "Each store lints itself"
+tasks = [
+  { id = "extension-markers", desc = "core/scripts/ledger.py: a function over Corpus.extensions returning the lines that carry a claim a commit could falsify — a bare integer, a path with a line number, a version string — with the path, the line number and the matched text. Shape only, no verdict, nothing fetched or run. Against this repo it must find all three: .flw/extensions/flw-review.md:5, .flw/extensions/flw-execute.md:9 and shared.md:11. The third is currently true, and that is the point — a commit could raise the floor to 3.12 and the file carries no revision to say so, and a lint that exempted it would be reasoning about truth rather than shape. Only a line carrying no such claim goes unreported." },
+  { id = "kb-unrevisioned", desc = "core/scripts/store.py: a new row in lint() for a note whose body carries a path:line or a count and whose frontmatter records no revision. Matches the existing (label, rows) shape and the docstring's rule that nothing here is a verdict. Against this store it must report scout-s-per-name-counts-are-imports-not-uses." },
+  { id = "lint-tests", desc = "tests/: fixtures for both, including the negatives — an extension of pure prose and a note that carries a revision are not reported.", depends_on = ["extension-markers", "kb-unrevisioned"] },
+]
+
+[[dag]]
+group = 3
+phase = "The command that folds them"
+tasks = [
+  { id = "report-fold", desc = "core/scripts/stale.py, a new module with a docstring saying why it exists: given a project root, list the reports directory from [paths] reports and split it into spent and open. A report is spent when some record names it — from `sources` where the record carries one, from a regex over the record's prose where it does not, and from the record name flw-spec writes at the top of the report itself. The regex half strips a :line suffix, drops a match with no .md in it, and drops a name with no file behind it: of the 26 raw matches here, 3 are one report cited with a line anchor, 2 are artifacts (`.` and `y.md`) and 10 name reports that no longer exist. Must give 12 spent and 54 open here, and report those 10 dead citations on their own row rather than counting them as either." },
+  { id = "stale-fold", desc = "core/scripts/stale.py: fold the other three by calling the readers that own them — ledger's extension markers, knowledge's check, the note store's lint — and render one block with a row per store. Imports ledger, store and knowledge; nothing imports it back.", depends_on = ["report-fold"] },
+  { id = "stale-command", desc = "cli/flw.py: `flw stale [--root PATH]`, importing stale lazily inside its handler like every other engine. Exit 0 whenever it ran, including when everything is stale; 1 only for a --root it was given and could not use. A project with no reports directory and no stores prints what it can and exits 0, the way flw context does.", depends_on = ["stale-fold"] },
+  { id = "stale-tests", desc = "tests/test_stale.py plus the parser-surface check in tests/test_cli.py, which diffs build_parser() against the CLI component's surfaces and fails on an undeclared flag or a declared one nobody built.", depends_on = ["stale-command"] },
+]
+
+[[dag]]
+group = 4
+phase = "The judgment pass"
+tasks = [
+  { id = "research-recheck", desc = "core/skills/flw-research/SKILL.md: a re-check mode, written as a section the way Thrifty mode is in flw-spec. It reads the files a survey already recorded, reports what moved, and skips step 1's scout and any step 2 probe whose answer is already in .flw/config.toml. It rewrites no tree and it is triggered by the ask rather than by a flag. Say that it takes a list of paths, because flw stale is what produces one." },
+  { id = "recheck-budget", desc = "The file is at 20,341 of 21,000. If the section does not fit, put it in core/skills/flw-research/references/ and leave a pointer in SKILL.md — a reference file is uncapped and that directory already exists. Do not shrink another section to make room without saying so.", depends_on = ["research-recheck"] },
+]
