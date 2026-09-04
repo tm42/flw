@@ -138,6 +138,28 @@ def test_a_contract_that_does_not_parse_does_not_stop_the_records(tmp_path):
     assert [r.name for r in found.records] == ["first"]
 
 
+def test_a_file_the_tier_cannot_open_is_skipped_and_named(tmp_path):
+    """The finding: extensions and plans read every file with an unguarded
+    read_text, so one broken symlink under .flw/extensions/ raised
+    FileNotFoundError out of `flw stale --root <that project>` — exit 1 with no
+    output at all, against the property that says it exits 0 whenever it ran. The
+    reviews tier already skipped a file it could not parse; this is the same
+    answer for a file it cannot open, and reviews had the same hole."""
+    root = project(tmp_path)
+    for where in (".flw/extensions", ".flw/reviews", "plans"):
+        (root / where).mkdir(parents=True, exist_ok=True)
+    (root / ".flw" / "extensions" / "shared.md").write_text("# a convention\n")
+    (root / ".flw" / "extensions" / "gone.md").symlink_to("/nonexistent/gone.md")
+    (root / ".flw" / "reviews" / "gone.toml").symlink_to("/nonexistent/gone.toml")
+    (root / "plans" / "gone.md").symlink_to("/nonexistent/plan.md")
+
+    found = ledger.corpus(root)
+    assert [p.name for p in found.extensions] == ["shared.md"]
+    assert found.plans == {}
+    assert found.reviews == {}
+    assert sorted(p.name for p in found.skipped) == ["gone.md", "gone.md", "gone.toml"]
+
+
 def test_flws_own_corpus_assembles(tmp_path):
     """The real thing, not a fixture: every tier present and non-empty."""
     found = ledger.corpus(REPO)

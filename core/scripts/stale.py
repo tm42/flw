@@ -132,8 +132,11 @@ def cited(records: list, pattern: re.Pattern[str] | None = None) -> set[str]:
     matcher = pattern or citation()
     found: set[str] = set()
     for record in records:
-        declared = record.document.get("sources", [])
-        given = [s for s in declared if isinstance(s, str)]
+        # `sources` is a list of strings or it is nothing. flw validate refuses a
+        # record where it is not, but this command does not validate first and the
+        # contract says it exits 1 only for a bad --root.
+        declared = record.document.get("sources")
+        given = [s for s in declared if isinstance(s, str)] if isinstance(declared, list) else []
         for key in PROSE:
             value = record.document.get(key)
             if isinstance(value, str):

@@ -21,7 +21,7 @@ import os
 import re
 import textwrap
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from validate_spec import LEGACY_NUMBER, Record, load_records
@@ -44,6 +44,10 @@ class Corpus:
     reviews: dict[Path, dict]
     extensions: dict[Path, str]
     plans: dict[Path, str]
+    # Files inside a tier that could not be read at all — a broken symlink, a
+    # permission. Carried rather than raised, so a caller can name them; reporting
+    # them in this command's own output is a separate change.
+    skipped: list[Path] = field(default_factory=list)
 
 
 def corpus(root: Path, specs_dir: str = "specs") -> Corpus:
@@ -82,23 +86,40 @@ def corpus(root: Path, specs_dir: str = "specs") -> Corpus:
     versions = specs / "versions"
     records = load_records(versions) if versions.is_dir() else []
 
+    # A file inside a tier that cannot be read at all is skipped rather than
+    # raised. A broken symlink under .flw/extensions/ made `flw stale` exit 1 with
+    # no output whatever, against the property that says it exits 0 whenever it
+    # ran; the reviews tier already skipped a file it could not parse, and this is
+    # the same answer for a file it cannot open.
+    skipped: list[Path] = []
+
+    def text(path: Path) -> str | None:
+        try:
+            return path.read_text(errors="replace")
+        except OSError:
+            skipped.append(path)
+            return None
+
     flw_dir = os.environ.get("FLW_DIR", ".flw")
     reviews: dict[Path, dict] = {}
     for path in sorted((root / flw_dir / "reviews").glob("*.toml")):
+        raw = text(path)
+        if raw is None:
+            continue
         try:
-            reviews[path] = tomllib.loads(path.read_text())
+            reviews[path] = tomllib.loads(raw)
         except (tomllib.TOMLDecodeError, UnicodeDecodeError):
             continue
 
-    extensions = {
-        path: path.read_text(errors="replace")
-        for path in sorted((root / flw_dir / "extensions").glob("*.md"))
-    }
-
-    plans = {
-        path: path.read_text(errors="replace")
-        for path in sorted((root / "plans").glob("*.md"))
-    }
+    tiers: list[dict[Path, str]] = []
+    for pattern in ((root / flw_dir / "extensions").glob("*.md"), (root / "plans").glob("*.md")):
+        found: dict[Path, str] = {}
+        for path in sorted(pattern):
+            raw = text(path)
+            if raw is not None:
+                found[path] = raw
+        tiers.append(found)
+    extensions, plans = tiers
 
     return Corpus(
         root=root,
@@ -107,6 +128,7 @@ def corpus(root: Path, specs_dir: str = "specs") -> Corpus:
         reviews=reviews,
         extensions=extensions,
         plans=plans,
+        skipped=skipped,
     )
 
 

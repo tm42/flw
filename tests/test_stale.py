@@ -255,6 +255,27 @@ def test_a_backticked_name_that_is_no_record_marks_nothing(tmp_path):
     assert fold(root).spent == []
 
 
+def test_a_record_whose_sources_is_not_a_list_does_not_raise(tmp_path):
+    """flw validate refuses such a record, but this command does not validate
+    first and the contract says it exits 1 only for a bad --root."""
+    root = project(tmp_path, first='summary = "s"\nsources = 7\n')
+    report(root, "2026-08-31T1205-eng.md")
+    found = fold(root)
+    assert found.unread == ["2026-08-31T1205-eng.md"]
+
+
+def test_a_broken_symlink_in_an_extension_still_prints_every_block(tmp_path):
+    """The whole command, not the corpus: one unreadable extension exited 1 with
+    no output whatever."""
+    root = project(tmp_path, first='summary = "s"\n')
+    directory = root / ".flw" / "extensions"
+    directory.mkdir(parents=True)
+    (directory / "gone.md").symlink_to("/nonexistent/gone.md")
+    text = stale.fold(root)
+    for block in ("REPORTS", "KNOWLEDGE", "EXTENSIONS  (0)", "NOTES"):
+        assert block in text
+
+
 # --- a project that has none of this ----------------------------------------- #
 
 
