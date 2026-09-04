@@ -1,0 +1,160 @@
+name = "nothing-falls-through"
+base = "say-what-was-not-read"
+sources = [
+  ".flw/reports/2026-09-04T1934-fresh-code.md",
+  ".flw/reports/2026-09-04T1934-fresh-code-unread-code.md",
+]
+
+summary = """
+flw stale reports a knowledge file it could not check as no row at all, so a store whose
+every stamp went unverifiable — after any rebase, squash or force-push — reads byte for byte
+like a store where everything is current. Four smaller untruths sit beside it: a citation
+pattern that matches any directory whose name ends in the declared one, a citation matcher
+run over a record's whole file so a path inside a task description counts, a header that
+counts flagged lines while its three siblings count documents, and one unreadable extension
+that aborts the command against the property this contract added a day ago. Each is the same
+failure: the command prints a number it did not earn.
+"""
+
+approach = """
+Specced from the fresh-code review, four lenses over bc1ada5..HEAD, all findings reproduced
+by the reviewer and the two load-bearing ones re-verified by the author before writing.
+
+The coverage line that matters: every line the review read was written by an unattended
+subagent, nobody had read it as code, and every reviewer was another agent of the same kind
+that wrote it. The only outside evidence in the range is three field findings from one live
+session.
+
+THE CRITICAL, AND WHY IT IS NOT ONE FILE
+
+  core/scripts/knowledge.py:332   Diff.state is one of current, changed, unstamped, unverifiable
+  core/scripts/stale.py:214,218   knowledge_state tests only == "changed"
+  core/scripts/knowledge.py:469   the engine's own check handles all three non-current states
+
+`unstamped` is caught earlier through `concept.problems` at :210, so `unverifiable` is the
+one state that reaches no list. The reviewer built a project with two stamped files, changed
+the code, then replaced the history with an orphan commit:
+
+  before                                after
+    KNOWLEDGE  (2)                        KNOWLEDGE  (2)
+      changed under  (2)                  (no rows)
+    flw know --check                      flw know --check
+      2 files · 2 changed                   2 files · 0 changed · 2 unverifiable
+
+A history rewrite invalidates every stamp at once, so this is never one file: the whole store
+goes silently clean on the run right after the rewrite, and that is the run where a reader
+most needs telling. `flw know --check` says it. `flw stale` is sold as the command that reads
+all four stores for you, so there is no second source.
+
+THE ARTIFACT THIS RECORD'S PREDECESSOR NAMED AND DID NOT REMOVE
+
+`mark-what-is-spent-minor.toml:33` lists `"." and "y.md"` as the two regex artifacts the
+cleanup rules exist to drop. The shipped `cited()` drops the match with no `.md` in it and
+keeps `y.md`, which comes from `specs/versions/knowledge-base-minor.toml:160` — a dag task
+describing a test fixture, not a citation of anything. It is one of the ten dead citations
+`flw stale` prints in this repository today. The cause is that `cited()` matches over
+`record.path.read_text()`, the whole file, rather than over the record's prose.
+
+The same mechanism moves the headline split, not only the dead list. A record whose summary
+reads "Nobody has yet read .flw/reports/X.md; it is still open" reports X as spent.
+
+WHAT THIS IS NOT
+
+Not a bounding of `[paths] reports`. The review filed three edge cases — `.`, `./reports`, and
+a path that is a file — and `mark-what-is-spent`'s citation decision already said bounding the
+setting is a separate change. Patching four symptoms is worse than bounding it once, and that
+is a later record.
+
+Not a change to what a citation means. The matcher keeps both the configured directory and the
+default; only where it looks and what it anchors to changes.
+
+Not a rewrite of `ledger.corpus`. The unguarded reads get the same treatment the reviews tier
+above them already has, and the skipped paths ride on `Corpus` so `flw ledger` can name them
+too — but its own reporting is not this record's work.
+"""
+
+contract_edit = """
+1. In the CLI component's `provides`, in the sentence beginning "A user can ask which of the
+   project's own documents are spent", replace "which knowledge files the code has moved
+   under" with:
+
+     "which knowledge files the code has moved under and which it could not check at all,
+     because the revision they record is no longer in the repository"
+
+2. In the CLI component's `properties`, in the sentence beginning "flw stale exits 0 whenever
+   it ran", after "and including one where every document it read is stale" add:
+
+     ", and including one holding a document it could not read, which it names and counts
+     as read by nobody rather than failing the run"
+
+3. In the "validation and checks" component's `provides`, in the sentence beginning "A review
+   report a version record has acted on", replace "its prose where it does not" with:
+
+     "its prose where it does not — the record's own written fields, so a path inside a task
+     description or a quoted fixture is not a citation, and matched at a directory boundary,
+     so a directory whose name merely ends in the declared one is not the reports directory"
+"""
+
+[[decisions]]
+topic = "What flw stale prints for a knowledge file it could not check"
+options = [
+  "Report it under `changed`, since something is wrong either way",
+  "Give it its own row, glossed with why the file could not be checked",
+  "Leave it out and let flw know --check be the place that says it",
+]
+chosen = "Its own row"
+rationale = """
+Folding it into `changed` would claim a measurement the command does not have: a changed file
+carries files, insertions and deletions, and an unverifiable one carries nothing, because the
+revision it names is gone. Leaving it out is what ships today and is the defect — the command
+is sold as the single read across all four stores, so a reader who has to run `flw know
+--check` beside it to find out whether the first answer was real has no reason to run the
+first. The row costs one list on `Knowledge` and one `_rows` call.
+"""
+
+[[decisions]]
+topic = "Where the prose citation matcher looks inside a record"
+options = [
+  "The whole record file, as today",
+  "The record's written prose fields — summary, approach, contract_edit",
+  "The whole file, minus any line inside a dag task description",
+]
+chosen = "The written prose fields"
+rationale = """
+The whole file is what ships and it is why `y.md` — a path inside a dag task describing a test
+fixture — is one of this repository's ten dead citations, an artifact
+`mark-what-is-spent-minor.toml:33` named by name as the thing to avoid. Excluding dag
+descriptions alone was rejected because it fixes the instance and not the class: a path in a
+decision's rationale or in a quoted error is the same mistake. The prose fields are where a
+record actually cites what it read, which is what `flw-spec` step 5 tells a session to write.
+This cannot fix a citation inside a negation — "nobody has read X" still counts X — and that
+is the standing argument for `sources` carrying the weight over time rather than the regex.
+"""
+
+[[dag]]
+group = 1
+phase = "The state that reached no row"
+tasks = [
+  { id = "unverifiable-row", desc = "core/scripts/stale.py:206-219: keep the Diff from knowledge.changed rather than testing it, and route anything that is not `current` to a list — `changed` as today, plus a new `unverifiable` list on the Knowledge dataclass. Same for the System branch at :212, which tests `system_state(...) == \"changed\"` and has the same hole. Render the new row with a gloss saying the recorded revision is not in the repository, so a reader knows it is not a measurement." },
+  { id = "unverifiable-test", desc = "tests/test_stale.py: a store whose recorded revision is gone reports under the new row rather than under nothing. Build it by stamping, then rewriting history to an orphan commit — the reviewer's own reproduction. Verify it fails with the change reverted, by reverting it.", depends_on = ["unverifiable-row"] },
+]
+
+[[dag]]
+group = 2
+phase = "Citations that are not citations"
+tasks = [
+  { id = "prose-fields-only", desc = "core/scripts/stale.py:114: run the citation matcher over the record's written prose — summary, approach, contract_edit — rather than over record.path.read_text(). `sources` is read as it is today, from the parsed document. This must drop `y.md` from this repository's dead citations, which comes from a dag task description at specs/versions/knowledge-base-minor.toml:160." },
+  { id = "anchor-the-directory", desc = "core/scripts/stale.py:72: anchor the directory alternation to a path boundary. Today `[\\w./-]*(?:{body})/...` lets the prefix class absorb whatever precedes the name, so citation('reviews') matches docs/previews/X.md and citation('notes') matches plans/notes/X.md — which the contract declares as the project note store, so any project setting [paths] reports = \"notes\" reads every note citation as a report citation." },
+  { id = "citation-tests", desc = "tests/test_stale.py: a path inside a dag description is not a citation; docs/previews/X.md is not a citation of reviews/X.md; a record naming a report in prose still is. Each must fail with its own change reverted.", depends_on = ["prose-fields-only", "anchor-the-directory"] },
+]
+
+[[dag]]
+group = 3
+phase = "A count that means what its neighbours mean, and a run that finishes"
+tasks = [
+  { id = "extensions-header", desc = "core/scripts/stale.py:272: `EXTENSIONS (n)` counts marker lines while REPORTS, KNOWLEDGE and NOTES each count documents, and the row beneath it repeats the same number. `flw ledger` prints 4 extensions in the same repository where `flw stale` prints 2. Pass the extension count into render and use it for the header; the row keeps its own count of flagged lines." },
+  { id = "corpus-guards", desc = "core/scripts/ledger.py:94,99: the extensions and plans tiers read every file with an unguarded read_text, so a broken symlink under .flw/extensions/ raises FileNotFoundError and `flw stale --root <that project>` exits 1 with no output at all — against the property this contract added a day ago. Guard both the way the reviews tier above them already is, and carry the skipped paths on Corpus so a caller can name them. Reporting them in `flw ledger`'s own output is not this record's work." },
+  { id = "marked-anchor", desc = "core/scripts/stale.py:141: `marked()` accepts any first non-heading line carrying a backticked record name, so a report whose opening sentence merely mentions a record reads as marked. Anchor on the words flw-spec actually writes. Small, and it belongs here because it is the third place this command believes something it did not check." },
+  { id = "sources-not-a-list", desc = "core/scripts/stale.py:112: a record whose `sources` is not a list is a TypeError traceback. flw validate refuses such a record, but flw stale does not validate first and the contract says it exits 1 only for a bad --root." },
+  { id = "group3-tests", desc = "tests/test_stale.py and tests/test_ledger.py: the EXTENSIONS header equals the number of extension files; a project with a broken-symlink extension still prints every block and exits 0; a report whose first line mentions a record without the mark is not spent; a record with a scalar `sources` does not raise.", depends_on = ["extensions-header", "corpus-guards", "marked-anchor", "sources-not-a-list"] },
+]

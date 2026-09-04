@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.16.0"
+spec_version = "0.16.1"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -37,6 +37,7 @@ applied = [
   "mark-what-is-spent",
   "resolve-before-comparing",
   "say-what-was-not-read",
+  "nothing-falls-through",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -95,7 +96,7 @@ provides = [
   "A user can see which of a repo's extensions a skill will actually read at every level from the outermost project root inward, how large each one is, and which sit there read by nobody — for the repository they name rather than only the one they are standing in, and including a declared member that resolves outside the parent's own directory and so reads none of the parent's extensions.",
   "A user can print everything a skill reads at its opening — the shared context, the resolved root and where it came from, this repo's extensions from the outermost project root inward, the note store listing where that skill's own opening reads one, the records the contract has not applied, and the contract's component names and paths — with one command. Run with no skill named it omits the shared context: that call serves a session flw has no skill for, which wants what the repository records and not the file every skill already reads.",
   "A user can print the same opening without the shared context every skill already carries — the resolved root, the live extensions, the note store listing, the records the contract has not applied, and the scoped components — so a second call in one session, or an agent handed a briefing, pays for what this repository records rather than for the rules it is already holding.",
-  "A user can ask which of the project's own documents are spent: which review reports a version record has already acted on and which are still open, which knowledge files the code has moved under, and which extensions and notes carry a claim a commit could falsify while carrying no revision to date it against. It reports and deletes nothing, because a report is gitignored in most projects and an uncited one is a backlog item rather than refuse.",
+  "A user can ask which of the project's own documents are spent: which review reports a version record has already acted on and which are still open, which knowledge files the code has moved under and which it could not check at all, because the revision they record is no longer in the repository, and which extensions and notes carry a claim a commit could falsify while carrying no revision to date it against. It reports and deletes nothing, because a report is gitignored in most projects and an uncited one is a backlog item rather than refuse.",
   "A user can see, per host, where skills install and what that host does and does not support, before installing — and is told when a host cannot do something a skill wants, rather than the skill silently not working.",
   "A user can install flw's writing style into every host as a separate opt-in step, and remove it exactly, because a style reshapes every response in a session rather than only the ones a skill handles.",
   "Nothing flw installs destroys what was already there: it never overwrites a file it did not write, and never deletes one it did not create.",
@@ -128,7 +129,7 @@ properties = [
   "A [project.roots] path resolves relative to the project directory whose config declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
   "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside the directory it would name. One name is in force at a time: a directory under another name is not a project, and a walk probes exactly one name per level. A name that is not a string, is empty, is `.` or `..`, or is absolute is refused naming its source, because each of those makes every directory a project or none.",
   "flw context --scope prints the full text of every contract component whose declared paths meet one of the given paths, after the names-and-paths block, so a skill that has to hand a contract to another agent passes command output rather than intersecting paths by hand. A scope path matching no component prints no component and is not an error; a scope path outside the resolved root is refused naming it.",
-  "flw stale exits 0 whenever it ran — including a project with no reports directory, no knowledge store and no notes, and including one where every document it read is stale — and 1 only for a --root it was given and could not use. Nothing it reports is a failure, which is the reading flw context already takes at the other end of a run.",
+  "flw stale exits 0 whenever it ran — including a project with no reports directory, no knowledge store and no notes, and including one where every document it read is stale, and including one holding a document it could not read, which it names and counts as read by nobody rather than failing the run — and 1 only for a --root it was given and could not use. Nothing it reports is a failure, which is the reading flw context already takes at the other end of a run.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -240,7 +241,7 @@ provides = [
   "A user is told what a note costs before opening it and how old it is, so following a title into a note is a decision rather than a surprise.",
   "A user can find where a store is going wrong — notes with no description, no date, near duplicates of each other, or a slug that resolves to several — without flw deciding which of them to delete.",
   "A user is told when the store holds a file flw could not read, rather than searching a store that silently answers from part of itself.",
-  "A review report a version record has acted on is distinguishable from one nobody has read, from both directions: the paths the records name — the sources field where a record carries one and its prose where it does not, read against the reports directory the project declared and against the default, so records written before the field are still read and a project that moved that directory does not lose every citation naming the old one — and the record name flw-spec writes at the top of the report it specced from. One fact and one fold, so neither half has to be complete. A report a record names with no file behind it is reported as a dead citation rather than counted, because a citation is not evidence a file exists.",
+  "A review report a version record has acted on is distinguishable from one nobody has read, from both directions: the paths the records name — the sources field where a record carries one and its prose where it does not, read against the reports directory the project declared and against the default, so records written before the field are still read and a project that moved that directory does not lose every citation naming the old one, and matched over the record's own written fields, so a path inside a task description or a quoted fixture is not a citation, and at a directory boundary, so a directory whose name merely ends in the declared one is not the reports directory — and the record name flw-spec writes at the top of the report it specced from. One fact and one fold, so neither half has to be complete. A report a record names with no file behind it is reported as a dead citation rather than counted, because a citation is not evidence a file exists.",
   "A claim a commit could falsify — a bare count, a path with a line number, a version string — is reported when it sits in a store that carries no revision, which is every extension and any note whose frontmatter records only a date. The report is of shape and never of truth: nothing checks whether the claim still holds, because that costs a run and is a judgment a command does not make.",
 ]
 properties = [
