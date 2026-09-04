@@ -202,11 +202,12 @@ def test_a_directory_walks_from_itself_and_the_root_walks_to_the_repo_file():
 
 def test_a_path_outside_the_root_is_refused_and_so_is_one_not_in_the_code(tmp_path):
     shop = ACME / "shop"
+    store = store_of(shop)
     with pytest.raises(knowledge.Refused, match="not under"):
-        knowledge.relative_to_root(shop, tmp_path)
+        knowledge.relative_to_root(shop, tmp_path, store)
     with pytest.raises(knowledge.Refused, match="not in the code"):
-        knowledge.relative_to_root(shop, Path("api/nothing.py"))
-    assert knowledge.relative_to_root(shop, shop / "api" / "orders.py") == Path(
+        knowledge.relative_to_root(shop, Path("api/nothing.py"), store)
+    assert knowledge.relative_to_root(shop, shop / "api" / "orders.py", store) == Path(
         "api/orders.py"
     )
 
@@ -1443,3 +1444,105 @@ def test_a_system_stamp_moves_every_declared_member_through_the_command(
     assert run(["know", "--stamp", str(path), "--root", str(acme)]) == 0
     concept = knowledge.load(path, store_of(acme), acme)
     assert concept.revision == {"shop": "aaa1111", "worker": "bbb2222"}
+
+
+# --- a flw directory that is a symlink ---------------------------------------- #
+
+
+@pytest.fixture
+def symlinked(tmp_path: Path, monkeypatch) -> Path:
+    """A repository whose flw directory is a symlink into a directory it ignores.
+
+    The layout a repository takes when it wants the flw directory covered by an
+    ignore rule it already has: the real files live under `no-commit/`, which is
+    gitignored, and `.flw` is a link into it. Reported from a live session, and
+    the only fixture in this suite where a store is reached through a link.
+    """
+    repo = tmp_path / "repo"
+    store = repo / "no-commit" / ".flw" / "knowledge"
+    (store / "src").mkdir(parents=True)
+    (repo / "src").mkdir()
+    (repo / "src" / "a.py").write_text("x = 1\n")
+    (store / "repo.md").write_text(
+        '+++\ntype = "Repository"\ndescription = "A probe."\n+++\n# repo\n'
+    )
+    (store / "src" / "src.md").write_text(
+        '+++\ntype = "Area"\ndescription = "A probe area."\n+++\n# src\n'
+    )
+    try:
+        (repo / ".flw").symlink_to(Path("no-commit") / ".flw")
+    except (OSError, NotImplementedError):
+        pytest.skip("this platform cannot create a symlink")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    return repo
+
+
+def test_a_store_reached_through_a_symlink_can_be_stamped(
+    symlinked, capsys, monkeypatch
+):
+    """The refusal the layout was reported for. `--stamp` resolves the path it is
+    given, so an unresolved store matched nothing and every file in the store was
+    `in no store`."""
+    canned(monkeypatch, {"rev-parse": (0, "ff00aa1\n")})
+    path = symlinked / ".flw" / "knowledge" / "repo.md"
+
+    assert run(["know", "--stamp", str(path), "--root", str(symlinked)]) == 0
+    assert "1 file stamped" in capsys.readouterr().out
+    real = symlinked / "no-commit" / ".flw" / "knowledge" / "repo.md"
+    assert 'revision = "ff00aa1"' in real.read_text()
+
+
+def test_a_knowledge_file_named_through_the_link_is_refused_not_walked(
+    symlinked, capsys, monkeypatch
+):
+    """The worse half: it answered, describing a knowledge file as source at a
+    path under the ignored directory, with nothing saying the answer was wrong."""
+    canned(monkeypatch, {"diff": (0, "")})
+    path = symlinked / ".flw" / "knowledge" / "repo.md"
+
+    assert run(["know", str(path), "--root", str(symlinked)]) == 1
+    err = capsys.readouterr().err
+    assert "inside the knowledge store" in err
+    assert "no-commit" not in err
+
+
+def test_the_four_whole_store_commands_are_unchanged_by_the_link(
+    symlinked, capsys, monkeypatch
+):
+    """A regression pin, not a fail-on-revert test: these four pass before this
+    record and must pass after it. Their paths come out of `concepts(store)`, so
+    both sides of every comparison derive from one store object and the link
+    cannot separate them — including the relative path a listing prints."""
+    canned(monkeypatch, {"diff": (0, "")})
+
+    assert run(["know", "--root", str(symlinked)]) == 0
+    assert capsys.readouterr().out.startswith("repo: repo · ")
+
+    assert run(["know", "src/a.py", "--root", str(symlinked)]) == 0
+    assert capsys.readouterr().out.startswith(
+        "repo · src/a.py · 2 of 3 levels have knowledge"
+    )
+
+    assert run(["know", "--check", "--root", str(symlinked)]) == 0
+    out = capsys.readouterr().out
+    assert "  repo      repo.md                    unstamped" in out
+    assert "  repo      src/src.md                 unstamped" in out
+
+    assert run(["know", "--reindex", "--root", str(symlinked)]) == 0
+    assert "2 listings rewritten" in capsys.readouterr().out
+    store = symlinked / "no-commit" / ".flw" / "knowledge"
+    assert "repo.md" in (store / "index.md").read_text()
+
+
+def test_a_knowledge_file_is_refused_on_a_repository_with_no_symlink(
+    acme, capsys, monkeypatch
+):
+    """The half of the refusal that has nothing to do with symlinks. On any
+    repository, naming a knowledge file walked it as though it were source —
+    `shop · .flw/knowledge/shop.md · N levels` — because `under` finds it
+    genuinely under the root and only the store's location tells the two apart."""
+    canned(monkeypatch, {"diff": (0, "")})
+    path = store_of(acme / "shop") / "shop.md"
+
+    assert run(["know", str(path), "--root", str(acme / "shop")]) == 1
+    assert "inside the knowledge store" in capsys.readouterr().err

@@ -1,0 +1,200 @@
+name = "resolve-before-comparing"
+base = "mark-what-is-spent"
+
+summary = """
+A repository whose flw directory is a symlink — the ordinary way to put it inside a
+directory the repo already ignores — cannot re-stamp a knowledge file, and gets a wrong
+answer rather than an error when it names one. The comparison that decides whether a file
+is inside the store resolves one side and not the other, and the lookup that decides
+whether a path is code has no way to know the store exists. This resolves both sides where
+the comparison is made, and refuses a path that resolves inside the store instead of
+answering as though it were source.
+"""
+
+approach = """
+Reported from a live session on another repository and reproduced here at b3fa4d5 before
+anything was written. That repository keeps `no-commit/` gitignored and makes `repo/.flw` a
+symlink into it, so the flw directory inherits the ignore rather than needing its own line.
+
+WHAT ACTUALLY BREAKS, MEASURED ON THAT LAYOUT
+
+A fixture repo with real files under `no-commit/.flw/knowledge/` and `.flw` a symlink to
+`no-commit/.flw`:
+
+  flw know                                 exit 0
+  flw know src/a.py                        exit 0
+  flw know --check                         exit 0
+  flw know --reindex                       exit 0
+  flw know --stamp .flw/knowledge/repo.md  exit 1  error: ... is in no store under repo
+  flw know .flw/knowledge/repo.md          exit 0  repo · no-commit/.flw/knowledge/repo.md
+
+Two failures, not six. The first is a refusal a user cannot work around. The second is
+worse: it answers, treating a knowledge file as an ordinary source file inside the repo,
+with nothing saying the answer is wrong.
+
+WHY THE OTHER FOUR WORK, WHICH IS ALSO WHY THE FIRST DRAFT OF THIS RECORD WAS WRONG
+
+Their paths come out of `concepts(store)` or `store / f"{name}.md"`, so both sides of the
+`relative_to` derive from one `store` object and cannot disagree. That is the same argument
+this record uses to exclude `store.walk()`, and the first draft applied it to store.py and
+failed to apply it to knowledge.py — claiming every whole-store operation reached the
+defect. The spec critic ran the six commands and showed four of them passing. The
+ValueError in the original reproduction needs a caller that hands the engine a resolved
+path against an unresolved store, and no flw command does that.
+
+WHERE THE TWO REAL FAILURES LIVE
+
+  cli/flw.py:3688-3691   `path = path.resolve()` on one side, `store` from
+                         `knowledge_dir(root)` on the other, then `path.is_relative_to(store)`.
+                         One side resolved, one not. This is --stamp.
+  cli/flw.py:3579,:3581  `relative_to_root(root, given)` has no store parameter, so
+                         `under():223` resolves both sides, finds the knowledge file
+                         genuinely under `no-commit/`, and answers. `target_store` is
+                         computed one line later at :3583 and is never consulted.
+
+So the fix is in cli/flw.py and in one engine signature, not in the engine's comparison
+sites. The first draft chose the opposite layer and would have left --stamp exactly as
+broken as it is now.
+
+WHAT DOES NOT CHANGE, CHECKED RATHER THAN ASSUMED
+
+The listings. `Concept.rel` is relative to the store, so resolving both sides consistently
+leaves it identical and `index.md` is untouched:
+
+  through the symlink    rel = ['repo.md', 'src/src.md']
+  both resolved          rel = ['repo.md', 'src/src.md']
+
+The engine's own comparison sites — `level_of:124`, `mirror:138`, `load:153`,
+`concepts:279` — are left alone. Resolving there fixes nothing any caller reaches, and this
+record does not add defensive code for an input that cannot occur.
+
+ONE THING THIS RECORD GOT WRONG, FOUND WHILE BUILDING IT
+
+The sentence above is false as stated, and the run proved it. `flw know --stamp` reaches
+`level_of:130` one call deeper — `_know_stamp` builds its items with the store it just
+compared against, and `stamp_all` -> `_stamped` -> `load` -> `level_of` compares again. With
+only the `is_relative_to` comparison resolved, --stamp raises the same ValueError from
+inside the engine:
+
+  ValueError: '.../repo/no-commit/.flw/knowledge/repo.md' is not in the subpath of
+              '.../repo/.flw/knowledge'
+
+So a caller does reach the engine's comparison with a mismatched pair, and the first draft's
+instinct was not baseless — it was aimed one layer too high. The fix stays where decision 1
+put it: `_know_stamp` resolves the store once and the item carries the resolved one, so the
+engine is handed a consistent pair rather than being taught to normalise. What is wrong is
+the reasoning, not the choice, and this paragraph is here because the next reader of
+decision 1 would otherwise take "no caller reaches the bug through those functions" at face
+value and be wrong.
+
+`flw kb` is out of scope and unaffected. `store.walk():251` computes
+`path.parent.relative_to(root)` where `path` came from `root.rglob("*.md")`, so both sides
+derive from one object. Nothing hands `walk()` an outside path — `flw kb show` addresses by
+slug, not by path.
+
+HISTORY AND COVERAGE
+
+  git log --oneline -S'root = root.resolve()' -- core/scripts/knowledge.py
+    f058ea1, 9967148 — both the original store commits. Nothing since.
+  flw ledger symlink
+    install and sync material only. No record has touched store-path resolution.
+  grep -rn 'symlink' tests/test_knowledge.py
+    nothing. tests/test_cli.py's symlink tests are all about install links. Nothing in 752
+    tests exercises a symlinked flw directory, which is why this reached a user.
+
+WHY MINOR, AND HOW CLOSE IT IS
+
+A user could not re-stamp and could get a wrong answer; both are corrections rather than
+capabilities arriving, which `stale-claims` classifies as minor. `relative_to_root` gains a
+parameter, but it is an engine function with two call sites, both in this repo.
+
+The argument for major is stronger than the first draft admitted. `flw know <a path inside
+the store>` exits 0 on every repository today and will exit 1 on every repository after
+this, symlinked or not, so a command whose output someone scripted around changes. It stays
+minor because the exit-0 answer was a knowledge file reported as a source path — the same
+capability working correctly rather than a behaviour anyone could have relied on — but the
+record states the reach rather than leaving a reader to find it.
+"""
+
+contract_edit = """
+1. In the "the knowledge store" component's `properties`, after the sentence beginning
+   "The store is read from the root it belongs to", add:
+
+     "A flw directory or a knowledge directory that is a symlink is read exactly as a real
+     one — the layout a repository takes when it puts the flw directory inside a directory
+     it already ignores. Every comparison deciding whether a file is inside a store resolves
+     both sides, so one side reached through a link and one not cannot disagree, and the
+     relative path a listing prints is unchanged by it."
+
+2. In the "the knowledge store" component's `properties`, in the sentence beginning "A root
+   with no store prints `no store`", extend the list of inputs that exit 1 by adding, after
+   "a path not in the code or under no declared member or under more than one":
+
+     ", a path that resolves inside a knowledge store rather than in the code"
+"""
+
+[[decisions]]
+topic = "Which layer resolves the store"
+options = [
+  "knowledge.py's comparison sites — level_of, mirror, load, concepts — so the engine normalises whatever it is handed",
+  "cli/flw.py, where a caller's path meets a store built from config, plus one engine signature so the code lookup can see the store",
+  "Both, with a contract sentence saying which layer owns normalisation",
+]
+chosen = "cli/flw.py, plus one engine signature"
+rationale = """
+This reverses the first draft, which chose the engine. The spec critic ran the six commands
+on the reported layout: `flw know`, `flw know <code path>`, `--check` and `--reindex` all
+exit 0, because their paths come out of `concepts(store)` and share the store object. The
+two that are wrong are both in cli/flw.py — `_know_stamp:3690` resolves one side of its
+`is_relative_to`, and `relative_to_root` is called at :3579 and :3581 without the store that
+`knowledge_dir(target)` computes at :3583. Fixing the engine's comparison sites would have
+left --stamp broken exactly as it is, because that comparison is not in the engine. Adding
+the engine resolve as well was offered and declined: no caller reaches the bug through those
+functions, so it is defensive code for an input that cannot occur, which flw's posture
+argues against.
+"""
+
+[[decisions]]
+topic = "Whether a path inside the store gets its own refusal"
+options = [
+  "No: fix --stamp and accept that flw know on a knowledge file keeps answering as though it were source",
+  "Yes: relative_to_root takes the store and refuses a path that resolves inside it, alongside the two refusals it already tells apart",
+]
+chosen = "Yes"
+rationale = """
+The reported failure is a refusal, and the refusal is the recoverable half. The unrecoverable
+half is that `flw know .flw/knowledge/repo.md` exits 0 and answers
+`no-commit/.flw/knowledge/repo.md · 1 of 5 levels`, describing a knowledge file as source
+with nothing saying so. Resolving the store does not touch that path: `under():223` already
+resolves both sides and correctly finds the file under `no-commit/`, so the only thing that
+distinguishes it is knowing the store exists. `relative_to_root():264` is the function whose
+whole job is telling refusals apart — a path outside the root from a path not in the code —
+so a third is the shape already there. The cost is a signature change and two call sites,
+both in cli/flw.py, and the critic was right that the first draft understated it.
+
+This refusal fires on every repository, not only a symlinked one, and that is deliberate.
+On flw's own checkout today, `flw know .flw/knowledge/flw.md` exits 0 and prints
+`flw · .flw/knowledge/flw.md · 1 of 4 levels have knowledge`, walking a knowledge file as
+though it were source. No symlink is involved; the resolve changes nothing there and the
+refusal is the whole of the change. The answer is wrong on an ordinary repo for the same
+reason it is wrong on a symlinked one, and it is simply less obviously wrong.
+"""
+
+[[dag]]
+group = 1
+phase = "The two comparisons that are wrong"
+tasks = [
+  { id = "stamp-resolves-store", desc = "cli/flw.py:3688-3691 in _know_stamp: resolve the store side before `path.is_relative_to(store)`, so a store reached through a symlink matches a caller's resolved path. The path side already resolves at :3690 and the comment above it says why the batch resolves everything first — keep that property. Against the fixture, `flw know --stamp .flw/knowledge/repo.md` must go from exit 1 to a stamp." },
+  { id = "refuse-inside-store", desc = "core/scripts/knowledge.py: relative_to_root():264 takes the store as a parameter and raises Refused for a path that resolves inside it, naming that as the reason, alongside the two refusals it already distinguishes. under():216 is unchanged and keeps returning None rather than raising — telling refusals apart is relative_to_root's job. Then cli/flw.py: move `target_store = knowledge_dir(target)` from :3583 above the calls at :3579 and :3581 and pass it; the second call is on `root`, so it passes `knowledge_dir(root)`." },
+]
+
+[[dag]]
+group = 2
+phase = "A fixture nothing in 752 tests had"
+tasks = [
+  { id = "symlink-fixture", desc = "tests/test_knowledge.py: a fixture repository in the reported layout — real files under no-commit/.flw/knowledge/ with .flw a symlink to no-commit/.flw. Skip on a platform that cannot create one rather than failing there.", depends_on = ["stamp-resolves-store"] },
+  { id = "the-two-failures", desc = "Against that fixture: `flw know --stamp <a file in the store>` stamps rather than refusing, and `flw know <that same path>` is refused as inside the store rather than answering with a path under the ignored directory. Both must fail with their fix reverted — check that by reverting each, not by reading the test.", depends_on = ["symlink-fixture", "refuse-inside-store"] },
+  { id = "the-four-that-work", desc = "Against the same fixture, pin that flw know, flw know <a code path>, --check and --reindex still exit 0 and print what they print on an unsymlinked repo, including the relative path in a listing. These pass today and this record must not change them; they are a regression pin, not a fail-on-revert test, and the task says so because the first draft of this record claimed they were broken.", depends_on = ["symlink-fixture"] },
+  { id = "refusal-on-any-repo", desc = "tests/test_knowledge.py, without the symlink fixture: a plain repository with a real knowledge store, where naming a knowledge file's own path is refused as inside the store. This is the half of refuse-inside-store that has nothing to do with symlinks — it exits 0 today on flw's own checkout — and the record's classification turns on it, so it is pinned separately from the fixture cases.", depends_on = ["refuse-inside-store"] },
+  { id = "kb-unaffected", desc = "tests/test_store.py: one test that a symlinked note root still walks, because store.walk():251 derives both sides of its comparison from the same root object. The negative half of this record's scope claim, so a later reader does not 'fix' store.py to match.", depends_on = ["stamp-resolves-store"] },
+]

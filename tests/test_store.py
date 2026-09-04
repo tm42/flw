@@ -11,6 +11,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core" / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli"))
 import flw
@@ -1556,3 +1558,22 @@ def test_an_updated_date_is_not_a_revision(tmp_path):
     hm = home(tmp_path)
     note(hm / "kb", "flw/counts.md", "+++\ntitle = 'c'\nupdated = 2026-09-02\n+++\nat x.py:1\n")
     assert store.walk(hm, None)[0].revision == ""
+
+
+def test_a_note_root_reached_through_a_symlink_still_walks(tmp_path):
+    """The negative half of the record that resolved the knowledge store's
+    comparisons: `walk` needs no resolve, because `path.parent.relative_to(root)`
+    derives both sides from the root it was handed and `rglob` never leaves it.
+    Nothing hands `walk` an outside path — `flw kb show` addresses by slug — so
+    resolving here would be defensive code for an input that cannot occur."""
+    hm = home(tmp_path)
+    real = tmp_path / "elsewhere" / "kb"
+    note(real, "python/unions.md", "+++\ntitle = 'unions'\n+++\nbody")
+    (hm / "kb").rmdir()
+    try:
+        (hm / "kb").symlink_to(real)
+    except (OSError, NotImplementedError):
+        pytest.skip("this platform cannot create a symlink")
+
+    found = store.walk(hm, None)
+    assert [(n.slug, n.category) for n in found] == [("unions", "python")]

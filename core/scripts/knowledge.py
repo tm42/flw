@@ -261,16 +261,28 @@ def member_for(root: Path, members: dict[str, Path], given: Path) -> Path:
     return owners[0]
 
 
-def relative_to_root(root: Path, given: Path) -> Path:
-    """`under`, with the two refusals told apart.
+def relative_to_root(root: Path, given: Path, store: Path) -> Path:
+    """`under`, with the three refusals told apart.
 
     A path outside the root is a typo or the wrong `--root`; a path that is not
-    in the code is a typo or a rename that already orphaned its knowledge.
+    in the code is a typo or a rename that already orphaned its knowledge; a
+    path inside the store names a knowledge file, which describes the code
+    rather than sitting in it, so walking it would report a description as
+    source.
+
+    The store is why this takes one more argument than `under`. A knowledge
+    file is genuinely under the root, so `under` finds it and nothing but the
+    store's location tells the two apart. Both sides are resolved, because a
+    repository whose flw directory is a symlink reaches the store through the
+    link and the file without it; `is_dir()` is False for a symlink loop, so it
+    short-circuits the resolve.
     """
+    root = root.resolve()
     found = under(root, given)
     if found is not None:
+        if store.is_dir() and (root / found).is_relative_to(store.resolve()):
+            raise Refused(f"{given} is inside the knowledge store under {root}")
         return found
-    root = root.resolve()
     if any(candidate.resolve().exists() for candidate in _reachable(root, given)):
         raise Refused(f"{given} is not under {root}")
     raise Refused(f"{given} is not in the code under {root}")

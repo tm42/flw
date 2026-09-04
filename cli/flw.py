@@ -3576,11 +3576,11 @@ def _know_walk(args, engine, root: Path, store: Path, members: dict[str, Path]) 
             # not a member — the answer it wants is the orientation.
             return _know_orientation(engine, root, store, members)
         target = engine.member_for(root, members, given)
-        rel = engine.relative_to_root(target, given)
     else:
-        target, rel = root, engine.relative_to_root(root, given)
+        target = root
 
     target_store = knowledge_dir(target)
+    rel = engine.relative_to_root(target, given, target_store)
     rows = []
     # The denominator is how many levels the path has, which is a fact about
     # the path and not about the store — computed inside the guard, a member
@@ -3680,7 +3680,17 @@ def _know_stamp(args, engine, root: Path, members: dict[str, Path]) -> int:
     if not args.stamp:
         raise engine.Refused("--stamp names the files to re-stamp; it was given none")
 
-    stores = _knowledge_stores(root, members)
+    # Both sides of the comparison below are resolved, and the resolved store is
+    # what the item carries: a repository that puts its flw directory inside a
+    # directory it already ignores makes `.flw` a symlink, and an unresolved store
+    # matches nothing a resolved path can be under — neither here nor in the
+    # engine's own `path.relative_to(store)`, which stamping these items reaches.
+    # `is_dir()` is False for a symlink loop, so it short-circuits the resolve.
+    stores = [
+        (owner, store.resolve())
+        for owner, store in _knowledge_stores(root, members)
+        if store.is_dir()
+    ]
     # Every named file is resolved before any is stamped, so that the batch's
     # one-write-or-none property survives files spanning several stores.
     items = []
@@ -3689,8 +3699,7 @@ def _know_stamp(args, engine, root: Path, members: dict[str, Path]) -> int:
         path = path if path.is_absolute() else (Path.cwd() / path)
         path = path.resolve()
         owned = next(
-            ((owner, store) for owner, store in stores
-             if store.is_dir() and path.is_relative_to(store)),
+            ((owner, store) for owner, store in stores if path.is_relative_to(store)),
             None,
         )
         if owned is None:
