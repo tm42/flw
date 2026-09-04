@@ -824,6 +824,22 @@ def census(corpus_: Corpus) -> str:
 # The lint reads shape and never truth. Verifying a count costs a run, which is a
 # judgment `flw-research` makes and a command does not.
 
+# Cardinals two through twenty and the tens, longest first so `nineteen` is not
+# read as `nine`. A number written as a word is as falsifiable as one written as
+# digits, and the rules above report shape rather than what an author meant by it.
+SPELLED = "|".join(
+    sorted(
+        [
+            "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+            "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+            "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty",
+            "fifty", "sixty", "seventy", "eighty", "ninety",
+        ],
+        key=len,
+        reverse=True,
+    )
+)
+
 MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
     # A path with a line number. The extension names where to look and the line
     # moves under it: `tests/test_cli.py:3156` was the parser-surface diff and the
@@ -831,10 +847,14 @@ MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("path:line", re.compile(r"\b[\w./-]+\.[A-Za-z]{1,6}:\d+(?:-\d+)?\b")),
     # A version string, including the two-part form a language floor takes.
     ("version", re.compile(r"\bv?\d+\.\d+(?:\.\d+)*\b")),
-    # A bare count. The lookarounds keep this off the digits the two rules above
-    # already claimed, and off a date, whose parts are each preceded or followed
-    # by a hyphen and a digit.
-    ("count", re.compile(r"(?<![\w.:-])\d+(?![\w.:-])")),
+    # A count, written as digits or as a word. The lookarounds keep the digit half
+    # off the digits the two rules above already claimed, and off a date, whose
+    # parts are each preceded or followed by a hyphen and a digit.
+    #
+    # `one` is not in the spelled list. It is an article as often as it is a
+    # count — "one file, not the tree" — and a rule that reports it reports most
+    # sentences in these files.
+    ("count", re.compile(rf"(?<![\w.:-])\d+(?![\w.:-])|\b(?:{SPELLED})\b", re.IGNORECASE)),
 )
 
 
@@ -851,10 +871,18 @@ class Marker:
 def extension_markers(corpus_: Corpus) -> list[Marker]:
     """Every line of every extension that carries a countable.
 
-    A number spelled as a word is not reported, and that is the design rather than
-    a gap in the pattern. "in about eight seconds" and "the first fifteen lines"
-    are the register of a convention; "638 tests in 7.3 seconds" is a measurement,
-    and a measurement is what a commit can falsify.
+    A number spelled as a word is reported, and used not to be. The exemption
+    argued that "in about eight seconds" is the register of a convention while
+    "638 tests in 7.3 seconds" is a measurement — which is a claim about what an
+    author meant, and the comment above MARKERS says these rules read shape and
+    never truth. It also has the one sample against it: of the three claims this
+    repository's extensions had actually drifted, the exemption missed exactly
+    one, "Three checks" where there were four, and that one was caught only
+    because a person read the file.
+
+    The price is `shared.md:16`, "the first fifteen lines", reported while true.
+    That is the same trade `mark-what-is-spent` took for `shared.md:11`, and it is
+    recorded so it is not re-opened as a defect.
 
     One line yields at most one marker per shape, so a line carrying a count and a
     version reports both and a line carrying two counts reports the first. The

@@ -1074,10 +1074,22 @@ def test_a_bare_count_is_reported(tmp_path):
     assert [(m.kind, m.text) for m in found] == [("version", "7.3"), ("count", "638")]
 
 
-def test_a_number_spelled_as_a_word_is_not_reported(tmp_path):
-    """The register is the signal. "in about eight seconds" is how a convention is
-    written; "638 tests in 7.3 seconds" is a measurement filed in the wrong store."""
-    assert markers(tmp_path, shared="Three checks, in about eight seconds together.\n") == []
+def test_a_number_spelled_as_a_word_is_reported(tmp_path):
+    """This test used to assert the opposite, on the same fixture, and the fixture
+    is why it changed: "Three checks" was false when it was written — there were
+    four — and a person caught it by reading, because the exemption this pins the
+    end of did not. The exemption was the one place these rules decided what an
+    author meant rather than what a line looks like.
+
+    One marker rather than two: the count rule keeps its first match on a line."""
+    found = markers(tmp_path, shared="Three checks, in about eight seconds together.\n")
+    assert [(m.kind, m.text) for m in found] == [("count", "Three")]
+
+
+def test_one_is_not_a_spelled_cardinal(tmp_path):
+    """It is an article as often as it is a count, so reporting it would report
+    most sentences in these files."""
+    assert markers(tmp_path, shared="Rewrite one file, not the tree.\n") == []
 
 
 def test_a_version_string_that_is_currently_true_is_still_reported(tmp_path):
