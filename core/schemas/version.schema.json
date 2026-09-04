@@ -54,6 +54,15 @@
       "pattern": "^[a-z0-9][a-z0-9.-]*$",
       "description": "This record's identity, and the filename without its classification suffix. A record is stored as <name>-minor.toml or <name>-major.toml, so a directory listing says which each change is; the suffix stays out of the name so that reclassifying a change during its interview renames the file without moving the record's identity. Chosen when the version is specced and never changed afterwards, so two people speccing in parallel cannot collide. Legacy records carry the number they were written with and no suffix."
     },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The review reports this record was specced from, as paths relative to the project root. Optional, because most records come from a conversation rather than from a report, and because every record written before this field existed still has to validate. It exists so the fold from a report to the record that acted on it survives in the versioned artifact: a reports directory is gitignored in most projects, so a report can be deleted and the record still says which one it answered. flw stale reads it, falling back to a regex over the record's prose for the records that carry none."
+    },
     "release_line": {
       "type": "integer",
       "minimum": 0,

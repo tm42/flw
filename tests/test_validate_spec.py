@@ -363,6 +363,52 @@ def test_a_versions_directory_with_no_records_is_caught(tmp_path):
 
 
 
+# --- the reports a record came from ----------------------------------------- #
+#
+# `check_version` reads identity and dag integrity; the document's shape is the
+# schema's. These go through the schema, which is the half `sources` changed.
+
+
+def record_shape() -> dict:
+    import json
+
+    return json.loads(
+        (REPO / "core" / "schemas" / "version.schema.json").read_text()
+    )
+
+
+def against_schema(document: dict) -> list[str]:
+    shape_ = record_shape()
+    return [str(e) for e in validate(document, shape_, root=shape_)]
+
+
+def test_a_record_may_name_the_reports_it_came_from():
+    """`sources` is optional, so every record written before it existed still
+    validates, and a record that carries it is not a new kind of record."""
+    doc = version(name="marked", sources=[".flw/reports/2026-09-03T2050-process.md"])
+    assert against_schema(doc) == []
+
+
+def test_a_record_with_no_sources_still_validates():
+    assert against_schema(version(name="unmarked")) == []
+
+
+def test_sources_must_hold_strings_and_not_be_empty():
+    """An empty list says the record was specced from no report, which is what
+    omitting the field already says. Two spellings of one state is one too many."""
+    empty = against_schema(version(name="marked", sources=[]))
+    assert any("sources" in e for e in empty), empty
+    wrong = against_schema(version(name="marked", sources=[3]))
+    assert any("sources" in e for e in wrong), wrong
+
+
+def test_an_unknown_field_beside_sources_is_still_refused():
+    """additionalProperties stays false: adding one property does not open the
+    document, and a typo'd `source` must not read as `sources`."""
+    errors = against_schema(version(name="marked", source=[".flw/reports/x.md"]))
+    assert any("unexpected property 'source'" in e for e in errors), errors
+
+
 # --- identity and the applied list ------------------------------------------ #
 #
 # A record is addressed by a name it keeps, and the order versions landed in is

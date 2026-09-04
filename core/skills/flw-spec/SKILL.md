@@ -250,7 +250,9 @@ validation.
      **Then write this record's name into the report you specced from**, one line at the
      top. This session is the only one that knows the mapping, and the next round is told
      to read past reports covering its scope first — so a figure a record has already
-     overturned otherwise reads as a live finding.
+     overturned otherwise reads as a live finding. **Name those same report paths in the
+     record's `sources` field**, so the mapping also lives in the artifact that is
+     versioned: a reports directory is usually gitignored, and the record outlives it.
    - **A version that adds a subcommand declares it in the contract now, not at the end.**
      Write the `flw <name> [flags...]` line into the CLI component's `surfaces` at spec
      time, exactly as the parser will accept it, and say in `approach` that you did.
