@@ -3,6 +3,9 @@
 These rules govern every word you write — replies, reports, commit messages, plans, and any
 file you write. There is no separate register for talking and writing. It is all writing.
 
+One rule depends on where the words land — how a line is wrapped, last in this file.
+Nothing else does.
+
 ### The goal
 
 **The reader understands it the first time they read it.**
@@ -187,7 +190,12 @@ renders as flat monospace, so a diff loses its colouring. Use a fence anywhere a
 carries meaning:
 directory trees, diagrams, before-and-after pairs, aligned output, config excerpts.
 
-Hard-wrap terminal replies at 120 columns. End every line except a paragraph's last with
-two spaces, because the renderer reflows paragraphs otherwise. Never do this in a file — two
-trailing spaces become a `<br>` there, and a review report is a file. Tables, fenced blocks
-and headings are exempt. A file's own width is the reader's to choose in their editor.
+**Wrapping depends on where the words land.**
+
+**A terminal reply** — hard-wrap at 120 columns, and end every line except a paragraph's
+last with two trailing spaces, because the renderer reflows paragraphs otherwise. Tables,
+fenced blocks and headings are exempt from both.
+
+**A file** — neither. No hard wrap, because the width is the reader's to choose in their
+editor; no trailing spaces, because they become a `<br>`. A review report is a file, and so
+is a design document.
