@@ -2748,7 +2748,13 @@ def scout(args: argparse.Namespace) -> int:
 
 
 def validate(args: argparse.Namespace) -> int:
-    """Validate a contract or a version file."""
+    """Validate a contract or a version file.
+
+    Resolves `[paths] reports` and the contract's own `applied` list once, ahead
+    of the loop, and hands both to every target: they are what check_version's
+    sources rule needs to tell a record being written from one already landed,
+    and neither comes from the file being validated itself.
+    """
     sys.path.insert(0, str(checkout() / "core" / "scripts"))
     import validate_spec
 
@@ -2757,6 +2763,20 @@ def validate(args: argparse.Namespace) -> int:
     specs = root / _specs_dir(root)
 
     contract = specs / "current.toml"
+
+    paths = _section_config(root, "paths")
+    declared = paths.get("reports")
+    reports_dir = declared if isinstance(declared, str) and declared.strip() else (
+        f"{flw_dir_name()}/reports"
+    )
+    applied: list[str] = []
+    if contract.exists():
+        try:
+            with contract.open("rb") as handle:
+                applied = [n for n in tomllib.load(handle).get("applied", []) if isinstance(n, str)]
+        except (tomllib.TOMLDecodeError, UnicodeDecodeError):
+            pass  # validate_file reports this same failure against the contract below
+
     if not args.path and not contract.exists():
         # A repo with local checks and no specs/ is a normal, supported state —
         # run_tests.py says so, flw-research produces it, and it is where a
@@ -2784,7 +2804,9 @@ def validate(args: argparse.Namespace) -> int:
             worst = max(worst, 2)
             continue
         default = _schema_for(target)
-        code, messages = validate_spec.validate_file(target, schemas / default)
+        code, messages = validate_spec.validate_file(
+            target, schemas / default, reports_dir=reports_dir, applied=applied
+        )
         for message in messages:
             print(message, file=sys.stderr if code else sys.stdout)
         worst = max(worst, code)

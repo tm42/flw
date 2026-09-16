@@ -34,50 +34,11 @@ import knowledge
 import ledger
 import store as note_store
 from ledger import WIDTH, _capped
+from validate_spec import DEFAULT_REPORTS, citation
 
-# Where reports live when a project has not said otherwise. Kept as a second
-# alternation whatever the project declares, because a project that has moved its
-# reports directory still holds records citing the old one.
-DEFAULT_REPORTS = ".flw/reports"
-
-
-def citation(reports_dir: str = DEFAULT_REPORTS) -> re.Pattern[str]:
-    """A report path as a record writes it, in `sources` or in prose.
-
-    Built from the directory the fold was handed rather than hardcoded, because
-    `[paths] reports` is configurable and a matcher that is not saw every citation
-    in such a project as unread — the whole directory, counted as nobody having
-    read it.
-
-    The character class after the directory is what a report name is made of: an
-    ISO stamp, the lens name, and the `:14` a record sometimes appends to cite one
-    line of one. The directory itself reaches the pattern escaped, because a
-    project may name it anything and a `.` or `+` in it would otherwise match
-    something else.
-
-    A declared directory contributes a pattern only when it is relative and stays
-    inside the root. `[paths] reports` is taken raw at `cli/flw.py`, unlike
-    `[paths] flw`, which the contract refuses when absolute — so `root / reports_dir`
-    discards the root for an absolute value, and a pattern built from a
-    machine-specific absolute path matches nothing any record would ever spell.
-    Such a project folds on the default alone. Bounding the setting itself is a
-    separate change.
-
-    The lookbehind is what makes the directory a directory. The pattern used to
-    open with a prefix character class that absorbed whatever preceded the name,
-    so `citation("reviews")` matched `docs/previews/X.md` and `citation("notes")`
-    matched `plans/notes/X.md` — and the contract declares `notes/` as the project
-    note store, so a project setting `[paths] reports = "notes"` read every note
-    citation as a report citation. A record writes a report path from the project
-    root, so the directory begins the path or the path is not this directory's.
-    """
-    directories = [DEFAULT_REPORTS]
-    given = reports_dir.strip().rstrip("/")
-    inside = given and not Path(given).is_absolute() and ".." not in Path(given).parts
-    if inside and given != DEFAULT_REPORTS:
-        directories.append(given)
-    body = "|".join(re.escape(d) for d in directories)
-    return re.compile(rf"(?<![\w./-])(?:{body})/[A-Za-z0-9T:._-]+")
+# citation(reports_dir) and its default DEFAULT_REPORTS live in validate_spec now:
+# validate_spec sits at the bottom of the import chain, so it is the one module
+# both this and flw validate's sources rule can reach without a cycle.
 
 
 # The mark flw-spec writes above a report's own heading: one line naming the

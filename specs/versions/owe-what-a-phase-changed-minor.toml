@@ -1,0 +1,130 @@
+name = "owe-what-a-phase-changed"
+base = "say-the-loop-is-open"
+
+summary = """
+Two handoffs between lanes that today depend on a sentence become mechanical. flw validate
+refuses an unapplied record whose prose names a review report while its sources field is
+empty. The shared Commands block, printed at every lane's opening, gains flw ledger, flw stale
+and flw scout, which live only inside prose today. It also removes a contradiction
+say-the-loop-is-open left in the flw stale property.
+"""
+
+approach = """
+Specced from plans/design-the-loop.md (ec835e9), sections 6.4 and 6.5. A separate agent
+reviewed that document and every finding is applied. Sections 6.2 and 6.3, the two --owed
+flags, are say-the-loop-is-open-major, specced beside this one. The first draft of this record
+also carried flw know --owed. The spec critic found that makes it major, because current.toml:315
+says flw know exits 0 even when every file is changed, so it moved to the major record. Its section 7, widening the knowledge
+carve-out in all four skills, is in neither record. Every obvious wording costs +38 bytes,
+and core/skills/flw-spec/SKILL.md has 16 free.
+
+THE RULE BEHIND ALL THREE (measured at 7870d15, 2026-09-11)
+
+A fact reaches the next lane in one of three ways. A sentence in a SKILL.md reaches it only
+if an agent reads it and acts. A field in a record reaches it only if an agent fills it: the
+optional sources field is carried by 3 of 58 records (a loop over specs/versions/*.toml
+testing for the key). A computation over what is already on disk reaches it every time. So G3
+is a field that flw validate enforces, and the Commands lines put three commands where every
+opening prints them.
+
+WHAT IT IS NOT
+
+It is not ambient knowledge at the opening. design-the-loop's first draft had flw context
+--scope print knowledge heads, and that was withdrawn. The knowledge-store record's merge
+decision says knowledge is "addressed by path, never listed at opening".
+plans/knowledge-store.md:372 lists "Ambient printing of any of this" as not built on
+purpose. --scope's output is documented. This record prints nothing new at any opening
+except three command lines.
+
+G3 — THE APPLIED CLAUSE IS WHAT MAKES IT SHIPPABLE
+
+Without it, the rule refuses 19 of the 58 existing records on its first run, five of them
+already applied (4.0, 4.1, 4.3, 4.5, 4.6). A record carries no date, and
+validate_spec.check_version at core/scripts/validate_spec.py:364 sees only the record dict.
+The applied list is what separates old records from the one being written: a record is
+unapplied exactly while it is being specced. check_chain opens at :460 and reads applied at
+:513.
+
+The pattern lives in core/scripts/stale.py as citation(reports_dir) at :44. stale sits above
+validate_spec in the import chain, so validate_spec cannot import it. Move citation down into
+validate_spec and let stale import it, rather than keeping two copies of a pattern that has
+already been fixed once. validate_file(path, schema_path) at :613 sees one file and no
+contract; its docstring says check_chain "is not run here". So it gains two inputs: the reports
+directory and the contract's applied list. cli/flw.py already resolves the contract at the top
+of the validate command, so it passes [paths] reports and applied, or an empty list when there
+is no contract. With no contract, every record is unapplied, which is true: a first record
+citing a report without sources is refused.
+
+It enforces consistency, not completeness. A session that read a report and names it nowhere
+still passes. The hand-written Specced as mark stays, because 2 of the 8 marked reports are
+cited by no record's prose at all.
+
+G4 — THE COMMANDS BLOCK
+
+core/shared/context.md is 8,423 of 10,000 bytes and lists flw validate and flw test. Its own
+line 58 says "No command lives inside prose". flw ledger is named three times across the
+shipped skills, never as an instruction (grep -rnE 'flw ledger' core/skills core/shared). Its
+only imperative is in this repository's local .flw/extensions/flw-spec.md:4. The line added
+for flw stale does not mention --owed, so the block stays true if this record lands before
+say-the-loop-is-open.
+
+THE CONTRADICTION FOLDED IN FROM say-the-loop-is-open
+
+That record's contract edit 1 added the clause saying --owed exits 1, but kept the property's
+old last sentence: "Nothing it reports is a failure, which is the reading flw context already
+takes at the other end of a run." The two now contradict each other in one property. The
+executor of say-the-loop-is-open found it and raised it as a proposal rather than editing the
+contract. The user folded the fix into this record rather than speccing a one-clause record of
+its own. The base moved to say-the-loop-is-open, because this edit depends on text that record
+wrote.
+
+THE SURFACE LINE
+
+This record adds no CLI flag. The flw know --owed line in the contract belongs to
+say-the-loop-is-open-major.
+"""
+
+contract_edit = """
+1. In the schemas component's `provides`, replace "in an optional sources field" with "in a
+   sources field, which flw validate requires of a record the contract has not applied whose
+   prose names a path under the reports directory".
+
+2. In the "validation and checks" component's `provides`, at the end, add:
+
+     "flw validate refuses a version record the contract has not applied when its summary,
+     approach or contract_edit names a path under the reports directory and its sources field
+     is empty. An applied record is never refused for this, so the rule binds the record
+     being written and none already landed."
+
+3. In the CLI component's `properties`, in the sentence beginning "flw stale exits 0 whenever
+   it ran", replace "Nothing it reports is a failure," with "Without --owed, nothing it
+   reports is a failure,".
+"""
+
+[[decisions]]
+topic     = "which records the sources rule binds"
+options   = ["every record", "records the contract has not applied"]
+chosen    = "records the contract has not applied"
+rationale = "Every record would refuse 19 of 58 on the first run, 5 of them applied. A record carries no date, so applied is the only thing that tells the record being written from one already landed."
+
+[[decisions]]
+topic     = "where the report-citation pattern lives"
+options   = ["a second copy in validate_spec", "move stale.citation down into validate_spec and import it back"]
+chosen    = "move stale.citation down into validate_spec and import it back"
+rationale = "The import chain runs validate_spec <- ledger <- store <- knowledge <- stale, so validate_spec cannot reach up. The pattern has already been corrected once (resolve-before-comparing), and two copies would drift apart on the next correction."
+
+[[dag]]
+group = 1
+phase = "sources, required while a record is being written"
+tasks = [
+  { id = "move-citation", desc = "Move citation(reports_dir) from core/scripts/stale.py:44 into core/scripts/validate_spec.py, and import it in stale.py. There is no behaviour change, and tests/test_stale.py passes unchanged." },
+  { id = "sources-rule", desc = "core/scripts/validate_spec.py: an unapplied record whose summary, approach or contract_edit matches citation(reports_dir), with sources absent or empty, is an error naming the record and the first matched path. validate_file gains reports_dir (default '.flw/reports') and applied (default empty). cli/flw.py's validate command already resolves the contract, so it passes [paths] reports and the contract's applied list, or an empty list when there is no contract.", depends_on = ["move-citation"] },
+  { id = "sources-tests", desc = "tests/test_validate_spec.py. An unapplied record citing a report with no sources: refused. The same with sources: passes. The same record once applied: passes. A project with [paths] reports = 'reviews' citing reviews/x.md: refused. A directory with no contract, holding one record that cites a report without sources: refused. flw validate on this repository still exits 0, so none of the 58 existing records is refused.", depends_on = ["sources-rule"] },
+]
+
+[[dag]]
+group = 2
+phase = "The Commands block"
+tasks = [
+  { id = "commands-lines", desc = "core/shared/context.md, the Commands block: add `flw ledger <term>` (search what the project decided), `flw stale` (which documents are spent, and which nobody read) and `flw scout` (rank the repo by what depends on what). Plain flw stale only; no --owed. budget.py holds the file to 10,000 bytes." },
+]

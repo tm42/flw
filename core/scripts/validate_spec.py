@@ -299,6 +299,50 @@ def check_review(config: dict, name: str) -> list[str]:
 LEGACY_STEM = re.compile(r"^v\d+\.\d+$")
 LEGACY_NUMBER = re.compile(r"^\d+\.\d+$")
 
+# Where reports live when a project has not said otherwise. Kept as a second
+# alternation whatever the project declares, because a project that has moved its
+# reports directory still holds records citing the old one.
+DEFAULT_REPORTS = ".flw/reports"
+
+
+def citation(reports_dir: str = DEFAULT_REPORTS) -> re.Pattern[str]:
+    """A report path as a record writes it, in `sources` or in prose.
+
+    Built from the directory the fold was handed rather than hardcoded, because
+    `[paths] reports` is configurable and a matcher that is not saw every citation
+    in such a project as unread — the whole directory, counted as nobody having
+    read it.
+
+    The character class after the directory is what a report name is made of: an
+    ISO stamp, the lens name, and the `:14` a record sometimes appends to cite one
+    line of one. The directory itself reaches the pattern escaped, because a
+    project may name it anything and a `.` or `+` in it would otherwise match
+    something else.
+
+    A declared directory contributes a pattern only when it is relative and stays
+    inside the root. `[paths] reports` is taken raw at `cli/flw.py`, unlike
+    `[paths] flw`, which the contract refuses when absolute — so `root / reports_dir`
+    discards the root for an absolute value, and a pattern built from a
+    machine-specific absolute path matches nothing any record would ever spell.
+    Such a project folds on the default alone. Bounding the setting itself is a
+    separate change.
+
+    The lookbehind is what makes the directory a directory. The pattern used to
+    open with a prefix character class that absorbed whatever preceded the name,
+    so `citation("reviews")` matched `docs/previews/X.md` and `citation("notes")`
+    matched `plans/notes/X.md` — and the contract declares `notes/` as the project
+    note store, so a project setting `[paths] reports = "notes"` read every note
+    citation as a report citation. A record writes a report path from the project
+    root, so the directory begins the path or the path is not this directory's.
+    """
+    directories = [DEFAULT_REPORTS]
+    given = reports_dir.strip().rstrip("/")
+    inside = given and not Path(given).is_absolute() and ".." not in Path(given).parts
+    if inside and given != DEFAULT_REPORTS:
+        directories.append(given)
+    body = "|".join(re.escape(d) for d in directories)
+    return re.compile(rf"(?<![\w./-])(?:{body})/[A-Za-z0-9T:._-]+")
+
 
 def parse_record_filename(filename: str) -> tuple[str, str | None]:
     """A record's name and its classification, read off the filename alone.
@@ -361,13 +405,26 @@ def load_records(versions_dir: Path) -> list[Record]:
     return records
 
 
-def check_version(record: dict, name: str) -> list[str]:
-    """Identity and dag integrity for one version file.
+def check_version(
+    record: dict,
+    name: str,
+    *,
+    reports_dir: str = DEFAULT_REPORTS,
+    applied: list[str] | None = None,
+) -> list[str]:
+    """Identity, dag integrity and sourcing for one version file.
 
     The filename is the version's identity, so `name` disagreeing with it means
     one of the two is a typo and there is no way to tell which. `base` is checked
     nowhere here: it records the contract state this was specced against, and the
     order versions landed in lives in the contract's `applied` list.
+
+    `applied` is what tells the record being written from one already landed: a
+    record carries no date, so without it the sources rule below would refuse
+    every old record whose prose happens to name a report. `reports_dir` and
+    `applied` default to the values a directory with no contract folds to — the
+    default reports directory and nothing applied — so every record in it is
+    unapplied, which is true.
     """
     errors: list[str] = []
 
@@ -414,6 +471,22 @@ def check_version(record: dict, name: str) -> list[str]:
     cycle = _find_cycle({t["id"]: list(t.get("depends_on", [])) for t in tasks if "id" in t})
     if cycle:
         errors.append("dag: dependency cycle: " + " -> ".join(cycle))
+
+    if stem not in (applied or []):
+        given = record.get("sources")
+        has_sources = isinstance(given, list) and any(isinstance(s, str) for s in given)
+        if not has_sources:
+            matcher = citation(reports_dir)
+            for field in ("summary", "approach", "contract_edit"):
+                value = record.get(field)
+                match = matcher.search(value) if isinstance(value, str) else None
+                if match:
+                    errors.append(
+                        f"{stem or name} names {match.group(0)} in {field} but carries "
+                        "no sources field; a record the contract has not applied must "
+                        "list in sources any report path its prose points at"
+                    )
+                    break
 
     return errors
 
@@ -610,11 +683,22 @@ def resolve_schema(document: dict, given: Path) -> tuple[Path, str | None]:
     return resolved, f"schema_version = {version}; using {wanted}"
 
 
-def validate_file(path: Path, schema_path: Path) -> tuple[int, list[str]]:
+def validate_file(
+    path: Path,
+    schema_path: Path,
+    *,
+    reports_dir: str = DEFAULT_REPORTS,
+    applied: list[str] | None = None,
+) -> tuple[int, list[str]]:
     """(exit code, messages). Shape first, then meaning.
 
     check_chain is about the versions directory, not about any one file in it,
     so it is not run here — the caller runs it once per directory it validates.
+
+    `reports_dir` and `applied` reach `check_version` alone: a contract and a
+    review team have no sources field to check. The caller resolves both from
+    `[paths] reports` and the contract it already reads, or passes neither for a
+    directory with no contract, where every record is unapplied.
     """
     try:
         with path.open("rb") as handle:
@@ -641,7 +725,7 @@ def validate_file(path: Path, schema_path: Path) -> tuple[int, list[str]]:
     elif schema_path.name == "review.schema.json":
         meaning = check_review(document, path.name)
     else:
-        meaning = check_version(document, path.name)
+        meaning = check_version(document, path.name, reports_dir=reports_dir, applied=applied)
 
     markers = check_markers(document)
     if markers:

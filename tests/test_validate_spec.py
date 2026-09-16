@@ -409,6 +409,82 @@ def test_an_unknown_field_beside_sources_is_still_refused():
     assert any("unexpected property 'source'" in e for e in errors), errors
 
 
+# --- the sources rule: unapplied and citing a report owes flw validate a field  #
+#
+# The schema checks shape alone — `sources`, when present, is a non-empty list of
+# strings. check_version is where a record that names a report in prose without
+# naming it in sources is refused, and only while the contract has not applied it.
+
+
+def test_an_unapplied_record_citing_a_report_with_no_sources_is_refused():
+    errors = check_version(
+        {"name": "cites", "summary": "read .flw/reports/2026-01-01T0000-eng.md first"},
+        "cites-minor.toml",
+    )
+    assert any("sources" in e for e in errors), errors
+
+
+def test_the_same_record_with_sources_passes():
+    errors = check_version(
+        {
+            "name": "cites",
+            "summary": "read .flw/reports/2026-01-01T0000-eng.md first",
+            "sources": [".flw/reports/2026-01-01T0000-eng.md"],
+        },
+        "cites-minor.toml",
+    )
+    assert errors == []
+
+
+def test_the_same_record_once_applied_passes():
+    """The applied list is what tells the record being written from one already
+    landed. A record carries no date, so this is the only signal check_version has."""
+    errors = check_version(
+        {"name": "cites", "summary": "read .flw/reports/2026-01-01T0000-eng.md first"},
+        "cites-minor.toml",
+        applied=["cites"],
+    )
+    assert errors == []
+
+
+def test_a_configured_reports_directory_is_bound_by_the_rule_too():
+    """[paths] reports = 'reviews' moves where citations are read from, not
+    whether the rule applies."""
+    errors = check_version(
+        {"name": "cites", "summary": "read reviews/2026-01-01T0000-eng.md first"},
+        "cites-minor.toml",
+        reports_dir="reviews",
+    )
+    assert any("sources" in e for e in errors), errors
+
+
+def test_a_directory_with_no_contract_still_binds_every_record(tmp_path, monkeypatch):
+    """With no contract there is no applied list, so `flw validate`'s default —
+    nothing applied — is exactly right: every record in such a directory is
+    unapplied, which is true."""
+    from tests.test_cli import flw
+
+    specs_dir = tmp_path / "specs"
+    (specs_dir / "versions").mkdir(parents=True)
+    (specs_dir / "versions" / "cites-minor.toml").write_text(
+        'name = "cites"\nsummary = "read .flw/reports/2026-01-01T0000-eng.md first"\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    assert flw.validate(SimpleNamespace(path=None)) == 1
+
+
+def test_flws_own_records_are_never_refused_by_the_sources_rule():
+    """The rule binds every record the contract has not applied. A record landed
+    before the rule existed must not turn red the day the rule ships — this is
+    the check that proves the `applied` clause is what makes it shippable."""
+    contract = tomllib.loads((REPO / "specs" / "current.toml").read_text())
+    for path in (REPO / "specs" / "versions").glob("*.toml"):
+        errors = check_version(
+            tomllib.loads(path.read_text()), path.name, applied=contract["applied"]
+        )
+        assert not any("sources" in e for e in errors), (path.name, errors)
+
+
 # --- identity and the applied list ------------------------------------------ #
 #
 # A record is addressed by a name it keeps, and the order versions landed in is

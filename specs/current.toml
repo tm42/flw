@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.17.0"
+spec_version = "0.17.1"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -41,6 +41,7 @@ applied = [
   "a-shape-is-not-a-judgment",
   "what-nothing-would-catch",
   "say-the-loop-is-open",
+  "owe-what-a-phase-changed",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -132,7 +133,7 @@ properties = [
   "A [project.roots] path resolves relative to the project directory whose config declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
   "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside the directory it would name. One name is in force at a time: a directory under another name is not a project, and a walk probes exactly one name per level. A name that is not a string, is empty, is `.` or `..`, or is absolute is refused naming its source, because each of those makes every directory a project or none.",
   "flw context --scope prints the full text of every contract component whose declared paths meet one of the given paths, after the names-and-paths block, so a skill that has to hand a contract to another agent passes command output rather than intersecting paths by hand. A scope path matching no component prints no component and is not an error; a scope path outside the resolved root is refused naming it.",
-  "flw stale exits 0 whenever it ran — including a project with no reports directory, no knowledge store and no notes, and including one where every document it read is stale, and including one holding a document it could not read, which it names and counts as read by nobody rather than failing the run — and 1 only for a --root it was given and could not use. Under --owed it also exits 1 when the project owes work it can name: a knowledge file orphaned or malformed, or a commit after the last applied record's landing commit that changes a component's paths outside plans/ while no record is in flight — none unapplied other than a legacy-numbered one, and none whose name is in applied without a landing commit yet. An unapplied record and an unstamped knowledge file are listed under --owed and never make it exit 1, because both are the normal state in the middle of a flw-execute run, and a check that failed on them would stop the run that clears them. Nothing it reports is a failure, which is the reading flw context already takes at the other end of a run.",
+  "flw stale exits 0 whenever it ran — including a project with no reports directory, no knowledge store and no notes, and including one where every document it read is stale, and including one holding a document it could not read, which it names and counts as read by nobody rather than failing the run — and 1 only for a --root it was given and could not use. Under --owed it also exits 1 when the project owes work it can name: a knowledge file orphaned or malformed, or a commit after the last applied record's landing commit that changes a component's paths outside plans/ while no record is in flight — none unapplied other than a legacy-numbered one, and none whose name is in applied without a landing commit yet. An unapplied record and an unstamped knowledge file are listed under --owed and never make it exit 1, because both are the normal state in the middle of a flw-execute run, and a check that failed on them would stop the run that clears them. Without --owed, nothing it reports is a failure, which is the reading flw context already takes at the other end of a run.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -247,6 +248,7 @@ provides = [
   "A review report a version record has acted on is distinguishable from one nobody has read, from both directions: the paths the records name — the sources field where a record carries one and its prose where it does not, read against the reports directory the project declared and against the default, so records written before the field are still read and a project that moved that directory does not lose every citation naming the old one, and matched over the record's own written fields, so a path inside a task description or a quoted fixture is not a citation, and at a directory boundary, so a directory whose name merely ends in the declared one is not the reports directory — and the record name flw-spec writes at the top of the report it specced from. One fact and one fold, so neither half has to be complete. A report a record names with no file behind it is reported as a dead citation rather than counted, because a citation is not evidence a file exists.",
   "A commit is attributable to a version record from git alone: a record's landing commit is the one that added its name to applied in the contract, and every commit up to and including it that no earlier landing covers belongs to that record. Nothing is declared for this — no field, no trailer — so it holds for every record written before anyone asked. flw stale --owed names each commit after the last landing that changes a component's paths outside plans/, and treats one as owed only while no record is in flight.",
   "A claim a commit could falsify — a count written as digits or as a word, a path with a line number, a version string — is reported when it sits in a store that carries no revision, which is every extension and any note whose frontmatter records only a date. A note clears that row by recording the revision it was measured at, which flw kb write can put there and which is read only when it looks like one, so a sentence in the field does not silence the check. The report is of shape and never of truth: nothing checks whether the claim still holds, because that costs a run and is a judgment a command does not make.",
+  "flw validate refuses a version record the contract has not applied when its summary, approach or contract_edit names a path under the reports directory and its sources field is empty. An applied record is never refused for this, so the rule binds the record being written and none already landed.",
 ]
 properties = [
   "A contract whose applied list names only records that exist validates clean; a record no applied list names is a version in flight rather than an error.",
@@ -286,7 +288,7 @@ name  = "the schemas"
 paths = ["core/schemas/"]
 provides = [
   "A contract, a version record and a review team are each checked against a published shape by a stdlib-only validator, so a malformed one fails loudly at authoring time rather than quietly at execution time.",
-  "A version record may name the review reports it came from in an optional sources field, so the mapping from a report to the record that acted on it survives in the one artifact that is versioned, rather than in a directory most projects ignore.",
+  "A version record may name the review reports it came from in a sources field, which flw validate requires of a record the contract has not applied whose prose names a path under the reports directory, so the mapping from a report to the record that acted on it survives in the one artifact that is versioned, rather than in a directory most projects ignore.",
 ]
 
 [[final_state.components]]
