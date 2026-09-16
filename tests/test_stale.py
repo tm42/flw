@@ -528,3 +528,215 @@ def test_a_note_with_no_revision_reaches_the_block(tmp_path):
     text = stale.fold(root, notes=notes)
     assert "NOTES  (1)" in text
     assert "flw/counts — e.g. core/scripts/scout.py:478" in text
+
+
+# --- flw stale --owed --------------------------------------------------------- #
+#
+# Red only on what is never true in the middle of a normal flw-execute run. The
+# fixtures are real repositories, because the row under test is a reading of git
+# history and a canned answer would hold only the parsing.
+
+if "flw_cli" in sys.modules:
+    flw = sys.modules["flw_cli"]
+else:
+    import importlib.util
+
+    _spec = importlib.util.spec_from_file_location(
+        "flw_cli", Path(__file__).resolve().parent.parent / "cli" / "flw.py"
+    )
+    flw = importlib.util.module_from_spec(_spec)
+    sys.modules[_spec.name] = flw
+    _spec.loader.exec_module(flw)
+
+OWED_CONTRACT = """schema_version = 4
+spec_version = "0.1.0"
+applied = [{applied}]
+
+[[final_state.components]]
+name = "the thing"
+paths = ["src/"]
+provides = ["A user can do the thing."]
+
+[[final_state.components]]
+name = "the surface"
+paths = ["plans/"]
+provides = ["A user can read the plans."]
+"""
+
+needs_git = pytest.mark.skipif(GIT is None, reason="git not on PATH")
+
+
+def contract(root: Path, *applied: str) -> None:
+    (root / "specs" / "versions").mkdir(parents=True, exist_ok=True)
+    names = ", ".join(f'"{n}"' for n in applied)
+    (root / "specs" / "current.toml").write_text(OWED_CONTRACT.format(applied=names))
+
+
+def record(root: Path, name: str) -> None:
+    (root / "specs" / "versions").mkdir(parents=True, exist_ok=True)
+    (root / "specs" / "versions" / f"{name}-minor.toml").write_text(
+        f'name = "{name}"\nsummary = "s"\n'
+    )
+
+
+def commit(root: Path, message: str, files: dict[str, str] | None = None) -> None:
+    """Write each file, then commit everything."""
+    for rel, text in (files or {}).items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    ident = ["-c", "user.email=flw@example.invalid", "-c", "user.name=flw", "-c", "commit.gpgsign=false"]
+    if not (root / ".git").exists():
+        subprocess.run([GIT, "init", "--initial-branch=main", str(root)], capture_output=True, check=True)
+    for args in (["add", "-A"], ["commit", "-m", message]):
+        subprocess.run([GIT, *ident, *args], cwd=root, capture_output=True, text=True, check=True)
+
+
+def landed(root: Path, *applied: str) -> Path:
+    """A repository whose last commit applied these names."""
+    (root / "src").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "x.py").write_text("x = 0\n")
+    contract(root, *applied)
+    commit(root, "land")
+    return root
+
+
+def run_owed(root: Path, capsys, *extra: str) -> tuple[int, str]:
+    code = flw.main(["flw", "stale", "--root", str(root), *extra])
+    return code, capsys.readouterr().out
+
+
+def short(root: Path) -> str:
+    return subprocess.run(
+        [GIT, "rev-parse", "--short", "HEAD"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+@needs_git
+def test_owed_an_unapplied_record_and_an_unstamped_file_are_listed_not_red(tmp_path, capsys):
+    """The deadlock regression. Both are true in the middle of every flw-execute
+    run, so a declared --owed that failed on either would stop the run that clears
+    them."""
+    root = landed(tmp_path, "first")
+    record(root, "next")
+    concept(
+        root / ".flw" / "knowledge",
+        "src/src.md",
+        '+++\ntype = "Area"\ndescription = "d"\n+++\n# src\n',
+    )
+    code, out = run_owed(root, capsys, "--owed")
+    assert code == 0
+    assert "record not yet applied: next" in out
+    assert f"unstamped knowledge file {root.name}/src/src.md" in out
+
+
+@needs_git
+def test_owed_a_component_commit_with_nothing_in_flight_is_red(tmp_path, capsys):
+    root = landed(tmp_path, "first")
+    commit(root, "unagreed work", {"src/x.py": "x = 1\n"})
+    code, out = run_owed(root, capsys, "--owed")
+    assert code == 1
+    assert f"commit {short(root)} after first landed: unagreed work" in out
+
+
+@needs_git
+def test_plain_stale_on_a_red_owed_project_still_exits_0(tmp_path, capsys):
+    root = landed(tmp_path, "first")
+    commit(root, "unagreed work", {"src/x.py": "x = 1\n"})
+    code, _ = run_owed(root, capsys)
+    assert code == 0
+
+
+@needs_git
+def test_owed_the_same_commit_with_a_record_in_flight_is_listed(tmp_path, capsys):
+    root = landed(tmp_path, "first")
+    record(root, "next")
+    commit(root, "agreed work", {"src/x.py": "x = 1\n"})
+    code, out = run_owed(root, capsys, "--owed")
+    assert code == 0
+    assert f"commit {short(root)} after first landed" in out
+
+
+@needs_git
+def test_owed_a_commit_confined_to_plans_is_not_counted(tmp_path, capsys):
+    root = landed(tmp_path, "first")
+    commit(root, "a design", {"plans/design.md": "# design\n"})
+    code, out = run_owed(root, capsys, "--owed")
+    assert code == 0
+    assert "commit" not in out
+
+
+@needs_git
+def test_owed_a_commit_mixing_plans_with_a_component_is_counted(tmp_path, capsys):
+    root = landed(tmp_path, "first")
+    commit(root, "both", {"plans/design.md": "# design\n", "src/x.py": "x = 1\n"})
+    code, _ = run_owed(root, capsys, "--owed")
+    assert code == 1
+
+
+def test_owed_with_no_git_repository_has_no_attribution_row(tmp_path, capsys):
+    """Other rows still work: the unapplied record is listed."""
+    (tmp_path / "src").mkdir()
+    contract(tmp_path, "first")
+    record(tmp_path, "next")
+    assert stale.unattributed(tmp_path, {"applied": ["first"]}, "specs/current.toml", []) is None
+    code, out = run_owed(tmp_path, capsys, "--owed")
+    assert code == 0
+    assert "commit" not in out
+    assert "record not yet applied: next" in out
+
+
+@needs_git
+def test_two_names_sharing_one_landing_commit_resolve_to_it(tmp_path, capsys):
+    root = landed(tmp_path, "first", "second")
+    head = subprocess.run(
+        [GIT, "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert stale.landing(root, "specs/current.toml", "first") == head
+    assert stale.landing(root, "specs/current.toml", "second") == head
+    code, _ = run_owed(root, capsys, "--owed")
+    assert code == 0
+
+
+def test_owed_a_malformed_knowledge_file_is_red(tmp_path, capsys):
+    (tmp_path / "src").mkdir()
+    contract(tmp_path, "first")
+    concept(tmp_path / ".flw" / "knowledge", "src/src.md", '+++\ntype = "Area"\n+++\n# src\n')
+    code, out = run_owed(tmp_path, capsys, "--owed")
+    assert code == 1
+    assert f"malformed knowledge file {tmp_path.name}/src/src.md" in out
+
+
+@needs_git
+def test_owed_the_execute_step_5_window_counts_the_new_name_as_in_flight(tmp_path, capsys):
+    """flw-execute appends the name to applied before the commit that carries it.
+    In that window nothing is unapplied, but git finds no landing for the new
+    name, so the walk passes over it and the phase commits stay listed."""
+    root = landed(tmp_path, "first")
+    commit(root, "phase work", {"src/x.py": "x = 1\n"})
+    contract(root, "first", "second")
+    record(root, "second")
+    code, out = run_owed(root, capsys, "--owed")
+    assert code == 0
+    assert "after first landed: phase work" in out
+
+
+def test_owed_reads_components_under_final_state_not_a_top_level_key(tmp_path, monkeypatch):
+    """The first measurement read a top-level `components` and reported the
+    opposite of the truth."""
+    answers = {
+        "log -S": (0, "abc\n"),
+        "log --relative": (0, "\x00abc1234 wrong place\nsrc/x.py\n"),
+    }
+
+    def canned(args, cwd):
+        key = "log -S" if "-S" in args else "log --relative"
+        return answers[key]
+
+    monkeypatch.setattr(knowledge, "git", canned)
+    top_level = {"applied": ["first"], "components": [{"paths": ["src/"]}]}
+    assert stale.unattributed(tmp_path, top_level, "specs/current.toml", []).commits == []
+    nested = {"applied": ["first"], "final_state": {"components": [{"paths": ["src/"]}]}}
+    assert stale.unattributed(tmp_path, nested, "specs/current.toml", []).commits == [
+        ("abc1234", "wrong place")
+    ]

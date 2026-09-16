@@ -1546,3 +1546,76 @@ def test_a_knowledge_file_is_refused_on_a_repository_with_no_symlink(
 
     assert run(["know", str(path), "--root", str(acme / "shop")]) == 1
     assert "inside the knowledge store" in capsys.readouterr().err
+
+
+# --- flw know --owed ----------------------------------------------------------- #
+#
+# What the store owes the paths a phase staged. Red on a describing file the code
+# has moved under, measured over those paths alone; a path no file describes is
+# listed and never red, because the store is sparse by design.
+
+ORDERS_MOVED = "3\t1\tapi/orders.py\n"
+
+
+def test_owed_a_file_changed_under_a_given_path_exits_1(capsys, monkeypatch):
+    canned(monkeypatch, {"ls-files": (0, ""), "-- api/orders.py": (0, ORDERS_MOVED)})
+    shop = ACME / "shop"
+    assert run(["know", "--owed", "api/orders.py", "--root", str(shop)]) == 1
+    out = capsys.readouterr().out
+    assert "changed  shop/api/api.md · 1 file · +3 −1" in out
+    assert "shop.md" not in out
+    # Plain flw know over the same moved store still exits 0.
+    assert run(["know", "api/orders.py", "--root", str(shop)]) == 0
+
+
+def test_owed_a_change_elsewhere_in_the_tree_is_not_owed(capsys, monkeypatch):
+    """The flw.md case: the repository file is changed because something outside
+    the phase's paths moved. Measured over the whole tree, --owed would report it
+    at every boundary of every run."""
+    calls = canned(
+        monkeypatch, {"ls-files": (0, ""), "-- api/orders.py": (0, ""), "diff": (0, NUMSTAT)}
+    )
+    shop = ACME / "shop"
+    assert run(["know", "--owed", "api/orders.py", "--root", str(shop)]) == 0
+    assert "owed: 0 changed · 0 with no file" in capsys.readouterr().out
+    assert all(args[-1] == "api/orders.py" for args, _ in calls)
+
+
+def test_owed_a_path_with_only_the_repository_file_above_it_is_no_file(
+    acme, capsys, monkeypatch
+):
+    calls = canned(monkeypatch, {"diff": (0, NUMSTAT)})
+    shop = acme / "shop"
+    (shop / "web.py").write_text("x = 1\n")
+    assert run(["know", "--owed", "web.py", "--root", str(shop)]) == 0
+    assert capsys.readouterr().out == "  no file  shop/web.py\nowed: 0 changed · 1 with no file\n"
+    assert calls == []
+    assert knowledge.owed(shop, store_of(shop), [Path("web.py")]) == [
+        knowledge.Owed("no file", Path("web.py"))
+    ]
+
+
+def test_owed_takes_paths_and_check_still_refuses_one(acme, capsys, monkeypatch):
+    """--owed is a separate mode that requires paths. The refusal of --check with a
+    path is unchanged, message and all."""
+    canned(monkeypatch, {"diff": (0, "")})
+    shop = acme / "shop"
+
+    assert run(["know", "api/orders.py", "--check", "--root", str(shop)]) == 1
+    assert "error: --check reads the whole store; a path describes a walk" in (
+        capsys.readouterr().err
+    )
+    assert run(["know", "--owed", "--root", str(shop)]) == 1
+    assert "--owed names the paths to measure" in capsys.readouterr().err
+    assert run(["know", "api/orders.py", "--owed", "api", "--root", str(shop)]) == 1
+    assert "--owed names its own paths; a path describes a walk" in capsys.readouterr().err
+
+
+def test_owed_measures_a_path_the_phase_deleted(acme, capsys, monkeypatch):
+    """A phase that removes a file stages a path no longer in the code. Refusing
+    it as `not in the code` would stop every boundary after a deletion."""
+    canned(monkeypatch, {"ls-files": (0, ""), "-- api/gone.py": (0, "0\t9\tapi/gone.py\n")})
+    shop = acme / "shop"
+    assert run(["know", "--owed", "api/gone.py", "--root", str(shop)]) == 1
+    assert "changed  shop/api/api.md · 1 file · +0 −9" in capsys.readouterr().out
+    assert run(["know", "--owed", str(acme.parent / "outside.py"), "--root", str(shop)]) == 1

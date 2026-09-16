@@ -361,6 +361,158 @@ def render(
     return "\n".join(lines) + "\n"
 
 
+# --- what the project owes --------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class Owed:
+    """One thing the project owes: what it is, which lane owes it, and whether it
+    is red. Only a row that is never true in the middle of a normal flw-execute
+    run is red, because a declared check that failed mid-run would stop the run
+    that clears it."""
+
+    what: str
+    lane: str
+    red: bool
+
+
+def owed_rows(know: Knowledge, records: list, applied: list[str]) -> list[Owed]:
+    """The document half of `--owed`, over folds that already ran.
+
+    Unread reports are not here. They are a backlog with a decision attached, and
+    a check that fails on the standing backlog is a check nobody keeps.
+    """
+    rows = [Owed(f"orphaned knowledge file {w}", "flw-research", True) for w in know.orphaned]
+    rows += [Owed(f"malformed knowledge file {w}", "flw-research", True) for w in know.malformed]
+    rows += [Owed(f"unstamped knowledge file {w}", "flw-research", False) for w in know.unstamped]
+    rows += [
+        Owed(f"record not yet applied: {name}", "flw-execute", False)
+        for name in unapplied(records, applied)
+    ]
+    return rows
+
+
+def unapplied(records: list, applied: list[str]) -> list[str]:
+    """Records absent from `applied`, less the legacy numbers that predate the list."""
+    return sorted(
+        r.name
+        for r in records
+        if r.name and r.name not in applied and not ledger.LEGACY_NUMBER.match(r.name)
+    )
+
+
+def landing(root: Path, contract: str, name: str) -> str | None:
+    """The commit that added `name` to the contract, or None.
+
+    The oldest commit that changed how often the quoted name appears in the
+    contract at its current path. That is the commit that applied the record only
+    while the name appears nowhere else in the contract, the contract has never
+    moved, and the history is deep enough to hold it — a shallow clone finds
+    nothing, and nothing is the answer for a project not under git as well.
+    """
+    code, out = knowledge.git(["log", "--format=%H", "-S", f'"{name}"', "--", contract], root)
+    found = [line.strip() for line in out.splitlines() if line.strip()] if code == 0 else []
+    return found[-1] if found else None
+
+
+@dataclass(frozen=True)
+class Attribution:
+    """The commits after the last landing that change a component's paths."""
+
+    name: str
+    landing: str
+    commits: list[tuple[str, str]] = field(default_factory=list)
+    in_flight: bool = False
+
+
+# Design prose is the input to speccing rather than work that needed a record, so
+# a change under it is never owed one. A decision this row takes, stated in the
+# contract sentence that defines the row.
+EXCLUDED = "plans/"
+
+
+def _meets(path: str, declared: list[str]) -> bool:
+    return any(path == d.rstrip("/") or path.startswith(d.rstrip("/") + "/") for d in declared)
+
+
+def unattributed(
+    root: Path, contract: dict, contract_path: str, records: list
+) -> Attribution | None:
+    """The commits no applied record covers, or None when nothing resolves.
+
+    Walks `applied` from the end and stops at the first name with a landing, so
+    the row runs one `git log -S` rather than one per name. A name passed over on
+    the way is in `applied` with no landing commit yet — flw-execute's step 5
+    appends it before the commit that carries it — and so it is in flight.
+
+    Components are read at `final_state.components`. A first measurement read a
+    top-level key and reported the opposite of the truth.
+    """
+    applied = [n for n in contract.get("applied", []) if isinstance(n, str)]
+    in_flight = bool(unapplied(records, applied))
+    last = found = None
+    for last in reversed(applied):
+        found = landing(root, contract_path, last)
+        if found is not None:
+            break
+        in_flight = True
+    if last is None or found is None:
+        return None
+
+    components = contract.get("final_state", {}).get("components", [])
+    declared = [
+        p for c in components if isinstance(c, dict) for p in c.get("paths", []) if isinstance(p, str)
+    ]
+    # --relative, so a project root below the repository's top reads paths the
+    # way its contract writes them.
+    code, out = knowledge.git(
+        ["log", "--relative", "--name-only", "--format=%x00%h %s", f"{found}..HEAD"], root
+    )
+    if code != 0:
+        return None
+    commits: list[tuple[str, str]] = []
+    for block in out.split("\x00")[1:]:
+        lines = block.splitlines()
+        short, _, subject = lines[0].partition(" ")
+        files = [line for line in lines[1:] if line.strip()]
+        if any(_meets(f, declared) and not f.startswith(EXCLUDED) for f in files):
+            commits.append((short, subject))
+    return Attribution(last, found, commits, in_flight)
+
+
+def render_owed(rows: list[Owed], attribution: Attribution | None) -> tuple[str, bool]:
+    """One line per owed row, naming the lane; and whether any row is red."""
+    if attribution is not None:
+        red = not attribution.in_flight
+        lane = "flw-spec" if red else "flw-execute"
+        rows = rows + [
+            Owed(f"commit {short} after {attribution.name} landed: {subject}", lane, red)
+            for short, subject in attribution.commits
+        ]
+    lines = [f"  {'red' if r.red else 'listed':<6}  {r.lane:<12}  {r.what}" for r in rows]
+    red = sum(r.red for r in rows)
+    lines.append(f"owed: {red} red {knowledge.DASH} {len(rows) - red} listed")
+    return "\n".join(lines) + "\n", bool(red)
+
+
+def owed(
+    root: Path,
+    *,
+    specs_dir: str = "specs",
+    knowledge_stores: list[tuple[Path, Path]] | None = None,
+    members: dict[str, Path] | None = None,
+) -> tuple[str, bool]:
+    """`flw stale --owed`: what the project owes, and whether any of it is red."""
+    corpus = ledger.corpus(root, specs_dir)
+    know = knowledge_state(knowledge_stores or [], members or {})
+    applied = [n for n in corpus.contract.get("applied", []) if isinstance(n, str)]
+    rows = owed_rows(know, corpus.records, applied)
+    attribution = unattributed(
+        root, corpus.contract, f"{specs_dir}/current.toml", corpus.records
+    )
+    return render_owed(rows, attribution)
+
+
 def fold(
     root: Path,
     *,

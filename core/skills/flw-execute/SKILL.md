@@ -173,10 +173,9 @@ At the phase boundary, **propose a commit** — the files touched and a message 
 the user or their agent make it, in whatever VCS the repo uses. flw does not commit or
 tag. It does stage, by name, and step 6 says why.
 
-**Also at the boundary, re-read what this phase falsified.** A run that builds something
-has falsified the knowledge file describing that part, and this is the commoner trigger of
-the two. For each path this phase changed, re-read the files `flw know <path>` returns
-against the code as it now is, and correct what is wrong.
+**Also at the boundary, run `flw know --owed <the paths this phase staged>`.** Correct
+each file it reports against the code as it now is, or write one. A corrected file stays
+red until the stamp below; re-run it after that, until it exits 0.
 
 **The `flw know --stamp <file>…` follows the commit**, with `flw know --reindex` once
 after it. A stamp records HEAD, so stamping before the commit records the revision from

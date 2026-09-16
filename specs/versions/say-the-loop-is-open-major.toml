@@ -1,0 +1,284 @@
+name = "say-the-loop-is-open"
+base = "what-nothing-would-catch"
+
+summary = """
+flw stale and flw know both gain --owed, one idiom at two scopes: print what is owed, exit 1
+when any of it is red. flw know --owed PATHS computes what the knowledge store owes the paths
+a phase staged, and flw-execute runs it at the phase boundary instead of judging what it
+falsified. flw stale --owed is red on two things: a knowledge file the store cannot read as written, and a commit that changed a
+component's paths after the last applied record landed while no record is in flight. That
+second row attributes commits to records from git alone, with no field or trailer. Plain
+flw stale and plain flw know keep exiting 0. The change is major because both commands'
+properties said a changed or stale document could never exit 1, and --owed exits 1 on exactly
+that.
+"""
+
+approach = """
+Specced from two committed design documents, both reviewed by a separate agent with every
+finding applied: plans/design-the-loop.md (ec835e9) section 6.2, and
+plans/design-attribution.md (86ac6d2) section 5. This record takes the owed set (section 6.2) and
+the per-path knowledge debt (section 6.3) from the first, and the unattributed-commit row from
+the second. Sections 6.4 and 6.5 are owe-what-a-phase-changed, specced beside this one.
+
+WHY flw know --owed IS HERE, NOT IN THE MINOR RECORD
+
+The first draft put it in owe-what-a-phase-changed-minor. The spec critic found that the
+knowledge store component's properties say "flw know and flw map exit 0 whenever they ran,
+including when every file is changed" (specs/current.toml:315). --owed exits 1 on a changed
+file, which is the same documented-behaviour change that makes flw stale --owed major. The
+user chose to put both --owed flags in one major record, so the idiom and both exit-code
+amendments land together and the minor record stays minor.
+
+WHAT IT IS NOT
+
+It does not make a lane run, and it does not check that lanes ran in order. flw-review
+leaves nothing tracked, since .flw/reports/ is gitignored at .gitignore:9, and flw-research
+leaves only half, since .flw/knowledge/ is ignored at :11. A sequence check over artifacts
+that do not survive a clone passes on a fresh checkout where nothing was ever run. It does
+not check that a record preceded its work either: over the 24 records that landed in a
+commit of their own, 23 added the record in that same commit, which is what commits.md's
+fold-by-default rule asks for. The user decided to keep folding, so commits.md does not
+change. Nothing here reads a commit's diff against a record's dag; that stays judgment.
+
+THE MEASUREMENTS, AND HOW TO RE-TAKE THEM (at 9731e1a, 2026-09-14)
+
+  git log --format=%H -S '"<name>"' -- specs/current.toml
+      run for every name in applied: 49 names resolve, each to exactly one commit, none
+      ambiguous and none missing. They land in 26 distinct commits: 20 at a030fd4 (the
+      repository's first commit, an import) and 5 at 0eb58f2 (a batch). A name after the
+      first in a shared landing commit has an empty span, and that is correct.
+
+  git log --format=%h a53d68f..HEAD, filtered to files under final_state.components paths
+      4 commits since the last landing; 3 touch component paths; 2 remain after excluding
+      commits confined to plans/ (7870d15, 9731e1a). A second reader reproduced all three
+      figures with its own script.
+
+The first run of the second measurement was wrong. It read a top-level `components` key
+where the contract holds them at final_state.components, and so reported the opposite of the
+truth. The fold must read final_state.components, and a test holds it (dag task
+stale-owed-tests, case b).
+
+THE DEADLOCK THIS RECORD AVOIDS, FOUND AT SPEC TIME
+
+design-the-loop section 6.2 made --owed fail on a record absent from applied and on an
+unstamped knowledge file. Both are true in the middle of every normal flw-execute run. The
+record is unapplied until step 5. flw-execute's own text says a knowledge file written in a
+phase stays unstamped until after the commit, and this record's flw know --owed makes writing one
+routine. A project that declared flw stale --owed in [tests] checks would turn flw-execute's
+own flw test red, and the run could never apply its record. So only two rows are red: a
+knowledge file orphaned or malformed, and an unattributed commit while nothing is in flight.
+An unapplied record and an unstamped file are listed and never red. Neither review caught
+this.
+
+The spec critic found the same deadlock again at the last step. flw-execute step 5 appends
+the name to applied (core/skills/flw-execute/SKILL.md:225) before step 6 proposes the commit
+that carries it (:273), and commits.md says every commit passes its declared checks on its own.
+In that window the new name is in applied, so nothing looks in flight, but git log -S finds no
+landing for it. The walk would stop at the previous record and show every commit made during the
+run as unattributed. So a name that is in applied with no landing commit yet counts as in flight.
+The walk already passes over those names before it reaches the first one that resolves, so this
+costs nothing. Test case (i) holds it.
+
+WHERE IT PLUGS IN
+
+  core/scripts/stale.py      fold(root, specs_dir=...) already calls ledger.corpus, which
+                             loads the contract at core/scripts/ledger.py:76-79, so applied
+                             and final_state.components are in hand.
+  core/scripts/knowledge.py:307  git(args, cwd) is the one subprocess wrapper in the chain.
+                             Calling git log through it with cwd=root keeps stale.py's
+                             docstring true: every path is handed in, and nothing reaches
+                             into cli.
+  core/scripts/validate_spec.py:300  LEGACY_NUMBER, already imported by ledger, decides
+                             which unapplied names are legacy (the 9 records 1.0 to 3.4) and
+                             so never count as in flight.
+
+Walk applied from the end and stop at the first name that resolves. The tip needs only the
+last landing, so the row runs one git log -S instead of 49.
+
+flw know --owed — WHAT THE RESOLUTION HAS TO DO DIFFERENTLY
+
+  core/scripts/knowledge.py:197  found.append(store / f"{root.name}.md")
+      The repository file is appended to every candidate list, so every path resolves to at
+      least one file. `no file` therefore means the walk minus the repository file returned
+      nothing. Built on walk() unchanged, it never fires.
+
+  knowledge.numstat takes a single rel. flw.md is changed right now because a review config
+  landed under .flw/reviews/. Measured over the whole tree, --owed would report flw.md at every
+  phase boundary of every run. Measure only the given paths.
+
+  cli/flw.py:3552-3557 refuses --check with a path ("--check reads the whole store; a path
+  describes a walk"). --owed is a separate mode that requires paths. The refusal stays for
+  --check, and a test holds both.
+
+A changed file is red. A path with no describing file is listed and never red, because the
+store is sparse by design. core/skills/flw-execute/SKILL.md is 19,532 of 21,000 bytes. The
+paragraph beginning "Also at the boundary, re-read what this phase falsified" is replaced by
+one no longer than it that names the command. The stamp-follows-the-commit paragraph after it
+stays, because an unstamped file is not red under flw stale --owed either.
+
+WHAT git log -S ASSUMES
+
+The landing is the oldest commit that changed how many times the quoted name appears in the
+contract, found only at the contract's current path. That equals "the commit that added it to
+applied" only under three conditions:
+  - the quoted name appears nowhere in the contract but applied;
+  - the contract has never moved;
+  - the history is deep enough to hold the last landing.
+All three hold here: each of the 49 names occurs once, and git log --follow shows no rename.
+A shallow clone makes -S return nothing, so the row reads as no attribution. The assumption
+edit below states all three rather than claiming them for every project.
+
+THE plans/ EXCLUSION IS A DECISION THIS RECORD TAKES
+
+The contract lists plans/ under "the project surface", so the row does not read the
+components as written. It reads the components minus plans/, and says so in the contract
+sentence below. flw ledger --help gives the reason ("plans/ is design prose, not a validated
+record"), not the authority. A commit confined to plans/ is excluded, and one that mixes
+plans/ with anything else is not.
+
+THE SURFACE LINE ALREADY LANDED
+
+The CLI component's surfaces now read "flw stale [--root PATH] [--owed]". That line was
+written into specs/current.toml at spec time, not through contract_edit, because
+tests/test_cli.py diffs build_parser() against those lines in both directions. The same
+applies to "flw know [PATH] [--root PATH] [--full] [--check|--reindex|--stamp PATH...]
+[--owed PATH...]", written at the same moment. --owed sits in its own bracket because
+tests/test_cli.py's _declared_surface splits on whitespace and reads only tokens opening "[-".
+Putting it inside the existing group, after "PATH...", would silently drop --stamp from the
+declared set.
+
+A PROJECT WITHOUT GIT
+
+The attribution row is absent: no row, no failure, and the other rows unaffected. That is
+why the assumption edit below says "under git". design-attribution section 9 leaves open
+whether an absent row should say it is absent, and this record does not settle that.
+"""
+
+contract_edit = """
+1. In the CLI component's `properties`, replace the sentence beginning "flw stale exits 0
+   whenever it ran" with:
+
+     "flw stale exits 0 whenever it ran — including a project with no reports directory, no
+     knowledge store and no notes, and including one where every document it read is stale,
+     and including one holding a document it could not read, which it names and counts as
+     read by nobody rather than failing the run — and 1 only for a --root it was given and
+     could not use. Under --owed it also exits 1 when the project owes work it can name: a
+     knowledge file orphaned or malformed, or a commit after the last applied record's
+     landing commit that changes a component's paths outside plans/ while no record is in
+     flight — none unapplied other than a legacy-numbered one, and none whose name is in
+     applied without a landing commit yet. An unapplied record and an unstamped
+     knowledge file are listed under --owed and never make it exit 1, because both are the
+     normal state in the middle of a flw-execute run, and a check that failed on them would
+     stop the run that clears them."
+
+2. In `assumptions`, replace "and reads no VCS state except to locate a project root when
+   nothing nearer is found." with:
+
+     "and reads VCS state only to locate a project root when nothing nearer is found, to
+     measure a knowledge file against the revision it records, and, under git, to find the
+     commit that applied each version record. A project under another VCS or none gets no
+     attribution rather than a failure. Attribution also assumes that the contract has lived
+     at one path, that a record's quoted name appears in it only under applied, and that the
+     history is deep enough to hold the last landing. A shallow clone reads as no
+     attribution."
+
+3. In the "validation and checks" component's `provides`, after the sentence beginning "A
+   review report a version record has acted on is distinguishable", add:
+
+     "A commit is attributable to a version record from git alone: a record's landing commit
+     is the one that added its name to applied in the contract, and every commit up to and
+     including it that no earlier landing covers belongs to that record. Nothing is declared
+     for this — no field, no trailer — so it holds for every record written before anyone
+     asked. flw stale --owed names each commit after the last landing that changes a
+     component's paths outside plans/, and treats one as owed only while no record is in
+     flight."
+
+4. In the knowledge store component's `properties`, replace "flw know and flw map exit 0
+   whenever they ran, including when every file is changed, and 1 only for an input they were
+   given and could not use:" with:
+
+     "flw know and flw map exit 0 whenever they ran, including when every file is changed —
+     except flw know --owed, which exits 1 when a file describing one of the given paths has
+     moved — and 1 only for an input they were given and could not use:"
+
+5. In the knowledge store component's `provides`, at the end, add:
+
+     "A user can ask what the knowledge store owes a set of paths: flw know --owed PATH...
+     lists each file describing those paths that the code has moved under since its recorded
+     revision, measured over those paths alone, and each path no file describes other than the
+     repository file. A path with no file is never a reason to exit 1, because the store is
+     sparse by design."
+
+6. In `open_questions`, in the question beginning "Whether `flw ledger`'s corpus should be
+   bounded", replace "Neither direction is answerable without reading a VCS, which no flw
+   command does." with "Neither direction is answerable without reading a VCS."
+"""
+
+[[decisions]]
+topic     = "what flw stale --owed exits 1 on"
+options   = ["every owed row, as design-the-loop section 6.2 drafted", "only rows that are never true mid-run: orphaned or malformed knowledge, and an unattributed commit with nothing in flight", "every row, but exempting the record currently being executed"]
+chosen    = "only rows that are never true mid-run: orphaned or malformed knowledge, and an unattributed commit with nothing in flight"
+rationale = "An unapplied record and an unstamped knowledge file are both true during every normal flw-execute run. A project declaring --owed in [tests] checks would redden execute's own flw test and never apply its record. Exempting the running record needs state flw does not hold and an input an agent must remember to pass. Listing those two rows without failing on them keeps --owed declarable."
+
+[[decisions]]
+topic     = "which record carries flw know --owed"
+options   = ["owe-what-a-phase-changed-minor, as first drafted", "rename that record -major", "a third record of its own", "this record, beside flw stale --owed"]
+chosen    = "this record, beside flw stale --owed"
+rationale = "The user's decision, after the spec critic found current.toml:315 says flw know exits 0 even when every file is changed. Exiting 1 on a changed file is a documented-behaviour change, and so major. Putting it here lands both --owed flags and both exit-code amendments in one record, leaves the minor record honestly minor, and still means two records."
+
+[[decisions]]
+topic     = "whether a path with no knowledge file makes flw know --owed exit 1"
+options   = ["yes, so every uncovered directory a phase touches gets a file", "no: listed, never red"]
+chosen    = "no: listed, never red"
+rationale = "The store is sparse by design, and the shared context says missing is the normal case. Failing on no file would force a file for every directory a phase touches, and that is the tree-wide survey the carve-out exists to stop."
+
+[[decisions]]
+topic     = "the flag's name"
+options   = ["--check, matching flw know --check", "--owed"]
+chosen    = "--owed"
+rationale = "The user chose --owed for both commands: one idiom at two scopes, printing what is owed and exiting 1 when any of it is red. --check in this CLI means 'reports, exit 0'. cli/flw.py:3666, the _know_check docstring, says 'exit 0 whatever it finds', and plans/knowledge-store.md:212 defines it the same way. Reusing it for a flag that exits 1 would make one word mean two things."
+
+[[decisions]]
+topic     = "where a record's landing is stored"
+options   = ["applied becomes a list of objects carrying a revision", "a landed_at field in the version record", "a commit trailer naming the record", "derived: git log -S on the record's name in the contract"]
+chosen    = "derived: git log -S on the record's name in the contract"
+rationale = "It resolved all 49 applied names to exactly one commit each. applied is `array of string` and expected_release, check_chain and flw ledger all read it, so changing its item type breaks every reader to store a value git already returns. A trailer needs the message's cooperation, and the subject rule in commits.md says a message names what a user has, not bookkeeping. Deriving it also covers every record written before this existed."
+
+[[decisions]]
+topic     = "how the row treats plans/"
+options   = ["read the components as written, so design documents are owed a record", "remove plans/ from the project surface component", "read the components minus plans/, stated in the contract"]
+chosen    = "read the components minus plans/, stated in the contract"
+rationale = "A design document is the input to speccing, and it fired the row on ec835e9. Removing plans/ from the component changes what the contract says the project surface owns. So the exclusion lives in the sentence that defines the row, where a reader of the contract sees it."
+
+[[decisions]]
+topic     = "whether a record keeps landing in the same commit as its work"
+options   = ["keep folding, as core/shared/commits.md asks", "commit a record on its own first, so agreement order is checkable"]
+chosen    = "keep folding, as core/shared/commits.md asks"
+rationale = "The user's decision. commits.md says a commit 'carries everything that changed for that part', and 23 of the 24 records with their own landing commit follow it. Splitting would make agreement order checkable, but it would produce a commit commits.md calls incomplete and add a commit to every run. This record accepts that agreement order stays unverifiable."
+
+[[dag]]
+group = 1
+phase = "The owed fold"
+tasks = [
+  { id = "owed-rows", desc = "core/scripts/stale.py: a function over the existing folds returning owed rows. Each row carries what is owed, the lane that owes it, and whether it is red. Knowledge files orphaned or malformed are red and owed by flw-research. Knowledge files unstamped are listed, not red. Version records absent from applied are listed, not red, owed by flw-execute, and exclude names matching validate_spec.LEGACY_NUMBER. Unread reports are not in this set; they stay in the plain view." },
+  { id = "landing", desc = "core/scripts/stale.py: a function taking root, the contract path and a record name, returning its landing commit through knowledge.git(['log', '--format=%H', '-S', '\"<name>\"', '--', <contract>], root), oldest match. It returns None when git is absent or the call fails. Callers walk applied from the end and stop at the first name that resolves." },
+  { id = "unattributed", desc = "core/scripts/stale.py: the commits in <last landing>..HEAD whose changed files meet any path in the contract's final_state.components (not a top-level key), excluding commits whose files all sit under plans/. Red only when no record is in flight. A record is in flight when it is absent from applied and not legacy-numbered, or when its name is in applied but landing() returns None for it; the backwards walk passes over exactly those names before the first that resolves. No row at all when landing returns None.", depends_on = ["landing"] },
+]
+
+[[dag]]
+group = 2
+phase = "The flag"
+tasks = [
+  { id = "cli-owed", desc = "cli/flw.py: --owed on the stale parser. It prints one line per owed row, naming the lane, then exits 1 when any row is red and 0 otherwise. Plain flw stale is unchanged and still exits 0. The surface line is already in the contract.", depends_on = ["owed-rows", "unattributed"] },
+  { id = "stale-owed-tests", desc = "tests/test_stale.py, fixtures built with git init in tmp_path. (a) An unapplied record plus an unstamped knowledge file: exit 0, both listed. This is the deadlock regression. (b) A commit changing a final_state.components path after the landing, with no record in flight: exit 1, naming the commit. (c) The same with an unapplied non-legacy record: exit 0. (d) A commit confined to plans/: exit 0. (e) No git repository: no attribution row, exit 0. (f) Two names sharing one landing commit: no error. (g) A malformed knowledge file: exit 1. (h) Plain flw stale on fixture (b): exit 0. (i) The execute step-5 window: a record's name appended to applied in the working tree, uncommitted, with phase commits after the last landing: exit 0. tests/test_cli.py's parser-surface check must pass.", depends_on = ["cli-owed"] },
+]
+
+[[dag]]
+group = 3
+phase = "What the store owes a phase"
+tasks = [
+  { id = "owed-resolution", desc = "core/scripts/knowledge.py: for a list of paths, the describing files excluding the repository file (knowledge.py:197 appends it to every walk), each measured with numstat restricted to those paths rather than to the file's whole subtree. Rows: changed (red), no file (listed, not red)." },
+  { id = "cli-know-owed", desc = "cli/flw.py: --owed PATH... on the know parser. It prints the rows and exits 1 when any is red. The refusal of --check with a path at :3552-3557 is unchanged. The surface line is already in the contract.", depends_on = ["owed-resolution"] },
+  { id = "execute-boundary", desc = "core/skills/flw-execute/SKILL.md: replace the paragraph beginning 'Also at the boundary, re-read what this phase falsified' with one naming `flw know --owed <the paths this phase staged>`. It says to correct or write each file it reports, and to re-run until it exits 0. It must not be longer than the paragraph it replaces; budget.py is the check.", depends_on = ["cli-know-owed"] },
+  { id = "know-owed-tests", desc = "tests/test_knowledge.py and tests/test_cli.py. A file changed under a given path: exit 1. A change elsewhere in the tree (the flw.md case): exit 0. A path with only the repository file above it: listed as no file, exit 0. --check with a path is still refused with the same message. Plain flw know on a changed store still exits 0. The parser-surface check passes.", depends_on = ["cli-know-owed"] },
+]

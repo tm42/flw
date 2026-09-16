@@ -3536,6 +3536,8 @@ def know(args: argparse.Namespace) -> int:
 
 
 def _know(args, engine, root: Path, store: Path, members: dict[str, Path]) -> int:
+    if args.owed is not None:
+        return _know_owed(args, engine, root, members)
     mode = next(
         (
             name
@@ -3710,6 +3712,54 @@ def _know_check(engine, root: Path, members: dict[str, Path]) -> int:
     return 0
 
 
+def _owed_rel(engine, target: Path, given: Path) -> Path:
+    """`given` relative to `target`, allowing a path the phase deleted.
+
+    A phase that removes a file stages a path no longer in the code, and the diff
+    still measures it. Every other refusal stands: a path that exists and was
+    refused is outside the root or inside the store.
+    """
+    try:
+        return engine.relative_to_root(target, given, knowledge_dir(target))
+    except engine.Refused:
+        base = target.resolve()
+        tried = [Path(os.path.normpath(c)) for c in engine._reachable(base, given)]
+        if any(where.exists() for where in tried):
+            raise
+        inside = [where for where in tried if where.is_relative_to(base) and where != base]
+        if not inside:
+            raise
+        return inside[0].relative_to(base)
+
+
+def _know_owed(args, engine, root: Path, members: dict[str, Path]) -> int:
+    """What the store owes the given paths. Exit 1 when a describing file has
+    moved under one of them; a path with no file is listed and never red."""
+    if not args.owed:
+        raise engine.Refused("--owed names the paths to measure; it was given none")
+    for extra in ("a path" if args.path else "", "--full" if args.full else ""):
+        if extra:
+            raise engine.Refused(f"--owed names its own paths; {extra} describes a walk")
+
+    by_target: dict[Path, list[Path]] = {}
+    for given in map(Path, args.owed):
+        target = engine.member_for(root, members, given) if members else root
+        by_target.setdefault(target, []).append(_owed_rel(engine, target, given))
+
+    rows = []
+    for target, rels in by_target.items():
+        rows += [(target, row) for row in engine.owed(target, knowledge_dir(target), rels)]
+    for target, row in rows:
+        if row.red:
+            where = row.path.relative_to(knowledge_dir(target)).as_posix()
+            print(f"  changed  {target.name}/{where} {engine.DASH} {row.diff.summary()}")
+        else:
+            print(f"  no file  {target.name}/{row.path.as_posix()}")
+    red = sum(row.red for _, row in rows)
+    print(f"owed: {red} changed {engine.DASH} {len(rows) - red} with no file")
+    return 1 if red else 0
+
+
 def _know_reindex(engine, root: Path, members: dict[str, Path]) -> int:
     written: list[Path] = []
     for owner, store in _knowledge_stores(root, members):
@@ -3828,6 +3878,10 @@ def stale(args: argparse.Namespace) -> int:
     Exit 0 whenever it ran, including when every document it read is stale.
     Nothing it reports is a failure, and a non-zero exit invites someone to wire
     this into a check whose cheapest green is to delete the documents.
+
+    `--owed` is the one exception, and it is narrow for the same reason: it is red
+    only on what is never true in the middle of a normal flw-execute run, so a
+    project can declare it as a check without the run that clears it going red.
     """
     refused = _refuse_a_bad_root(args.root)
     if refused is not None:
@@ -3851,6 +3905,16 @@ def stale(args: argparse.Namespace) -> int:
     reports_dir = declared if isinstance(declared, str) and declared.strip() else (
         f"{flw_dir_name()}/reports"
     )
+
+    if args.owed:
+        text, red = engine.owed(
+            root,
+            specs_dir=_specs_dir(root),
+            knowledge_stores=_knowledge_stores(root, members),
+            members=members,
+        )
+        print(text, end="")
+        return 1 if red else 0
 
     skipped: list = []
     found = notes.walk(
@@ -4256,7 +4320,8 @@ Missing is normal. A root with no store says so and exits 0.""",
   flw know src/engine.py --full      the same, with the prose
   flw know --check                   changed, orphaned, malformed, unstamped
   flw know --reindex                 rewrite every generated index.md
-  flw know --stamp <file>            record the current HEAD in that file""",
+  flw know --stamp <file>            record the current HEAD in that file
+  flw know --owed <path>...          what the store owes these paths; exit 1 when any moved""",
     )
     p.add_argument("path", nargs="?", metavar="PATH", help="a path in the code")
     p.add_argument(
@@ -4273,6 +4338,12 @@ Missing is normal. A root with no store says so and exits 0.""",
         nargs="*",
         metavar="PATH",
         help="write the current HEAD into revision for these files",
+    )
+    mode.add_argument(
+        "--owed",
+        nargs="*",
+        metavar="PATH",
+        help="files these paths have moved under; exit 1 when any has",
     )
     p.set_defaults(handler=know)
 
@@ -4318,14 +4389,22 @@ flw-research's lane. It deletes nothing: a reports directory is gitignored in mo
 projects, so a wrong deletion is unrecoverable, and an uncited report is a backlog item
 with a decision attached rather than refuse.
 
-Exit 0 whenever it ran, including when every document it read is stale.""",
+Exit 0 whenever it ran, including when every document it read is stale. Under --owed it
+prints one line per owed item, naming the lane that owes it, and exits 1 when any is red:
+an orphaned or malformed knowledge file, or a commit changing a component's paths outside
+plans/ after the last applied record landed while no record is in flight. An unapplied
+record and an unstamped knowledge file are listed and never red.""",
         epilog="""examples
 
   flw stale                          every store, folded
+  flw stale --owed                   what the project owes, exit 1 when any is red
   flw stale --root ../other          the same, for another checkout""",
     )
     p.add_argument(
         "--root", metavar="PATH", help="the project to read, instead of $PWD's"
+    )
+    p.add_argument(
+        "--owed", action="store_true", help="what is owed; exit 1 when any of it is red"
     )
     p.set_defaults(handler=stale)
 

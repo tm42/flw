@@ -410,6 +410,59 @@ def changed(concept: Concept) -> Diff:
     return numstat(str(concept.revision), concept.root, mirror(concept.store, concept.root, concept.path))
 
 
+@dataclass(frozen=True)
+class Owed:
+    """One row of `flw know --owed`. `path` is the knowledge file, or the code
+    path when no file describes it."""
+
+    state: str  # changed | no file
+    path: Path
+    diff: Diff | None = None
+
+    @property
+    def red(self) -> bool:
+        return self.state == "changed"
+
+
+def owed(root: Path, store: Path, rels: list[Path]) -> list[Owed]:
+    """What the store owes these paths, measured over these paths alone.
+
+    Two differences from a walk. The repository file is excluded from the
+    candidates, because `candidates` appends it to every list and `no file` would
+    otherwise never occur. And a describing file is diffed against the given
+    paths rather than its whole subtree: the repository file is changed whenever
+    anything anywhere moved, which no phase's own paths need to answer for.
+
+    A path with no file is listed and never red. The store is sparse by design.
+    """
+    repository = store / f"{root.name}.md"
+    describes: dict[Path, list[Path]] = {}
+    rows: list[Owed] = []
+    for rel in rels:
+        found = [c for c in walk(root, store, rel) if c != repository]
+        if not found:
+            rows.append(Owed("no file", rel))
+        for path in found:
+            describes.setdefault(path, []).append(rel)
+
+    for path, given in describes.items():
+        concept = load(path, store, root)
+        if "unstamped" in concept.problems or not isinstance(concept.revision, str):
+            continue
+        diffs = [numstat(concept.revision, root, rel) for rel in given]
+        moved = [d for d in diffs if d.state == "changed"]
+        if moved:
+            total = Diff(
+                "changed",
+                sum(d.files for d in moved),
+                sum(d.insertions for d in moved),
+                sum(d.deletions for d in moved),
+                moved[0].first,
+            )
+            rows.append(Owed("changed", path, total))
+    return rows
+
+
 def members_by_basename(members: dict[str, Path]) -> dict[str, Path]:
     """`[project.roots]` keyed the way `system.md` keys it.
 
