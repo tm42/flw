@@ -1,0 +1,246 @@
+name = "skills-add-umbrella-plan"
+base = "skills-move-minority-sections"
+summary = "a cross-repository change gets a standard shape for the plan above it, a record can retire one that will never land, and the boundaries an agent may act within are written down in one place instead of inferred from four"
+
+sources = [
+  "plans/design-multi-repo.md",
+  "plans/codex-feedback-real-world-work.md",
+]
+
+approach = """
+§6.2, §6.9 and §6.10 of `plans/design-multi-repo.md`, with the seam instruction from §6.4
+and the fixture convention from §6.8.
+
+**Where this comes from.** One field report from a real multi-repository engagement,
+`plans/codex-feedback-real-world-work.md` — the first evidence about flw not produced by an
+agent of the same kind that wrote flw. Three of its observations reproduce in this tree and
+are measured in the design's §4.2, §4.3 and §4.4. This record takes the part of it that is
+prose; the parts that are schema and code are later records.
+
+**The gap this closes.** `core/skills/flw-spec/SKILL.md:163` already requires one plan at the
+parent for a cross-repository change and says every record cites it by path. No shape is
+given, so each plan is invented and none is comparable to the last. The field report's
+author spent real effort reconstructing which pull request needed which, and the thing that
+was missing was never a mechanism — it was a page with the same six headings every time.
+
+**What the template is, and what flw does with it.** A reference file read when a change
+spans repositories: what the feature is, which repository owns what, the seam field by
+field, the slices, which order matters and which does not, and what is expected to change.
+Slices are an indented list where a line needs the line above it. flw parses none of it.
+
+Indentation rather than box-drawing arrows, because an agent redrawing a `└─▶` layout after
+one slice moves produces a different picture each time, and a template whose purpose is to
+be standard cannot be the part that drifts. Indentation cannot express a slice needing two
+parents, so the template carries one prose escape hatch for that rather than a notation
+covering every shape.
+
+**What `retires` is not.** Not an ordering and not a dependency. The user refused a
+machine-readable dependency graph between records, and `validate_spec.py:537` already
+refused the narrower version: "There is no chain any more. A `base` pointer chain gives each
+record exactly one predecessor, which is precisely what two people speccing in parallel from
+the same contract cannot both have." `retires` is a retirement marker — the design turned,
+this older record will never land, and saying so is cheaper than leaving `flw stale` to ask
+for it forever. Nothing reads it beyond that row and nothing derives an order from it.
+
+**The contract sentence this has to amend, which is the part worth checking.** The skills
+component currently says "a version still in flight is a record the contract's applied list
+does not yet name". Adding a retired state makes that sentence false as written, so the
+contract edit amends it rather than adding a second sentence beside it. A contract holding
+both statements is exactly the unreconciled conflict a later round re-opens.
+
+**The autonomy file adds no mechanism.** The field report asks flw to record seven things so
+that a manager agent becomes unnecessary; five already have a home, and the two that do not
+are later records. So this is one file saying where each boundary is already written, not
+new machinery — and its own claim is worth carrying because it was measured rather than
+asserted: a management agent mostly repeats context and raises cost. Review teams run
+against this tree returned findings about wording and confirmed what had already been
+verified, which is the same result from the other direction.
+
+**Not built here**, and each refused against something already written: a feature contract
+above the repository contracts, pull request slices, a dependency graph, `flw reconcile`, a
+worktree registry, review comment ingestion. The design's §8 cites a record or a contract
+assumption for every one. Nothing in this record reaches for a branch, a worktree or a pull
+request host; the slice list carries a pull request number as text that flw never reads.
+"""
+
+contract_edit = """
+Six changes, all to `final_state.components`.
+
+1. In the skills component's `provides`, replace
+
+     "A user reads a contract that records what shipped, not what was planned: it moves
+     when the work lands rather than when the plan is agreed, so a version still in flight
+     is a record the contract's applied list does not yet name."
+
+   with
+
+     "A user reads a contract that records what shipped, not what was planned: it moves
+     when the work lands rather than when the plan is agreed, so a version still in flight
+     is a record the contract's applied list does not yet name and no landed record has
+     retired. A design that turned leaves a record nobody will run, and retiring it is how
+     flw stale --owed stops counting it as work owed."
+
+2. Add to the skills component's `provides`:
+
+     "A change spanning several repositories gets one plan in the project whose config
+     declares the set, in a standard shape rather than an invented one: what the feature
+     is, which repository owns which field of
+     the seam, the delivery slices as an indented list where a line needs the line above it,
+     the order that matters and the order that does not, and what is expected to change.
+     flw parses none of it, so a pull request number sits there as text and the plan is
+     rewritten rather than patched when the design moves."
+
+3. Add to the skills component's `provides`:
+
+     "An agent reads the boundaries it may act within from one place: which decisions are
+     approved, which still need the user, which files and behaviour it may change, which
+     tests and commits are authorised, and what stays the user's to run. Each of those is
+     recorded somewhere already, and this file names where."
+
+4. Add to the schemas component's `provides`:
+
+     "A version record may retire others by name in a retires field, so a record written and
+     then abandoned is marked as such in the artifact that is versioned rather than left for
+     someone to remember. A retires entry naming no record is refused, and the field takes
+     effect only from a record the contract has applied, so an unfinished draft cannot
+     retire live work."
+
+5. Add to the validation and checks component's `provides`:
+
+     "A record the contract has not applied and a landed record has retired is reported as
+     retired rather than as work owed, so the backlog flw stale prints is the work someone
+     still intends to do."
+
+6. In the validation and checks component's `properties`, inside the sentence beginning
+   "flw stale exits 0 whenever it ran", replace
+
+     "while no record is in flight — none unapplied other than a legacy-numbered one, and
+     none whose name is in applied without a landing commit yet"
+
+   with
+
+     "while no record is in flight — none unapplied other than a legacy-numbered one or one
+     a landed record has retired, and none whose name is in applied without a landing commit
+     yet"
+
+   Nothing else in that sentence changes. Without this, a retired record left on disk keeps
+   the project permanently in flight and the only --owed row that exits 1 never fires again.
+"""
+
+[[decisions]]
+topic = "where the umbrella plan lives when the declared members have no common parent directory"
+options = [
+  "wherever [project.roots] is declared",
+  "duplicated into every member's own plans/",
+  "left open in the contract, with the template assuming a parent",
+]
+chosen = "wherever [project.roots] is declared"
+rationale = """
+`[project.roots]` does not require nesting, so a set of siblings has no parent directory to
+hold a plan, and the config file that declares the set is the only thing that names it. The
+contract already says a roots path resolves against the project directory whose config
+declares it, so the plan resolving the same way adds no new rule. Duplicating the plan into
+every member means copies that drift with nothing detecting it, which is worse than the
+boundary problem it solves. Leaving it open ships a template that silently fails for a
+layout this project supports.
+"""
+
+[[decisions]]
+topic = "what the record-to-record retirement field is called"
+options = [
+  "retires",
+  "supersedes",
+  "replaced_by, declared on the record being retired",
+]
+chosen = "retires"
+rationale = """
+The contract already uses superseded in the other direction — "A review report a record has
+superseded carries that record's name" — so reusing the word would leave two relations with
+one name and a reader having to infer which from context. `replaced_by` inverts the
+direction and means editing a record you have decided not to run, which is a file nobody
+should have to touch again. The design drafted `supersedes`; this changes it.
+"""
+
+[[decisions]]
+topic = "whether an unapplied record's retires entry takes effect"
+options = [
+  "only from a record the contract has applied",
+  "as soon as the record is written",
+]
+chosen = "only from a record the contract has applied"
+rationale = """
+A draft that retires live work would let an unreviewed file remove a record from the backlog,
+and two people speccing in parallel could each retire the other's record with nothing having
+landed. Gating on `applied` means a retirement is a thing a finished run did, which matches
+every other state the contract records.
+"""
+
+[[decisions]]
+topic = "where the autonomy boundaries file lives"
+options = [
+  "core/shared/autonomy.md, read by path the way commits.md is",
+  "a references/ file under flw-execute, the lane that acts within the boundaries",
+  "a section in core/shared/context.md, which every run already prints",
+]
+chosen = "core/shared/autonomy.md, read by path the way commits.md is"
+rationale = """
+The boundaries span lanes: spec records the approved decisions, execute acts within them,
+review judges against them. A file under one skill is read by one skill. `core/shared/` is
+where flw already puts a cross-lane reference cited by path — `commits.md` is the precedent,
+and flw-execute reads it before proposing a commit rather than at its opening. A section in
+`context.md` would print on every run of every lane to be read by few, and that file has
+1,385 bytes free against a 10,000 ceiling.
+"""
+
+[[decisions]]
+topic = "the slice notation in the template"
+options = [
+  "indentation, where a line needs the line above it",
+  "box-drawing arrows showing the graph shape",
+  "an explicit requires list per slice",
+]
+chosen = "indentation, where a line needs the line above it"
+rationale = """
+A box-drawing layout was drafted first and discarded: an agent redrawing it after one slice
+moves produces a different picture each time, and the template exists to be standard. An
+explicit list per slice is the machine-readable graph the user refused, because a validated
+graph is wrong the moment the design moves and costs a correction every time. Indentation has
+one rule and a new slice costs one line; its limit is a slice with two parents, which the
+template handles with a prose line rather than a notation.
+"""
+
+[[dag]]
+group = 1
+phase = "the umbrella plan"
+tasks = [
+  { id = "template", desc = "Write core/skills/flw-spec/references/umbrella-plan.md: the six sections in fixed order, the indentation rule, the (also needs ...) escape hatch, the three status words with `landed` matching the contract's `applied`, the note that a pull request number is text flw never reads, and the sentence saying the plan is rewritten rather than patched when the design moves. The design's §6.2 holds the worked example to copy." },
+  { id = "fixture-note", desc = "In the template's seam section, record the shared wire fixture as a convention: one fixture at the parent, each member declaring a check in [tests] checks that validates it against its own schema. No flw machinery, so say explicitly that nothing new is needed to support it.", depends_on = ["template"] },
+  { id = "spec-pointer", desc = "Rewrite the cross-repository paragraph at core/skills/flw-spec/SKILL.md:163 to point at the template by absolute path, carrying four rules: the plan is rewritten rather than patched when the design moves; it sits in the project whose config declares [project.roots], since a declared set of siblings has no common parent; it is written before any repository specs its own record; and a seam under design stays a plan until it lands, because it is not knowledge yet. The last two are in the paragraph being replaced and nowhere else in core/skills/, core/shared/ or the contract, so dropping them loses them silently — and the seam rule is what stops the seam-ownership task's instruction being read as licence to write an undesigned seam into the store. skills-move-minority-sections left this paragraph alone for this record to replace.", depends_on = ["fixture-note"] },
+  { id = "seam-ownership", desc = "Add to core/skills/flw-research/references/cross-repo-survey.md, created by skills-move-minority-sections, the instruction that a seam file names which side owns each field and which sides copy it, in the same vocabulary as the template's seam section.", depends_on = ["template"] },
+]
+
+[[dag]]
+group = 2
+phase = "the autonomy boundaries"
+tasks = [
+  { id = "autonomy", desc = "Write core/shared/autonomy.md naming where each boundary is already recorded: approved decisions in a record's decisions, open ones in open_questions, editable files in a component's paths, properties and surfaces, authorised tests in success_criteria.tests and [tests] checks, authorised commits in commits.md plus propose-never-perform, and user-owned work in [tests] yours. Say which two the field report asks for that are not yet recorded. It is read by path like commits.md, never printed by flw context." },
+  { id = "autonomy-pointer", desc = "Cite core/shared/autonomy.md from the skills that act within those boundaries, by absolute path, the way flw-execute cites commits.md. One sentence each; do not restate the file.", depends_on = ["autonomy"] },
+]
+
+[[dag]]
+group = 3
+phase = "retires"
+tasks = [
+  { id = "schema", desc = "Add retires to core/schemas/version.schema.json as an array of record names, optional, with a description saying it marks records that will never land and derives no order." },
+  { id = "validate", desc = "In core/scripts/validate_spec.py, refuse a retires entry naming no record in the set. Reuse check_chain's existing name index rather than loading the records again.", depends_on = ["schema"] },
+  { id = "stale-row", desc = "In core/scripts/stale.py, filter retired names inside unapplied() itself, not in owed_rows. unapplied() has two callers — owed_rows at :351 and in_flight at :413 — and in_flight gates the one --owed row that exits 1, so filtering at the row alone would leave a retired record holding the project in flight for good and silencing that check. Report the retired record as retired rather than as not yet applied. Only a record the contract has applied retires anything.", depends_on = ["schema"] },
+  { id = "tests", desc = "Cover in tests/test_validate_spec.py the dangling retires entry, and in tests/test_stale.py a retired record dropping out of the owed rows plus an unapplied record's retires entry being ignored.", depends_on = ["validate", "stale-row"] },
+]
+
+[[dag]]
+group = 4
+phase = "verify"
+tasks = [
+  { id = "budget", desc = "Run budget.py. The flw-spec pointer and the autonomy citations are the additions; skills-move-minority-sections freed 1,889 B in flw-spec and about 3,800 B in flw-research for them.", depends_on = ["spec-pointer", "autonomy-pointer", "seam-ownership"] },
+  { id = "checks", desc = "Run flw test --no-stream, then flw validate, then flw stale --owed to see the new row shape against this project's own records.", depends_on = ["budget", "tests"] },
+]

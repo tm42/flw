@@ -1,0 +1,131 @@
+name = "skills-move-minority-sections"
+base = "owe-what-a-phase-changed"
+summary = "the minority-case sections move out of the flw-spec and flw-research trunks into each skill's references/, because flw-spec has 16 bytes free and every later record in this changeset adds a rule to it"
+
+sources = [
+  "plans/design-multi-repo.md",
+  "plans/codex-feedback-real-world-work.md",
+]
+
+approach = """
+§6.11 of `plans/design-multi-repo.md`, with its candidate list corrected by measurement.
+
+**The constraint.** `.venv/bin/python core/scripts/budget.py` at `72a4fd6`:
+
+    core/skills/flw-spec/SKILL.md      20984 / 21000  (+16)
+    core/skills/flw-research/SKILL.md  20853 / 21000  (+147)
+    core/skills/flw-execute/SKILL.md   19450 / 21000  (+1550)
+    core/skills/flw-review/SKILL.md    12445 / 21000  (+8555)
+
+flw-review carries 12,027 B of `references/` against a 12,445 B trunk and has the most
+headroom in the system; flw-spec carries 5,854 B and has 16 bytes. The two numbers are the
+same fact read twice. Compression of wording is spent, so the remaining move is structural,
+and `skills-add-umbrella-plan` cannot be written until it happens.
+
+**What moves, measured rather than guessed.** flw-spec: the thrifty mode section, 1,418 B,
+and the `release_line` bullet in step 5, 471 B. flw-research: the four passages that only
+a survey spanning repositories reads — the multi-root ordering inversion at 630 B, the
+parent `shared.md` reach rule at 536 B, the duplicated-literal grep at 1,279 B and the
+trace-one-transaction step at 1,652 B, 4,097 B together.
+
+**The design's candidate list was wrong in one place and this record corrects it.** It
+named flw-research's re-check mode as a section to move, "which already has a reference
+file to join". The trunk section is 512 B and is already the pointer at
+`references/recheck.md`, so there is nothing there to move. The four cross-repo passages
+are the real weight, they cohere into one subject, and they are where
+`skills-add-umbrella-plan` puts its seam ownership instruction — so that record then costs
+the flw-research trunk nothing.
+
+**No contract edit, and that is checked rather than assumed.** The contract says nothing
+about where a skill's prose lives: no component claims a byte ceiling, a trunk, or a
+`references/` directory, and `grep` for `21,?000`, `budget\\.py` and `references/` across
+every `provides`, `properties` and `surfaces` returns nothing. `core/skills/` is already in
+the skills component's `paths`. `pay-the-opening-once` is the precedent — it moved what a
+skill loads and recorded that the contract already permitted it, so `spec_version` moved on
+its suffix alone. Eleven of the sixty records carry no `contract_edit`.
+
+**What this is not.** Not a rewrite. Every sentence that moves arrives in its reference file
+unchanged, which is what makes the review cheap: concatenate trunk and references before
+and after, and they are byte-identical apart from the pointer sentences. Any wording a
+reader wants improved is a later record, because improving it here destroys the only check
+this record has.
+
+Not a rule change either. Nothing about thrifty mode, `release_line` or a cross-repo survey
+starts or stops applying. A reference file is read when the run needs it, and all three
+subjects are already conditional in the trunk — "On `--thrifty`", "when this record moves
+the product to a new line", "More than one root inverts this order".
+
+Not flw-execute. Its 1,550 B is short only for the scope amendment, which is a later record,
+and cutting its trunk now would guess at what that record wants.
+"""
+
+[[decisions]]
+topic = "which trunks this record moves"
+options = [
+  "flw-spec and flw-research only",
+  "all three constrained trunks, including flw-execute",
+  "flw-spec alone, since it is the one at 16 bytes",
+]
+chosen = "flw-spec and flw-research only"
+rationale = """
+These are the two trunks `skills-add-umbrella-plan` adds rules to, so they are the two that
+block it. flw-execute's 1,550 B is short only for the scope amendment's step, measured at
+roughly 1,900 B of prose in the design, and that record is not drafted — cutting its trunk
+now picks a section without knowing what the amendment step needs beside it. flw-spec alone
+is not enough: the seam ownership instruction lands in flw-research, which has 147 bytes.
+"""
+
+[[decisions]]
+topic = "whether flw-spec's cross-repository plan rules move here"
+options = [
+  "leave them; skills-add-umbrella-plan replaces that paragraph",
+  "move them into references/ now and let the later record edit them there",
+]
+chosen = "leave them; skills-add-umbrella-plan replaces that paragraph"
+rationale = """
+The 783 B paragraph at `core/skills/flw-spec/SKILL.md:163` is the one the umbrella template
+supersedes in part, so moving it here and rewriting it there is two edits to the same
+sentences and breaks this record's byte-identity check for no gain. The 1,889 B this record
+frees in flw-spec is already more than that record's pointer sentence needs.
+"""
+
+[[decisions]]
+topic = "how flw-research's cross-repository content is cut"
+options = [
+  "one reference file for the whole subject",
+  "four separate moves, one per passage, each with its own pointer",
+  "fold the passages into the existing recheck.md",
+]
+chosen = "one reference file for the whole subject"
+rationale = """
+The four passages answer one question — how to survey a system that spans repositories —
+and a run either needs all of them or none. Four pointers would cost more trunk bytes than
+three of the passages save. Folding them into `recheck.md` is wrong by subject: that file is
+for re-reading what a survey already wrote, and these are for the first survey.
+"""
+
+[[dag]]
+group = 1
+phase = "flw-spec"
+tasks = [
+  { id = "spec-thrifty", desc = "Move the `## Thrifty mode` section of core/skills/flw-spec/SKILL.md verbatim into core/skills/flw-spec/references/thrifty.md, and leave a pointer sentence in its place naming the absolute path the way the skill's other references are named." },
+  { id = "spec-release-line", desc = "Move the `release_line` bullet from step 5 into core/skills/flw-spec/references/release-line.md verbatim, with a pointer bullet in its place. Keep the bullet's position in the list, so the surrounding steps still read in order.", depends_on = ["spec-thrifty"] },
+  { id = "spec-budget", desc = "Run .venv/bin/python core/scripts/budget.py and report flw-spec's new free bytes. Then concatenate the trunk and both new reference files and diff against the same concatenation at HEAD: it must differ only by the pointer sentences.", depends_on = ["spec-release-line"] },
+]
+
+[[dag]]
+group = 2
+phase = "flw-research"
+tasks = [
+  { id = "research-reference", desc = "Create core/skills/flw-research/references/cross-repo-survey.md holding, verbatim and in their current order, the four passages: the multi-root ordering inversion in step 1, the parent shared.md reach rule, the duplicated-literal grep in step 2, and the trace-one-transaction step." },
+  { id = "research-trunk", desc = "Cut those four passages from core/skills/flw-research/SKILL.md and leave one pointer sentence where the first of them sat, saying that a survey spanning repositories reads that file first. The [project.roots] sentences in step 4 that decide where a file is written stay in the trunk.", depends_on = ["research-reference"] },
+  { id = "research-budget", desc = "Run budget.py and report flw-research's new free bytes, then the same concatenation diff as spec-budget.", depends_on = ["research-trunk"] },
+]
+
+[[dag]]
+group = 3
+phase = "verify"
+tasks = [
+  { id = "doctor", desc = "Run flw doctor. A reference file named for nothing is read by nobody, so confirm it reports the extensions and skills as it did before.", depends_on = ["spec-budget", "research-budget"] },
+  { id = "checks", desc = "Run flw test --no-stream. budget.py and style_lint.py are the two that can fail on this work; pytest and ruff should be untouched.", depends_on = ["doctor"] },
+]
