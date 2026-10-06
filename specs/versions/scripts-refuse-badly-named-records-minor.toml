@@ -1,0 +1,188 @@
+name = "scripts-refuse-badly-named-records"
+base = "skills-add-umbrella-plan"
+summary = "flw validate refuses a record the contract has neither applied nor retired whose name does not open with one of the areas its own project declares, and declares nothing for a project that declares no areas"
+
+sources = [
+  "plans/design-multi-repo.md",
+]
+
+approach = """
+**The drift, measured at `65a3d84`.** Reproduce with this, not with prose:
+
+    import pathlib, re, tomllib
+    LEGACY = re.compile(r"^v\\d+\\.\\d+$")
+    AREAS = tuple(a + "-" for a in ("cli","skills","scripts","schemas","surface","knowledge"))
+    applied = set(tomllib.loads(pathlib.Path("specs/current.toml").read_text())["applied"])
+    names = []
+    for p in sorted(pathlib.Path("specs/versions").glob("*.toml")):
+        s = p.stem
+        for suf in ("-minor", "-major"):
+            if s.endswith(suf): s = s[: -len(suf)]; break
+        if not LEGACY.match(s): names.append((s, s in applied))
+
+Of 43 applied non-legacy records, 41 do not open with an area. Two pass by accident —
+`knowledge-base` and `knowledge-store` — because `knowledge` is both their subject and an
+area word, so the rule has two false negatives on this tree and the real catch is 41 of 43.
+
+The rule this drifted from is already written: `core/skills/flw-spec/SKILL.md` says "Name it
+for what it does, in kebab-case". The instruction was never the problem. Nothing checked it.
+
+**The areas are declared by the project, not shipped by flw, and this is the whole design.**
+A first draft hard-coded flw's six into `validate_spec.py`. Measured against
+`~/_projects/punto`, which has 20 records: zero open with one of flw's area words, and its
+real areas are `nvim`, `histdb`, `install`, `hook`, `debug` and `tab`. Shipping flw's
+vocabulary in flw's validator refuses every unapplied record in every project that is not
+flw. So the areas come from `[spec] areas` in the project's own flw config, and **a project
+that declares none gets no check** — the same posture `flw context` already takes toward
+missing configuration, and the reason punto and mortgauge are untouched by this record.
+
+`cli/flw.py:2769` already resolves `[paths] reports` from config and passes it to
+`validate_file` as a keyword; `areas` follows that path exactly and adds no new way for
+configuration to reach the validator.
+
+**Scoped to records the contract has neither applied nor retired.** 41 of the 43 applied
+records fail the rule, and a record's landing commit is derived by
+`git log -S '"<name>"' -- specs/current.toml` at `core/scripts/stale.py:374`, so renaming a
+landed record collapses its attribution to the rename commit. Refusing them means either
+breaking attribution 41 times or leaving `flw validate` red forever.
+
+Retired matters for the same reason and is easy to miss. `skills-add-umbrella-plan` lands
+first and adds `retires`; a retired record is never applied, so a refusal keyed on `applied`
+alone would bind it permanently with no repair — it cannot be applied, because it was
+abandoned, and renaming it dangles the `retires` entry that the same ancestor refuses.
+`skills-add-umbrella-plan` already builds that filter inside `unapplied()`; this reuses it
+rather than writing a second one.
+
+**When the refusal fires, stated precisely, because the first draft got this wrong.** It
+fires on the first `flw validate` of a freshly written record, inside the spec session that
+wrote it, while the file is a draft the user has not yet locked. It is **not** a licence to
+rename a record afterwards. Three documents say a name never changes —
+`core/schemas/version.schema.json`'s `name` description, the skills component's "addressed by
+a name it keeps", and `core/skills/flw-spec/SKILL.md:224` — and the reason is that renaming
+breaks every sibling's `base`, which `check_version` does not validate. The first draft of
+this record claimed "a name is cheap to change while the record is still in flight", which
+contradicted all three.
+
+**The aphorism belt is one shape, not six.** A first draft rejected `a-*`, `an-*`, `no-*`,
+`nothing-*`, `what-*` and `*-is-not-*`. Measured: every applied record matching any of those
+six already fails the area rule, and the belt catches nothing the area rule misses — 0 of 43.
+Five of the six were dead code, and the tests a draft specced for them would have passed with
+the belt deleted. Only `-is-not-` can fire on a name the area rule admits, as in a
+hypothetical `skills-a-shape-is-not-a-judgment`, and it is kept for that alone.
+
+The refusal message cites `core/styles/terse_prose.md:69` and not `:66`. The rule text at 66
+names "X is not Y, it is Z" and "not X but Y" — two clauses — and a bare "X is not Y" is not
+in it. What bans the bare form is the worked example three lines down, "Bad: Minimal is not
+partial.", which is the exact shape of `a-shape-is-not-a-judgment`. A message citing the rule
+text would claim something the rule text does not say.
+
+**What this does not do.** It does not check that the area named is the part changed. The
+check compares one segment against a declared list and reads no paths, so a record named
+`scripts-` may edit two components — this one does, `core/scripts/` in group 1 and
+`core/skills/` in group 2. The `provides` sentence claims only what the check establishes.
+"""
+
+contract_edit = """
+Two changes.
+
+1. Add to the validation and checks component's `provides`:
+
+  "flw validate refuses a version record the contract has neither applied nor retired when
+  its name does not open with one of the areas the project declares in its flw config, and
+  refuses nothing on that ground in a project that declares no areas. A record already
+  applied is never refused for this, because its landing commit is derived from the name in
+  the contract's history and renaming it would discard that."
+
+2. Add to `assumptions`:
+
+  "The areas a record's name may open with are a fact about one project, so they are declared
+  in its flw config and never shipped by flw. flw's own six are its contract's components;
+  another project's are its own, and a project that declares none is a project this check
+  says nothing about."
+"""
+
+[[decisions]]
+topic = "where the area vocabulary comes from"
+options = [
+  "[spec] areas in the project's flw config, with no declaration meaning no check",
+  "hard-coded in validate_spec.py as flw's six components",
+  "derived from final_state.components by slugifying each component name",
+]
+chosen = "[spec] areas in the project's flw config, with no declaration meaning no check"
+rationale = """
+Hard-coding flw's six refuses every unapplied record in every other project: punto has 20
+records, none opening with one of flw's area words, and its real areas are nvim, histdb,
+install, hook, debug and tab. Slugifying component names does not work either — nothing in
+"validation and checks" yields `scripts` and nothing in "the project surface" yields
+`surface`, so a reader could not get from the contract to the list. Config is where flw
+already keeps per-project facts, and defaulting to no check means adopting flw never costs a
+project a refusal it did not ask for.
+"""
+
+[[decisions]]
+topic = "how many aphorism shapes the belt carries"
+options = [
+  "one, -is-not-, because the area rule subsumes the rest",
+  "six: a-, an-, no-, nothing-, what-, -is-not-",
+  "none, since the area rule catches 41 of 43 on its own",
+]
+chosen = "one, -is-not-, because the area rule subsumes the rest"
+rationale = """
+Measured over the 43 applied records, the belt catches nothing the area rule misses: every
+name matching one of the five prefix shapes already fails the area rule, so those five are
+dead code and tests for them would pass with the belt removed. `-is-not-` is the one shape
+that can appear after a valid area prefix, which is the construction `terse_prose.md` bans
+by name, so it earns its line. Dropping the belt entirely would leave that construction
+reachable.
+"""
+
+[[decisions]]
+topic = "whether the record permits renaming an in-flight record"
+options = [
+  "no — the refusal fires while the file is an unlocked draft, and the name is fixed once written",
+  "yes — a name is cheap to change until the record lands",
+]
+chosen = "no — the refusal fires while the file is an unlocked draft, and the name is fixed once written"
+rationale = """
+version.schema.json's `name` description, the skills component's "addressed by a name it
+keeps" and flw-spec SKILL.md:224 all say the name never changes, and the reason is concrete:
+`check_version` does not validate `base`, so renaming an in-flight record silently breaks
+every sibling that names it. The refusal therefore has to fire inside the spec session that
+writes the record, before step 6 hands the file over, which is the one moment the file is a
+draft rather than an identity. The first draft of this record claimed the opposite and had
+to be corrected.
+"""
+
+[[decisions]]
+topic = "whether the 41 badly named applied records are renamed"
+options = [
+  "no — forward-only, and the refusal never looks at an applied record",
+  "yes, with a mapping file so attribution survives",
+]
+chosen = "no — forward-only, and the refusal never looks at an applied record"
+rationale = """
+`stale.py:374` derives a landing commit with `git log -S` on the quoted name in
+`specs/current.toml`. After a rename the only commit matching the new name is the rename
+itself, so attribution for all 41 collapses at once. A mapping file would be a second source
+of truth for a record's identity, which is the thing the name exists to be.
+"""
+
+[[dag]]
+group = 1
+phase = "the refusal"
+tasks = [
+  { id = "config", desc = "In cli/flw.py, resolve [spec] areas from the project's flw config and pass it to validate_spec.validate_file as an `areas` keyword, following the shape cli/flw.py:2769 already uses for [paths] reports. A missing or empty key resolves to no areas." },
+  { id = "signature", desc = "Thread `areas` through validate_file into check_version beside the existing reports_dir and applied keywords. Default it to no areas, so a caller that does not pass it — and a directory with no config — gets no check rather than a refusal.", depends_on = ["config"] },
+  { id = "refusal", desc = "In check_version, refuse a record whose name does not open with one of the declared areas followed by a hyphen, when areas is non-empty and the record is neither in `applied` nor retired by an applied record. Reuse the retired filter skills-add-umbrella-plan builds inside unapplied() rather than writing a second one. A legacy v<major>.<minor> name is exempt, as it is for every other rule.", depends_on = ["signature"] },
+  { id = "aphorism", desc = "Add one shape to the same refusal: a name containing -is-not- anywhere. The message cites core/styles/terse_prose.md:69, the worked example 'Bad: Minimal is not partial.', and not the rule text at :66, which names only the two-clause forms and does not cover a bare X-is-not-Y. One shape, not six — the other five cannot fire on a name the area rule admits.", depends_on = ["refusal"] },
+  { id = "tests", desc = "In tests/test_validate_spec.py: no areas declared refuses nothing; a declared area list refuses an unapplied record outside it; the same name applied is not refused; a retired record is not refused; a legacy stem is exempt; and skills-a-shape-is-not-a-judgment is refused by the belt while skills-add-umbrella-plan is not. Assert the message names the declared areas, since a refusal that does not say what is wrong gets worked around rather than fixed.", depends_on = ["aphorism"] },
+]
+
+[[dag]]
+group = 2
+phase = "the instruction"
+tasks = [
+  { id = "skill", desc = "Rewrite the naming paragraph in core/skills/flw-spec/SKILL.md for the area-verb-object rule, with examples that satisfy it and a line saying the areas come from the project's config. Carry forward, do not delete, the paragraph's existing rationale that a name never changes afterwards because two people speccing at once pick different names and neither is renumbered at merge — it survives nowhere else in core/skills/, core/shared/ or the contract.", depends_on = ["tests"] },
+  { id = "config-line", desc = "Hand the user two edits rather than making them, both to files in .flw/, which sits in no component's paths and so is outside what any run may touch: the [spec] areas lines for .flw/config.toml — cli, skills, scripts, schemas, surface, knowledge — and the replacement first line of .flw/extensions/flw-spec.md, which currently reads 'One record per version under specs/versions/, named for what it does.' That file is printed at every flw-spec opening, so leaving it would have an author read the superseded instruction, name the record by it, and then meet the refusal. Say in the report that the check does nothing here until the config key exists.", depends_on = ["skill"] },
+  { id = "verify", desc = "Run flw validate, then flw test --no-stream. Before the config key exists, validate must stay at exit 0 with the check inert. After the user adds it, the four records in flight are area-named and the 43 applied ones are exempt, so it must still be 0. A red run means the scoping is wrong, not the names.", depends_on = ["config-line"] },
+]

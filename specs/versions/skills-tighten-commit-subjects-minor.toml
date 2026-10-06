@@ -1,0 +1,59 @@
+name = "skills-tighten-commit-subjects"
+base = "scripts-refuse-badly-named-records"
+summary = "commits.md states four testable constraints on a subject line instead of leaving it to the release-note test alone"
+
+approach = """
+`core/shared/commits.md` already carries the useful half: the release-note test, the list of
+verbs that name an action against those that name an intention, and the ban on an "and"
+joining unrelated halves. What it does not give is anything a writer can check in one pass,
+so the drift shows up as a trailing clause after a comma.
+
+Measured over the last 14 subjects at `65a3d84`, three fail the constraints below:
+
+    add --owed, which exits 1 on what the project or the knowledge store owes
+    record what-nothing-would-catch, which moves the contract to 0.16.3
+    add the multi-repo coherence design, with the field report it rests on
+
+The first two trail a relative clause; the second also carries a version number, which the
+contract already folds from the record set and which therefore says nothing a reader needs.
+The third is mine, from last week.
+
+**The four constraints**: an imperative verb first; nothing after a comma; 72 characters;
+no version number. Each is checkable by looking, which is the property the release-note test
+lacks — it is a good test and it needs a second reading to apply.
+
+**No contract edit.** The contract makes no claim about commit subjects, and `commits.md` is
+prose read by `flw-execute` when it proposes one. Tightening its wording changes no shared
+statement, so `spec_version` moves on this record's suffix alone, the way
+`pay-the-opening-once` did.
+
+**Not enforced, and the record says so rather than implying otherwise.** flw runs no git hook
+and the shared context states that flw is not a hook layer, so a subject is checked by whoever
+reads the proposal. A rule nobody checks is how the record names drifted 33 times out of 45 —
+the difference here is that a commit subject is read by a human at the moment it is written,
+and a record name was not read by anyone until someone went looking.
+"""
+
+[[decisions]]
+topic = "whether a commit subject is checked by anything"
+options = [
+  "no — prose in commits.md, read when a commit is proposed",
+  "a rule in style_lint.py reading git log -1, reporting after the fact",
+]
+chosen = "no — prose in commits.md, read when a commit is proposed"
+rationale = """
+A check on `git log -1` reports on the previous commit and cannot block the one being written,
+so it fires when the only repair is an amend or a rebase. The contract's own position is that
+flw is not a hook layer, so the blocking version does not exist to be chosen. The subject is
+the one rule in this pair that a human reads at the moment it applies, which is why it is the
+one left to prose.
+"""
+
+[[dag]]
+group = 1
+phase = "commits.md"
+tasks = [
+  { id = "constraints", desc = "Add the four constraints to the subject section of core/shared/commits.md: an imperative verb first, nothing after a comma, 72 characters, no version number. Put them where the verb list already sits rather than in a new section, and keep the release-note test as the test that settles the rest." },
+  { id = "examples", desc = "Give three failing examples from this repo's own history beside the constraints, with what is wrong with each. A constraint with no failing example beside it gets read as advice.", depends_on = ["constraints"] },
+  { id = "budget", desc = "Run budget.py. commits.md is 4,441 of 10,000 bytes, so there is room; confirm rather than assume.", depends_on = ["examples"] },
+]
