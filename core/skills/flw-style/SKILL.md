@@ -1,51 +1,112 @@
 ---
 name: flw-style
-description: Report what the writing style has drifted from in this session's own recent replies, and repair it forward. Use when the prose has gone off — wrapping lost, structure gone, filler words back — or after a long session. It names violations and never restates the rules.
-argument-hint: "[--last N]"
+description: Find your own instances of a writing failure the user has just named, then stop doing it in the same turn. Takes a flag for the category — vocabulary, length, formatting, shape, coherence — or free-form critique, and -h to list them. It names violations and never restates the rules, because restating them is measured as the intervention that does not work.
+argument-hint: "[--vocab|--verbose|--format|--shape|--coherence] [critique] [--last N] [-h]"
 ---
 
-# flw-style — what drifted, not what the rules are
+# flw-style — name what drifted, then stop doing it
 
-## Do this
+## `-h` or `--help`
 
-```sh
-flw style check
+Print the block below verbatim and stop. Do no correction, read no transcript, run nothing.
+These are this skill's flags. `flw style check --help` is a different surface and lists only
+`--last`.
+
+```text
+/flw-style [flags] [free-form critique]
+
+  --vocab       filler, praise, hedging, balanced aphorisms
+  --verbose     length out of proportion to what was asked
+  --format      the 120-column wrap, trailing spaces, headings on a short answer
+  --shape       what the reply is, and whether the decisions come first
+  --coherence   contradicting yourself across the session, or a recorded decision
+
+  no flags      all five
+  free form     e.g. "you're incoherent in judgement this session" — goes in as the
+                critique; find the instances rather than agree with it
+  --last N      how many of your own turns to re-read (default 5)
 ```
 
-Pass `--last N` when the request names a number of replies. Default is 10.
+## What this skill is for
 
-## Then act on what it named
+The user has named a failure. Your job is to find your own instances of it and then not do
+it again in the same turn. The correction **is the next reply**, not a report about the
+drift.
 
-Fix it forward in the next reply. Do not apologise, do not summarise the drift, and do not
-restate the rule that was broken — the rules are already in context, which is exactly why
-repeating them changes nothing.
+**Do not re-read the rule.** It is already in your context as the output style, and reading
+it again is the intervention measured at 6–12% (Drift No More?, arXiv:2510.07777) — while
+naming your specific violations is measured at +8.2 per round and +19.3 cumulative
+(MultiCodeIF, arXiv:2507.00699). The reason restating fails: constraint restatement accuracy
+is 97.3% while knows-but-violates runs 8–99% (DriftBench, arXiv:2604.28031). An agent that
+can recite the rule is not helped by reciting it.
 
-**Why this skill does not print the style.** Models restate a constraint accurately 97.3%
-of the time while still violating it, so an agent that can recite the rule is not helped
-by reading it again. Naming the specific violation is the intervention with a measured
-effect. That is the whole difference between this skill and a reminder.
+The refs in the table below are there to cite by name when you quote an instance, and for
+the user to check your work against. They are not a reading list.
 
-## When the output is empty
+## 1. Re-read your own last turns
 
-Say the last N replies were clean and stop. An empty report is the common case late in a
-tidy session and it is not a reason to look harder.
+Default 5, or `--last N`. They are in your context already, so this costs nothing — look at
+what you actually wrote, not at what you remember writing.
 
-## When it cannot find a transcript
+**Past a compaction, or further back than your context holds**, run `flw style check` for
+the countable rules. It reads this project's transcript and works on Claude Code only; Codex
+and OpenCode write no session record it parses. It cannot read a session whose newest
+transcript belongs to a dispatched agent, so a session that spawned subagents gets nothing
+from it — say so and work from context instead of reporting the command's refusal as a
+finding.
 
-`flw style check` exits 1 and names which of three it hit: no transcript directory it reads
-belongs to this project, the newest transcript holds only a dispatched agent's replies, or no
-transcript holds a main-agent reply yet. Repeat the one it named rather than concluding the
-host keeps no transcript, which is at most one of the three. `flw style lint <paths>` reads
-files rather than transcripts and works either way. Do not guess at your own prose from
-memory, which is the bias the command exists to route around.
+## 2. Find instances of what was flagged
 
-Under concurrent sessions on one project it reports the newest transcript holding prose,
-which may not be this one. It prints the path it read — check that the path is this
-session's before acting on the counts.
+| flag | what to look for | cite |
+|---|---|---|
+| `--vocab` | qualifiers that change nothing, evaluative words with no measurement, a longer word where a plain one exists, balanced aphorisms, reaction openers, closing offers, announcements, signposts | `terse_prose.md` §Words, §What to leave out |
+| `--verbose` | your reply's prose word count against the word count of what was asked; a short question answered at length; the same point made twice at the same level of detail | `terse_prose.md` §Length, §What to put in |
+| `--format` | a prose line over 120 columns, a reply line missing its two trailing spaces, a fence with no language, a heading deeper than `###`, headings on a reply to a short question | `terse_prose.md` §Structure and formatting |
+| `--shape` | the reply never says what kind of thing it is; decisions you made that the user could have made differently are not first, or not named at all; a sentence that has to be read twice | `terse_prose.md` §Before you write, §Sentences |
+| `--coherence` | a recommendation that contradicts one you made earlier in this session; a thing you argued against and then did; a decision already settled in `specs/versions/*.toml` that you re-proposed | the record's own `decisions`, found with `flw ledger <term>` |
+
+With no flag, look for all five. With free-form text and no flag, take the text as the
+category and find instances of that.
+
+**Count what is countable rather than judging it.** Word counts, line widths, heading
+counts and the ratio of a reply to its question are arithmetic. Do the arithmetic.
+
+**You are a biased reader of your own prose** — you wrote it because you believed it was
+right. What makes this work is that the user named the category, so you are searching for a
+named failure rather than judging quality. Searching for a named failure finds more.
+
+## 3. Say what you found, in the smallest form that identifies it
+
+One line per instance. The quote or the number, and the rule's name. Nothing else.
+
+```text
+--verbose   578 words and 2 headings in answer to "let's do it" (3 words)
+--vocab     "the critic earned it" — evaluative, no measurement behind it
+--coherence recommended retiring the review teams, then dispatched two
+```
+
+**Three instances at most, even when there are more.** A longer list is a report, and a
+report about verbosity is the disease. If you found nothing, say the last N turns were clean
+and stop — an empty result is the common case in a tidy session and not a reason to look
+harder.
+
+## What never goes in the output
+
+- An apology, or any sentence about how you feel about the drift.
+- A summary of the drift, or a count of how many times it happened.
+- The rule, restated. The user has it; so do you.
+- A promise to do better. The next reply is the promise or it is nothing.
+- A proposal for a new rule, a new lint or a new skill. That is a separate request.
+
+## 4. Then behave differently, in the same turn
+
+Whatever the user asked for alongside the flag, answer it now, without the flagged failure.
+This is the only part of the skill that matters. The lines in step 3 exist to make this part
+possible, not to stand in for it.
 
 ## Lane
 
-This skill reads and reports. It changes no file, fixes no other prose, and does not touch
-`core/styles/terse_prose.md`. For prose already written to disk, that is `flw style lint
-<paths>`, which is a different command over a different rule set: geometry against files,
-vocabulary against replies.
+Reads and reports. It changes no file, fixes no other prose, and never edits
+`core/styles/terse_prose.md` — a rule that needs changing is the user's call and a separate
+request. For prose already written to disk, `flw style lint <paths>` reads files rather than
+turns and works on every host.

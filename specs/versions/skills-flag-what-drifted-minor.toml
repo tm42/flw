@@ -1,0 +1,133 @@
+name = "skills-flag-what-drifted"
+base = "skills-tighten-commit-subjects"
+summary = "flw-style takes a named failure — a flag or the user's own words — finds the agent's own instances of it in its recent turns, and stops reading the transcript as its entry point so it works on a host that writes none"
+
+sources = [
+  "plans/design-reply-shape.md",
+]
+
+approach = """
+**The work was done before this record existed.** `core/skills/flw-style/SKILL.md` was
+rewritten in the session that then wrote this, at the user's instruction to build the skill,
+and the contract sentence it falsifies was found afterwards. That is drift, it is recorded
+here rather than tidied out of the history, and the rest of this record describes a file that
+is already on disk at 6,454 bytes passing budget, style lint and the full check set.
+
+**What was wrong with the old skill.** Its first instruction was `flw style check`, so the
+skill was a wrapper around a command that cannot run on two of flw's three hosts — Codex and
+OpenCode write no session record it parses — and that goes blind on the one host it does
+support whenever the session has dispatched a subagent, because the newest transcript is then
+the subagent's. Measured in the session that wrote this: it exited 1 twice, both times naming
+the wrong cause.
+
+**What replaces it.** The user names the failure and the agent finds its own instances. Five
+flags, each citing a real section of `core/styles/terse_prose.md` by name — `--vocab`,
+`--verbose`, `--format`, `--shape` — plus `--coherence`, which cites a record's own
+`decisions` and `flw ledger` rather than the style, because contradicting a settled decision
+is not a prose rule. Free-form text with no flag becomes the category. `-h` prints the table
+and stops, so the flags do not have to be remembered.
+
+The agent's recent turns are in its context already, so the default path costs nothing and
+needs no transcript. `flw style check` becomes the fallback for turns the context no longer
+holds, which is what makes the skill work on every host instead of one.
+
+**Why naming beats reading, which is the whole premise and is not this record's measurement.**
+`a-rule-nothing-breaks` established it: restating a rule moves behaviour 6-12% (Drift No
+More?, arXiv:2510.07777), naming specific violations moves it +8.2 per round and +19.3
+cumulative (MultiCodeIF, arXiv:2507.00699), and the reason restatement fails is that
+constraint restatement accuracy is 97.3% while knows-but-violates runs 8-99% (DriftBench,
+arXiv:2604.28031). This record carries that decision into the skill's own instructions, which
+previously only implied it.
+
+**The flag is what makes self-reading work.** An agent is a biased reader of its own prose —
+it wrote it because it believed it was right, which `flw-review` already states as the reason
+a solo reviewer needs structure rather than a prompt. The user supplying the category removes
+the judgment: the agent searches for a named failure rather than rating quality, and
+`flw-review` records that searching for a named failure finds more.
+
+**The output is capped at three instances, one line each.** A skill that makes an agent
+reflect is a skill that produces reflection, and a long report about verbosity is the failure
+it was invoked for. The skill also carries a list of what never appears: an apology, a summary
+of the drift, the rule restated, a promise to do better, or a proposal for another rule.
+
+**What this is not.** No new CLI surface — the flags are the skill's and `flw style check
+[--last N]` is unchanged, so `tests/test_cli.py`'s parser diff is untouched. No change to
+`core/styles/terse_prose.md`; the rules were never the problem. Nothing that reads a
+transcript on Codex or OpenCode, which is a separate question about parsing another tool's
+session format. The reply-length ranking in `plans/design-reply-shape.md` §5.2 is not built
+here: it needs the transcript and so works on one host, which is why the user asked for this
+instead.
+"""
+
+contract_edit = """
+One change. In the skills component's `provides`, replace
+
+  "A user can invoke flw style check as a skill, which reports what drifted in this session's
+  own recent replies and repairs it forward without restating the style."
+
+with
+
+  "A user can name a writing failure they have just seen — by one of the skill's flags or in
+  their own words — and get the agent's own instances of it, quoted from its recent turns,
+  followed by the corrected behaviour in the same reply. The style is never restated, because
+  an agent that can recite a constraint it is breaking is not helped by hearing it again.
+  Listing the categories is a flag of its own, so a user does not have to remember them, and
+  the transcript-reading command is a fallback for turns the context no longer holds rather
+  than the skill's entry point — so the skill works on a host that writes no session record."
+"""
+
+[[decisions]]
+topic = "what the skill reads first"
+options = [
+  "its own recent turns from context, with flw style check as the fallback",
+  "flw style check first, as before, with context as the fallback",
+]
+chosen = "its own recent turns from context, with flw style check as the fallback"
+rationale = """
+The command works on Claude Code alone and goes blind there whenever the session has
+dispatched a subagent, because the newest transcript for the project is then the subagent's —
+observed twice in the session that wrote this record, both times reporting the wrong cause.
+The agent's recent turns are already in its context, so reading them costs nothing and needs
+no host support at all. Keeping the command first would mean the skill's common path is the
+one that fails on two hosts out of three.
+"""
+
+[[decisions]]
+topic = "whether a flag makes the agent re-read the style section it cites"
+options = [
+  "no — the ref is cited when an instance is named, and read by the user",
+  "yes — the flag loads that section before the agent looks at its own turns",
+]
+chosen = "no — the ref is cited when an instance is named, and read by the user"
+rationale = """
+Re-reading is the 6-12% intervention; naming the instance is the +19.3 one. The four style
+sections the flags cite are also already in the agent's context as the installed output style,
+so loading them again spends roughly 35,000 bytes to show it what it is holding. The refs are
+there for the user to check the agent's work against and for the agent to name when it quotes
+an instance.
+"""
+
+[[decisions]]
+topic = "where contradicting a settled decision belongs"
+options = [
+  "a fifth flag, --coherence, citing a record's decisions rather than the style",
+  "out of scope — it is not a writing rule",
+  "folded into --shape, as a failure of what the reply claims",
+]
+chosen = "a fifth flag, --coherence, citing a record's decisions rather than the style"
+rationale = """
+It was the user's own free-form example, which makes it a category they actually reach for
+rather than one invented for symmetry. It is not a prose rule and `terse_prose.md` holds
+nothing about it, so it cites `specs/versions/*.toml` `decisions` and `flw ledger <term>`
+instead. Folding it into `--shape` would put a judgment about consistency under a flag about
+sentence construction, and the two failures are found by different searches.
+"""
+
+[[dag]]
+group = 1
+phase = "already built — verify rather than rebuild"
+tasks = [
+  { id = "verify", desc = "The skill file is on disk. Confirm rather than rewrite: budget.py reports core/skills/flw-style/SKILL.md under its ceiling, style_lint.py reports it clean, the YAML frontmatter parses with name, description and argument-hint, and flw test --no-stream passes including tests/test_validate_spec.py::test_every_skill_has_frontmatter_the_hosts_can_read, which the first write of the file broke by dropping the frontmatter." },
+  { id = "help", desc = "Invoke the skill with -h and confirm it prints the flag table and does no correction. The skill is installed as a symlink into this checkout, so the edit is live without flw install." },
+  { id = "contract", desc = "Apply the contract_edit above. It replaces one sentence in the skills component's provides and touches nothing else; print the diff of specs/current.toml on its own before any other diff." },
+]
