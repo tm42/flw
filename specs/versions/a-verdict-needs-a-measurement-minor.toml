@@ -1,0 +1,187 @@
+name = "a-verdict-needs-a-measurement"
+base = "scripts-drop-the-width-rules"
+summary = "five commands stop printing a verdict nothing measured — flw validate by path answers about the project that path is in, a config section that is not a table is refused instead of tracebacking, flw stale --owed finds a landing however the contract quotes it, a system.md with no declared members reads as unverifiable rather than current, and a knowledge file stops counting flw's own directory as the change under it"
+
+sources = [
+  ".flw/reports/2026-10-10T0945-eng-correctness.md",
+  ".flw/reports/2026-10-10T0945-eng-adversarial.md",
+  ".flw/reports/2026-10-10T0945-eng-tests.md",
+  "plans/oss-field-test.md",
+]
+
+approach = """
+**What these five have in common, and it is the reason they are one record.** Each one prints a verdict that no measurement is behind. `flw validate member/specs/current.toml` prints OK over a contract whose `applied` names a record that exists nowhere. `flw stale --owed` exits 0 with an undeclared drift commit sitting in the history. `flw stale` counts a `system.md` and lists it under no state. `flw know --check` says a knowledge file is changed when nothing under it moved. And a config section that is not a table does not print a verdict at all — it tracebacks, including out of `flw doctor`, which is the command a user would run to find out why. Four false greens and one refusal that never arrives, all in the same two files plus `knowledge.py`.
+
+They are one record because each is revertable alone and because the fixes do not touch each other: one line in `validate()`, one guard in two config readers, two lines in `stale.py`, and a pathspec threaded from `cli/flw.py` through `stale.py` into `knowledge.py`, which is much the largest of the four — five functions, two scripts and 14 test call sites — and the reason group 4 is last. Four dag groups, one per failure, so a group that stalls leaves the other three landed.
+
+**Every number and command below is re-takeable, and they come from two places.** The four numbered failures below were measured by the review round the three reports in `sources` record, each at the revision that report names. The fifth was measured on the ASGI field-test fixture and is recorded in `plans/oss-field-test.md`, which is in `sources` too for that reason. What follows is the part a reader needs without opening any of them.
+
+**1. `flw validate <path>` resolves the project from the caller's directory.** `validate()` calls `root = project_root()` with no argument at `cli/flw.py:2762`, while `flw test` at `:2358` calls `project_root(Path(args.path) if args.path else None)`. Everything after hangs off that root: `specs` at `:2763`, `reports_dir` at `:2767-2771`, `applied` at `:2772-2778`, and the `check_chain` call at `:2818`. The adversarial reproduction built a parent holding one member, each with its own contract, and ran the exact form the multi-root hint at `:2786` prints: `flw validate member/specs/current.toml` exits 0 and prints OK, while `cd member && flw validate` exits 1 naming `ghost-record` as applied with no file behind it. The second limb is worse, because both forms exit 1 on a different pair of inputs and the exit code cannot tell them apart — in one the sources rule was exempted by the parent's `applied` list, so the file asked about printed OK while the exit 1 named a release-number error in a contract nobody asked about. The contract already promises what the fix delivers: "A contract whose applied list names only records that exist validates clean" is a `properties` line of the validation component, and through the path form it is false. `project_chain` starts at the path given and tests `candidate / "specs"`, so a file path costs one failed candidate and then walks its parents correctly, and a path outside any project exits with `project_root`'s existing error — which is what `flw test` already does for that input.
+
+Why this one is first: `skills-add-umbrella-plan` is in flight and makes a declared set of sibling repositories a first-class layout, and per-member validation by path is how such a set gets checked.
+
+**2. A config section that is not a table tracebacks every command on the machine.** `_section_config`, defined at `cli/flw.py:2429`, does `merged.update(tomllib.loads(config.read_text()).get(section, {}))` at `:2442`, so `paths = "oops"` in a project's config raises `ValueError: dictionary update sequence element #0 has length 1; 2 is required`, `kb = 7` raises `TypeError: 'int' object is not iterable`, and both come out as a traceback with no path named. The machine-wide file is worse: `_resolve_flw_dir` at `:2255` reads `document.get("paths", {}).get("flw")` before `_section_config` runs at all, so a non-table `[paths]` in `$FLW_HOME/config.toml` tracebacks `flw doctor`, `flw validate`, `flw stale --owed`, `flw test` and `flw scout` with `AttributeError: 'str' object has no attribute 'get'`. Two readers in the same region already do this correctly and are the model for the message: `_knowledge_dir` at `:3462` and `project_roots` at `:2477` both print `error: <path>/.flw/config.toml: [<section>] is not a table`. That is what makes this a gap rather than a policy.
+
+The relation to `scripts-refuse-badly-named-records`, which is in flight, runs the other way, and an earlier draft of this paragraph had it backwards. That record's own decision at `:156` chose "the project's own file only, following `project_roots` at `cli/flw.py:2466`" and its `config` task at `:241` says to refuse a `[spec]` that is not a table in that reader, so `[spec]` never reaches `_section_config` at all. What it adds is a third project-only reader needing the same guard the two existing ones have, which is an argument for the message being identical in all of them and not a dependency in either direction. Group 2 is not a prerequisite for that record and that record is not a prerequisite for group 2.
+
+**3. `landing()` hardcodes the double-quote form of a record name.** `core/scripts/stale.py:374` runs `git log --format=%H -S '"<name>"' -- <contract>`, so the pickaxe counts occurrences of the name wrapped in double quotes. TOML treats `'x'` and `"x"` as the same value and `spec-v4.schema.json` accepts both, so a contract writing `applied = ['a-rule-nothing-breaks']` has never contained the byte sequence the pickaxe looks for. The adversarial reproduction built two repositories identical in every byte except that quote character, each with a landing commit and then a commit touching a declared component path: the double-quoted one reported `1 red` and exited 1, the single-quoted one reported `owed: 0 red` and exited 0 with the same drift commit present. `unattributed()` walks `applied` backwards, finds no landing for any name, returns `None`, and `render_owed` adds no attribution rows at all. `landing()`'s own docstring names three conditions under which it answers nothing — a name appearing elsewhere in the contract, a contract that has moved, a shallow clone — and quoting is not among them. `skills-flag-what-drifted` is in flight and builds on this row, so it would inherit the miss.
+
+**The report's suggested fix is wrong on the ordering and this record does not take it.** It proposes two pickaxe calls concatenated, keeping `found[-1]`, and argues that "`found[-1]` over the concatenation is still the oldest of whichever call matched." That holds only while exactly one call matches. A contract whose history contains both quotings — one commit changed the style — makes both calls return commits, and `found[-1]` is then the oldest of the second call rather than the oldest overall. One call with `--pickaxe-regex` keeps git's own ordering and has no such case.
+
+**4. A `system.md` in a project that declares no members is counted and listed nowhere.** At `core/scripts/stale.py:220-223` a System-level concept's row is `by_state.get(knowledge.system_state(per_member))`, and `by_state` has three keys. `knowledge.changed_system` returns one diff per declared member, so an empty `[project.roots]` gives `{}`; `knowledge.system_state({})` takes the empty set through its three-way loop and returns `"current"` at `knowledge.py:525`; `by_state.get("current")` is None, and the file is counted in `files` and listed under nothing. The correctness reproduction built a parent whose `system.md` carries two member revisions and whose config declares no roots: `flw know --check` names it in two lines, `flw stale` prints `KNOWLEDGE  (1)` with nothing under it, and `flw stale --owed` exits 0. The adjacent case is sound and was checked — a declared member whose directory is absent reaches `numstat` and comes back `unverifiable` — so the empty map is the only silent one. `knowledge_state`'s own docstring at `:190-196` records fixing this same class once before, for `unverifiable`, with the empty dict left over. `eng-tests` raises the same line as untested, which is why a test for it is in the same group rather than left for later.
+
+**5. A knowledge file counts flw's own directory as the change under it.** `knowledge.numstat` at `core/scripts/knowledge.py:344` deliberately counts an untracked file as one changed file with no lines, and says so in its docstring at `:350-356`: a file the tree has gained and the VCS does not ignore is a change too, found with `git ls-files --others --exclude-standard`, and `--exclude-standard` is what keeps an ignored store from counting itself. That design has one precondition — the store is ignored — and `flw-research` creates the case where it cannot be. `mirror()` at `:138-150` returns `.` for a Repository-level file and for `system.md`, so the diff is taken over the whole tree, and in a third-party checkout whose `.gitignore` belongs to upstream the flw directory the survey just wrote is untracked and counts. Measured on the ASGI field-test fixture, recorded in `plans/oss-field-test.md`: `flw know --check` reports all three repository files as `changed · 14 files · +0 −0 · since 31e3e00`, immediately after the same run stamped them. A `changed` verdict with an empty diff tells a reader the file is falsified when no line of code moved, and here it can never clear, because the advice `flw know --stamp` prints — re-stamp once the changes are committed — would mean committing a flw directory into someone else's repository.
+
+In flw's own tree this is latent rather than live: `.gitignore:11` ignores `.flw/knowledge/`, so the store does not count itself here. What is not ignored here is `.flw/config.toml` and `.flw/extensions/`, which are tracked, so an edit to an extension does count as a change under every repository file in this repo today.
+
+**What this does not do.** It does not touch the fourth finding of the adversarial round — a contract whose `applied` is not a list of strings tracebacks `validate_spec.py:517`, `cli/flw.py:2776` and `stale.py:469`, and the schema message naming the problem is printed and then buried. That is the same family and a different question: whether a shape the schema already refuses should also be survivable at runtime in three readers. It is unspecced and no record in flight covers it. `eng-tests` filed five findings. This record takes two as tasks — the System-level routing at `stale.py:221` and the untested `[paths] reports` resolution at `cli/flw.py:2808` — and closes a third as a byproduct, the unheld exit code at `cli/flw.py:2821`, because group 1's tests are the first to drive `flw validate` over a tree with a chain error. The two it leaves are `stale.py:356`, where `unapplied()` has no test of its own, which that report ties to the filter `skills-add-umbrella-plan` is about to give it, and `tests/test_validate_spec.py:512`, where the one test of `check_version`'s name-versus-filename check passes on a different error so that deleting the check leaves all 819 green. Both belong with records already in flight and neither is specced. It also does not touch `flw know --stamp` taking a store path where every other mode takes a code path, which the same round raised at `cli/flw.py:3823`, and it changes nothing about what `flw-research` writes or where — the multi-root research gaps the ASGI field test found are a separate record.
+"""
+
+contract_edit = """
+Three changes, each in a component's existing list, and nothing else is reworded.
+
+One. In the validation and checks component's `provides`, after the sentence beginning "A break in the record set", add:
+
+  "A user can validate a contract or a record in another project by naming its path, and every
+  check runs against the project that path is in — the record set it is part of, that
+  project's applied list and its own declared reports directory — so a file named from
+  outside its project is not checked against the caller's contract and reported OK."
+
+Two. In the same component's `properties`, after the sentence beginning "A command that could not be run to completion", add:
+
+  "A config section that is not a table is refused naming the file and the section, in the
+  machine-wide file and the project's alike, rather than tracebacking the command that read
+  it — including the read that resolves the flw directory itself, which runs before any other
+  and so breaks every command on the machine when it fails."
+
+Three. In the knowledge store component's `properties`, in the sentence beginning "Staleness is a git diff and never a judgment", replace:
+
+  "an uncommitted edit counts, and so does a file the tree has gained and the VCS does not
+  ignore, as one changed file with no lines."
+
+with:
+
+  "an uncommitted edit counts, and so does a file the tree has gained and the VCS does not
+  ignore, as one changed file with no lines — except under the flw directory, which no
+  knowledge file describes, so a store in a repository that does not ignore it does not
+  report itself as the change."
+"""
+
+[[decisions]]
+topic = "whether the five failures are one record or five"
+options = [
+  "one record with four dag groups, one per failure",
+  "five records, each landing alone",
+  "two records, splitting the config readers from the two stale.py rows",
+]
+chosen = "one record with four dag groups, one per failure"
+rationale = """
+Every one of the five prints a verdict no measurement is behind, which is a single property
+to make true rather than five unrelated repairs, and the fixes are disjoint: one line in
+validate(), one guard shared by two config readers, two lines in stale.py, and a pathspec
+threaded through numstat's three callers in knowledge.py. Four groups keep each failure revertable alone, which is what splitting into
+five records would buy, without five entries in applied and five release numbers for what a
+reader will remember as one round of repairs. Against that, a run that stalls in group 2
+leaves groups 3 and 4 unbuilt under one record where five would have landed independently —
+accepted, because the groups have no depends_on between them and a stalled group can be
+re-run.
+"""
+
+[[decisions]]
+topic = "how landing() finds a name the contract may have quoted either way"
+options = [
+  "one git log call with --pickaxe-regex over both quotings",
+  "two calls concatenated, as the report suggests, keeping found[-1]",
+  "refuse an applied entry whose landing the pickaxe cannot locate",
+]
+chosen = "one git log call with --pickaxe-regex over both quotings"
+rationale = """
+The report's two-call version is wrong on the ordering it claims to preserve: concatenating two
+newest-first lists and taking found[-1] gives the oldest of the second call, not the oldest
+overall, so a contract whose history carries both quotings gets the wrong landing commit rather
+than none. One call keeps git's own ordering and the existing found[-1] line unchanged. Refusing
+an unlocatable entry was the report's own alternative and is a larger change than the bug asks
+for: landing() already answers None for a shallow clone and for a project not under git, both of
+which are ordinary, so a refusal there would fire on repositories that are fine. Verified at this
+tree that the two forms agree where only one quoting exists: both return a030fd42 for
+release-line.
+"""
+
+[[decisions]]
+topic = "what word a system.md with no declared members reads as"
+options = [
+  "unverifiable, the word the contract already has for a diff that could not run",
+  "a fourth state added to by_state for a check with nothing to measure",
+]
+chosen = "unverifiable, the word the contract already has for a diff that could not run"
+rationale = """
+The knowledge store's properties already say "a diff that cannot run is unverifiable and the
+file is read normally", and a system.md whose project declares no members is a diff with
+nothing to run over, which is that sentence rather than a new case. So this limb needs no
+contract edit, which is why the contract_edit above has three changes and not four. The
+correctness report suggested the contract gains a line here; it does not need one. A fourth
+state would also change what every reader of by_state prints, for a condition that is already
+named.
+"""
+
+[[decisions]]
+topic = "how much is excluded from a knowledge file's own diff"
+options = [
+  "the whole flw directory",
+  "the knowledge store directory only",
+]
+chosen = "the whole flw directory"
+rationale = """
+Excluding the store alone leaves the config file. In the measured case that is one file —
+`git -C ~/_projects/oss-fixtures/asgi/uvicorn ls-files --others --exclude-standard -- .flw`
+filtered of the store prints `.flw/config.toml` and nothing else, the three members holding no
+extensions of their own — and one untracked file still reports `changed · 1 file · +0 −0` over
+nothing. The parent, which does hold four extensions, is not a git repository at all, so it
+contributes no untracked count to compare. The defensible line is
+what a knowledge file describes: the store mirrors the code tree, and no part of the flw
+directory is code any file in it mirrors. This does change a live behaviour in flw's own
+repository, where .flw/config.toml and .flw/extensions/ are tracked and an edit to an extension
+counts today as a change under every repository file — that count is noise by the same argument
+and goes with it.
+"""
+
+[[dag]]
+group = 1
+phase = "the wrong project"
+tasks = [
+  { id = "root", desc = "In cli/flw.py, change :2762 from `root = project_root()` to `root = project_root(Path(args.path) if args.path else None)`, copying flw test at :2358. Change nothing else in validate(): specs, reports_dir, applied and the check_chain call all hang off root already and want the corrected one. Leave the second bare project_root() at :3420 in the ledger handler alone — the comment under it says the upward walk is deliberate there, and flw ledger takes no path argument." },
+  { id = "root-test", desc = "Add two tests in tests/test_cli.py, both over a parent project and a member project each holding its own specs/current.toml. First, the record set: the member's applied names a record no file in the member carries, and flw validate <member contract path> run from the parent must exit 1 and name that record. Assert on the record name and not on the exit code alone, because the old behaviour also exits 1 on a neighbouring input for an unrelated reason — that is the second limb of the finding and what a weak test would miss. Second, the reports directory, which the contract edit promises and the first test does not reach: give the member a .flw/config.toml declaring reports = \"reviews\", and an unapplied record whose prose cites reviews/X.md with no sources field, and assert the path form refuses it from the parent. eng-tests filed that second one as a MAJOR at cli/flw.py:2808 with this fixture spelled out. Between them these are also the first tests to drive flw validate over a tree with a chain error at all, which is eng-tests' MAJOR at cli/flw.py:2821 — the exit code is folded correctly there and replacing `if chain_errors:` with `if False:` leaves the whole suite green — so say in the report that they close it, rather than adding a task for it.", depends_on = ["root"] },
+]
+
+[[dag]]
+group = 2
+phase = "a section that is not a table"
+tasks = [
+  { id = "section", desc = "In cli/flw.py's _section_config, defined at :2429 with the merge at :2442, read the section into a local before merging it, and raise SystemExit with the message _knowledge_dir at :3462 and project_roots at :2477 already use when it is not a dict: `error: {config}: [{section}] is not a table`. Keep the existing TOMLDecodeError and UnicodeDecodeError handling and keep the key-by-key merge, since the underlay is the behaviour the contract declares." },
+  { id = "flwdir", desc = "In cli/flw.py's _resolve_flw_dir at :2255, guard `document.get(\"paths\", {})` the same way. This is the limb that breaks flw doctor, because it runs before _section_config does and before any handler, so a non-table [paths] in the machine-wide file takes out every command including the one a user would run to diagnose it. Use the same message shape, naming the machine-wide path.", depends_on = ["section"] },
+  { id = "section-test", desc = "Add tests in tests/test_cli.py for both readers: a project config whose [paths] is a string, and a machine-wide config whose [paths] is a string, each asserting the error names the file and the section and that no traceback reaches the user. Cover one non-string non-table too — an integer, which raises TypeError rather than ValueError on the old path — so the guard is tested as a type check and not as a ValueError catch.", depends_on = ["flwdir"] },
+]
+
+[[dag]]
+group = 3
+phase = "a verdict with nothing behind it"
+tasks = [
+  { id = "landing", desc = "In core/scripts/stale.py's landing() at :374, replace the single pickaxe with one `git log --format=%H -S <pattern> --pickaxe-regex -- <contract>` call whose pattern matches the name wrapped in either quote character. Keep `found[-1]` as the oldest hit: one call keeps git's ordering, which is what makes the existing line still correct. The schema's name pattern is `^[a-z0-9][a-z0-9.-]*$`, so a name can contain a dot — a legacy record is named 4.2 — and a dot is a regex metacharacter, so escape the name before building the pattern rather than interpolating it raw. Then extend the docstring: it names three conditions under which it answers nothing and quoting was not among them, and after this change quoting is not one either, which is worth saying because the next reader will wonder." },
+  { id = "system-row", desc = "In core/scripts/stale.py at :221, treat an empty per_member as unverifiable rather than letting knowledge.system_state return current over an empty map: `row = by_state.get(\"unverifiable\" if not per_member else knowledge.system_state(per_member))`. Do not add a fourth state to by_state and do not change knowledge.system_state — the empty case is the caller's to recognise, and unverifiable is the word the contract already has for a diff that could not run." },
+  { id = "stale-tests", desc = "Add tests in tests/test_stale.py for both rows. For landing(): two fixtures identical except the quote character around one applied entry, each with a landing commit and a later commit touching a declared component path, both expected to report the drift. Add a third whose history contains both quotings, asserting the oldest landing rather than merely a non-None one, because that case is the one the report's suggested fix got wrong. For the system row: a parent whose system.md carries member revisions and whose config declares no roots, asserting the file appears under unverifiable rather than being counted and listed nowhere. eng-tests raises the System-level routing at :221 as untested, which the second of these tests is what that finding asks for; it raises nothing about landing(), whose tests this record adds because the bug has none rather than because a report asked.", depends_on = ["landing", "system-row"] },
+]
+
+[[dag]]
+group = 4
+phase = "the store counting itself"
+tasks = [
+  { id = "pathspec", desc = "In core/scripts/knowledge.py, exclude the flw directory from both the diff and the untracked walk in numstat at :344, so a store in a repository that does not ignore it stops reporting itself as the change under every file it holds. numstat is `def numstat(revision: str, cwd: Path, rel: Path)` and has no parameter for this, knowledge.py imports no os, and know() at cli/flw.py:3527 is not one of the three handlers that export FLW_DIR — those are at :2362, :3421 and :3922 — so neither a literal .flw nor an environment read will do. Thread it, and the thread is longer than numstat's own callers. numstat takes what to exclude as a required keyword, supplied by changed() at :410, owed() at :452 and changed_system() at :508. Those three are not reached only from cli/flw.py: core/scripts/stale.py:220 calls knowledge.changed_system and :225 calls knowledge.changed, both inside knowledge_state() at :182, which is reached from owed() at :468 and :494, which the stale handler at cli/flw.py:3914 calls. stale.py imports no os and no CLI module, so it has nothing of its own to supply and knowledge_state() takes the keyword too. There are also 14 call sites in tests/test_knowledge.py to update. Make the keyword required at every level rather than defaulting it: any default is .flw, which is right on every machine that has not moved the directory and silently wrong on the ones that have, which is the failure class this record exists to close. The exclusion is one value and not a map even though changed_system runs per member, because the contract's flw CLI properties at current.toml:134 say the directory's name comes from the machine and never from the project. Resolve it once in cli/flw.py from the existing flw_dir_name() and pass it down. Do not derive it from store.parent.name, which is the shape that needs no new parameter anywhere and is the reason not to use it: a project that moves its store with [knowledge] dir makes that name something else and the exclusion silently stops matching. Do not read it from the environment either, and this is not a preference between two shapes — it is wrong on the one path this task is about. FLW_DIR is read outside cli/flw.py in exactly two places, run_tests.py:200 and ledger.py:103 — the third read, at cli/flw.py:2243, is the resolver that produces the value rather than a consumer of it — and knowledge.py reaches neither: it imports only FRONTMATTER and _frontmatter from store.py, which imports no corpus from ledger. That is why know() at cli/flw.py:3527 and know_map() at :3841 get away with no export today. Adding a read to knowledge.py makes both of them first-time readers with no export, so the fallback to .flw fires on flw know --check — the command that produced this record's group-4 measurement — on every machine that has moved the directory. Then extend numstat's docstring: it argues at :350-356 that --exclude-standard is what keeps an ignored store from counting itself, and that argument is what fails when the repository belongs to someone else — say the exclusion is now explicit and no longer rests on the repository's ignore rules." },
+  { id = "pathspec-test", desc = "Add a test in tests/test_knowledge.py: a repository that ignores nothing, with a knowledge store written under its flw directory and no other change since the recorded revision, whose repository file must read current rather than changed. Assert on the state and on files == 0, because the failure this fixes is a changed verdict carrying +0 −0 and a test on the state alone would pass against a diff that counted the store and found no lines.", depends_on = ["pathspec"] },
+]
+
+[[dag]]
+group = 5
+phase = "check it"
+tasks = [
+  { id = "verify", desc = "Run flw validate, then flw test --no-stream. State the suite count as a delta: this record adds tests in four files and deletes none, and every record in flight ahead of it moves the count too, so an absolute number taken at this tree would fire on their work rather than on this record's. Then re-run the two reproductions this record's sources describe that can be re-run in a sentence — flw validate on a member contract naming a ghost record, and flw know --check over the ASGI fixture at ~/_projects/oss-fixtures/asgi, which is the measured case for group 4 and is still on disk.", depends_on = ["root-test", "section-test", "stale-tests", "pathspec-test"] },
+]
