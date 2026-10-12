@@ -1,0 +1,161 @@
+name = "scout-says-what-resolved"
+base = "a-verdict-needs-a-measurement"
+summary = "flw scout prints what its ranking rests on — the share of imports that reached a definition, with the denominator that share is of, and how many reached every definer of a name rather than one — and --help loses a resolution figure that is met on none of the three repositories it was measured against"
+
+approach = """
+**Where this came from.** Two field tests against repositories flw did not write, both recorded with their revisions in `plans/oss-field-test.md`. T1 ran `flw scout` over pandas at `1633b5447e`; T2 ran `/flw-research`, and so the scout, over a hand-made parent holding starlette at `96d5023`, uvicorn at `31e3e00` and httpx at `b5addb6`. Each test produced a ranking whose top entries were artifacts of how an import resolves, and in both cases nothing in the output said so.
+
+**The two artifacts, which are the same limit seen twice.** In pandas, `asv_bench/benchmarks/series_methods.py` ranks second at 0.0520 labelled `Any 167 files`, because line 285 of that file is `class Any:` — a benchmark fixture — and an import of a name whose module does not resolve in the repository edges to every in-repo definer of that name. Only 21 pandas files import `Any` from `typing`, so the 167 is not even the typing count. In uvicorn, `uvicorn/config.py` ranks first at 0.0940 and `uvicorn/protocols/http/h11_impl.py` — the file that serves every HTTP request — ranks fourteenth at 0.0161, because `uvicorn/config.py:53-75` holds four dicts of `"module:Class"` strings resolved by `import_from_string` and there is no import statement to make an edge from. One is resolution reaching too far and the other is an edge that does not exist at all, and a reader of either ranking has no way to tell.
+
+**The first artifact is a decided behaviour and this record changes the behaviour not at all, only the sentence that describes it.** The contract's `properties` say: "Both scouts rank the file that defines an imported name rather than the file a specifier names. Where more than one file defines that name, the edge goes to the definer in the module the import actually named, and to every definer only when no module resolves — so a re-export barrel still takes none of the score, and a name defined once per package does not edge to every package." The fallback is what the barrel property rests on, and the comment at `core/scripts/scout.py:501-504` says so: a barrel defines nothing, so nothing matches there and the edge reaches the real definition instead. What is missing is not a different rule. It is a number saying how often the rule fired.
+
+**The resolution figure in `--help` is met on none of the three repositories measured.** `flw scout --help` ends with "Expect roughly 85-90% of imports to resolve. `sys.path` manipulation and dynamic imports do not resolve and never will." It names no denominator, and the two readings available give different answers. Measured at this tree with `core/scripts/scout.py`'s own `parse()`:
+
+    import sys, pathlib
+    sys.path.insert(0, "core/scripts")
+    import scout as S
+    from collections import defaultdict
+    root = pathlib.Path(sys.argv[1]).resolve()
+    facts = S.parse(root)
+    definers = defaultdict(list)
+    for path, here in facts.defs.items():
+        for name, _, _ in here:
+            definers[name].append(path)
+    # every name import, resolved or not
+    total = sum(len(s) for s in facts.imports.values())
+    resolved = sum(1 for s in facts.imports.values() for _, n in s if definers.get(n))
+    # the narrower denominator: only imports naming a module this repo holds
+    inrepo = [(t, n) for s in facts.imports.values() for t, n in s
+              if t and facts.module_files.get(t) is not None]
+    print(resolved, total, sum(1 for _, n in inrepo if definers.get(n)), len(inrepo))
+
+Over every name import, including those naming a module outside the repository: flw 24 of 100, pandas 5,866 of 11,303, uvicorn 280 of 732 — 24.0%, 51.9% and 38.3%. Counting module imports too, which resolve at 100% in all three, the all-imports figures are 24.8%, 60.2% and 38.7%. On the narrower and more charitable denominator — only imports that name a module the repository holds, which is the reading the sentence about `sys.path` and dynamic imports implies — flw is 14 of 14, pandas 5,429 of 7,950 and uvicorn 278 of 444: 100%, 68.3% and 62.6%. So under either reading the two outside repositories fall well short of 85-90%, and under the charitable one flw's own repository overshoots it. A figure that cannot be reproduced because its denominator was never stated is the thing to delete; a figure the command prints is the thing to have.
+
+**What the fallback costs, measured.** Add these lines to the same script to count the every-definer branch, which the four prints above do not touch:
+
+    fb = edges = no_module = resolves_but_undefined = 0
+    for src, seen in facts.imports.items():
+        for target, name in seen:
+            cands = definers.get(name, [])
+            named = facts.module_files.get(target) if target else None
+            if not cands or (named is not None and named in cands) or len(cands) <= 1:
+                continue
+            fb += 1
+            edges += sum(1 for d in cands if d != src)   # as scout.py:509 does
+            if target and facts.module_files.get(target):
+                resolves_but_undefined += 1
+            else:
+                no_module += 1
+    print(fb, edges, no_module, resolves_but_undefined)
+
+flw takes the branch on 0 imports. pandas takes it on 645, which is 11.0% of its resolved name imports, producing 2,351 edges — the candidate count before `scout.py:509` drops 13 self-edges is 2,364, so the edge count is the smaller number and is the one a header should print. uvicorn takes it on 6, producing 12. Those 645 pandas imports are where the benchmark fixture's 167 came from. One number, printed, is what separates a ranking a reader can trust from one they cannot.
+
+**The measurement falsifies the contract's own statement of the rule, which is why the `contract_edit` below has two changes.** The contract says the edge goes to every definer "only when no module resolves". The branch at `scout.py:506` fires on two causes, because its condition is that no definer sits in the named module — either the module resolves to no file here, or it resolves and defines nothing of that name. Of pandas' 645, 229 are the first and 416 are the second. So "only when no module resolves" is false for 416 of 645 cases in one real repository, and a record that printed the count while leaving that sentence standing would ship a header disagreeing with the contract it is printed under.
+
+The same sentence's last clause fails with it. "A name defined once per package does not edge to every package" holds only where a definer sits in the named module, and 116 of those 416 pandas cases have definers in more than one top-level directory: `asv_bench/benchmarks/ctors.py` imports `DatetimeIndex` from `pandas`, `pandas/__init__.py` resolves and defines nothing of that name, and the edge goes to both `pandas/core/indexes/datetimes.py` and `asv_bench/benchmarks/timeseries.py` — one per package, which is the thing the clause says does not happen. Add the top-level-directory count to the second script to re-take it. The behaviour is unchanged in every case; what was wrong was the two clauses describing it.
+
+All three figures here are taken at this tree, at the revision `git rev-parse HEAD` reports for this checkout, over pandas at `1633b5447e` and uvicorn at `31e3e00`.
+
+**The budget sentence this record leaves standing still holds, and it is worth saying why.** The same component promises at `current.toml:240` that "a scout's budget bounds everything it prints rather than its last section", and this record adds a printed line the budget does not bound. The header has always sat outside it: `scout.py:541` builds `lines` from the header and `:659` joins that list onto `allocate()`'s return, so `allocate()` never sees it and `-n` never counts it. The sentence was written about the sections competing for the budget — `checked-and-bounded-major.toml` introduced it and mentions no header — so a second header line neither weakens it nor needs it narrowed. Nothing on file said this before, which is why it is said here.
+
+**The uvicorn artifact cannot be counted and goes in `--help`.** A dict of `"module:Class"` strings produces no import, so there is nothing to count as unresolved — the scout cannot know the edge was missed. `--help` already has a paragraph for exactly this kind of statement, "What a high rank does not mean", and it names three things a high rank is not. It does not name the two cases both field tests hit: a package `__init__.py` at the top because every file in the package imports it, and an implementation ranked low because something resolves it from a string at runtime. That paragraph is where a reader looks.
+
+**Both scouts, because the contract says both.** `core/scripts/scout.mjs:327-371` carries the same `definers` map and the same every-definer fallback, with the same comment at `:350`, and its header at `:417` prints files, test files and exported definitions. The contract's property above opens "Both scouts", so printing the figure in one and not the other makes a surface that disagrees with itself. The TypeScript tests skip by name when the compiler does not resolve, so its half may go unexercised in a given session, which the run should say rather than report as passed.
+
+**What this does not do.** It does not change how an edge is resolved, in either scout: not the every-definer fallback, not the module-import rule, not the weighting. It does not add a flag to turn any of it off. It does not touch the package-level ranking, where T1 also found `asv_bench/benchmarks` third at 0.076 — that follows from the file ranking and needs no separate fix. It does not address the other T1 finding, that `pandas/__init__.py` ranks first at 0.0677, beyond naming the case in `--help`: that is the documented plain-module-import rule working as stated, and 1,002 files do import `pandas`. And it does nothing about the multi-root research gaps the same field test found, which are their own record.
+"""
+
+contract_edit = """
+Two changes.
+
+One. In the validation and checks component's `properties`, in the sentence beginning "Both scouts rank the file that defines an imported name", replace:
+
+  "and to every definer only when no module resolves — so a re-export barrel still takes none
+  of the score, and a name defined once per package does not edge to every package"
+
+with:
+
+  "and to every definer whenever no definer sits in the module the import named — because that
+  module resolves to no file here, or because it resolves and defines nothing of that name. A
+  re-export barrel still takes none of the score, and a name the named module does define edges
+  to that module's definer alone, whatever other packages define it too"
+
+Two. In the same component's `provides`, replace:
+
+  "A scout says what it did not read: files in languages neither scout parses are counted and
+  named, so a ranking of the minority language in a mixed repository is never mistaken for the
+  repository."
+
+with:
+
+  "A scout says what it did not read and what its ranking rests on: files in languages neither
+  scout parses are counted and named, so a ranking of the minority language in a mixed
+  repository is never mistaken for the repository; and the share of imports that reached a
+  definition is printed with the denominator it is a share of, alongside how many reached every
+  definer of a name rather than one."
+"""
+
+[[decisions]]
+topic = "whether the every-definer fallback is narrowed or measured"
+options = [
+  "measured: print how many imports took it, change no edge",
+  "narrowed: create no edge when the named module is a known external dependency",
+]
+chosen = "measured: print how many imports took it, change no edge"
+rationale = """
+The fallback is what the contract's re-export-barrel property rests on, and the comment at
+scout.py:501-504 states the dependency: a barrel defines nothing, so nothing matches there and
+the edge reaches the real definition instead. Narrowing it by the external-dependency list would
+be a change to a measured, stated property for the sake of one repository's benchmark fixture,
+and the list is built from what the repository imports rather than from what is installed, so a
+first-party module absent from this checkout is indistinguishable from a third-party one. The
+cost of measuring instead is that pandas still ranks a benchmark fixture second and a reader has
+to read the number to know why. That is the user's call to overturn, and it is the one decision
+in this record worth overturning: narrowing the rule is a different record, not a different task
+in this one.
+"""
+
+[[decisions]]
+topic = "what the resolution figure's denominator is"
+options = [
+  "imports naming a module the repository holds",
+  "every import statement, external ones included",
+  "both figures, printed together",
+]
+chosen = "imports naming a module the repository holds"
+rationale = """
+This is the denominator the deleted sentence implies, because sys.path manipulation and dynamic
+imports are both ways an in-repo module fails to resolve, and it is the only one a reader can act
+on: an import of typing.Any was never going to produce an edge and counting it as a miss makes
+the figure a measure of how much of the standard library a repository uses. It is also the
+charitable reading, which matters for a number that will be printed on every run — 68.3% on
+pandas rather than 60.2%, and still short of what --help promised. Printing both was rejected
+because two percentages in a header invite the reader to work out which one matters, which is
+the work the denominator being named is meant to remove.
+"""
+
+[[dag]]
+group = 1
+phase = "the python scout"
+tasks = [
+  { id = "count", desc = "In core/scripts/scout.py, count two things in the edge loop at :496-521 as it already walks every import: how many name imports named a module the repository holds, and how many of those found a definer; and how many resolved name imports took the every-definer branch — the case where no definer sits in the named module, which is facts.module_files.get(target) being None or not among the candidates, with len(candidates) > 1 — together with the number of edges that branch produced, counted after the dst != src test at :509 and not before it, because the candidate count is larger and is not what the graph got: on pandas the two differ by 13. Add nothing to the loop's work beyond two counters: the branch is already taken in the code as written. Do not split the two causes in the printed output — the contract edit states both and one count is enough for a reader." },
+  { id = "header", desc = "Print both on a second header line under the existing one at :535-540, in words that name the denominator rather than leaving it to be inferred: the share and the counts behind it for imports naming a module the repository holds, and the count of imports that reached every definer of a name with the edge count that produced. Keep the first header line exactly as it is — files, test files, lines of code, definitions and the failed-to-parse clause — because the field tests read it and a change there invalidates their records. Print the second line flush-left. It costs no budget whichever way it is indented: -n is spent at scout.py:462 inside allocate(), which iterates sections only, and :659 joins the header onto allocate()'s return, the header itself having been built at :541. What flush-left is for is the tests — tests/test_scout.py:758-767 and tests/test_scout_mjs.py:344-350 both define the budgeted body as out.split(chr(10))[1:] filtered to lines that start with a space, so an indented second header line fails test_the_budget_bounds_the_whole_output at -n 1 while consuming nothing. A test failing with no behaviour behind it is the worst kind to hand an executor.", depends_on = ["count"] },
+  { id = "py-test", desc = "Add tests in tests/test_scout.py over a fixture repository, asserting both figures against counts a reader can verify by hand in the fixture: one import naming an in-repo module that resolves, one naming an in-repo module whose name nothing defines, one naming an external module, and one name defined in two files reached through an unresolvable module. Assert the external import is in neither numerator nor denominator — that is the decision this record took and the one a later reader is most likely to undo by accident.", depends_on = ["header"] },
+]
+
+[[dag]]
+group = 2
+phase = "the typescript scout"
+tasks = [
+  { id = "ts-count", desc = "In core/scripts/scout.mjs, make the same two counts in the edge loop at :340-371, which carries the same definers map and the same every-definer fallback as the Python one with the same comment at :350. Print them under the header at :417 in the same words, adapted to that header's existing format — it prints files, test files and exported definitions and no line count, so match its punctuation rather than the Python one's.", depends_on = ["py-test"] },
+  { id = "ts-test", desc = "Add the equivalent test to whichever file holds the TypeScript scout's tests, built on the same four-import fixture shape. These tests skip by name when the TypeScript compiler does not resolve, so say in the run's report whether they ran or skipped rather than counting a skip as a pass — the contract's property opens 'Both scouts', and a skipped half is a half nothing checked.", depends_on = ["ts-count"] },
+]
+
+[[dag]]
+group = 3
+phase = "what help claims"
+tasks = [
+  { id = "help-figure", desc = "In cli/flw.py, delete the sentence 'Expect roughly 85-90% of imports to resolve.' from the flw scout description and keep the sentence after it about sys.path manipulation and dynamic imports, which is true and is the reason a share is below 100%. Replace the deleted claim with one sentence saying the command prints the share and what its denominator is. The figure is met on none of the three repositories measured in approach, under either reading of its denominator, which is why it goes rather than being corrected to a new number — a second unsourced figure would be the same defect with different digits.", depends_on = ["ts-test"] },
+  { id = "help-cases", desc = "In the same description, extend the 'What a high rank does not mean' paragraph with the two cases both field tests hit, in one sentence each: a package's __init__.py tops the ranking because every file in the package imports it, which is the documented module-import rule and not a signal about that file; and an implementation resolved from a string at runtime — a registry of 'module:Class' values, a plugin table, a dynamic import — produces no edge at all and ranks as a leaf, which no number in the output can catch because there is no import to count as unresolved. Name uvicorn's config.py as the measured instance, with the two ranks, so the sentence carries evidence rather than a caution.", depends_on = ["help-figure"] },
+  { id = "verify", desc = "Run flw validate, then flw test --no-stream, saying whether the TypeScript tests ran or skipped. Then re-run the two field-test measurements and put the new header line beside the figures in plans/oss-field-test.md: flw scout ~/_projects/oss-fixtures/pandas and flw scout ~/_projects/oss-fixtures/asgi/uvicorn, both still on disk. The expected shares are 68.3% for pandas and 62.6% for uvicorn, and 645 and 6 imports respectively reaching every definer; a figure that disagrees with those means the counters count something other than what approach measured, so compare before reporting the run clean.", depends_on = ["help-cases"] },
+]
