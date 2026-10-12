@@ -4,6 +4,8 @@ summary = "flw validate refuses a record the contract has neither applied nor re
 
 sources = [
   "plans/design-multi-repo.md",
+  ".flw/reports/2026-10-10T0945-eng-footprint.md",
+  ".flw/reports/2026-10-10T0945-eng-adversarial.md",
 ]
 
 approach = """
@@ -36,9 +38,17 @@ flw. So the areas come from `[spec] areas` in the project's own flw config, and 
 that declares none gets no check** — the same posture `flw context` already takes toward
 missing configuration, and the reason punto and mortgauge are untouched by this record.
 
-`cli/flw.py:2769` already resolves `[paths] reports` from config and passes it to
-`validate_file` as a keyword; `areas` follows that path exactly and adds no new way for
-configuration to reach the validator.
+**`areas` is read from the project's own config and from nothing else.** A first draft of
+this record said it should follow `[paths] reports`, which is resolved by `_section_config`
+at `cli/flw.py:2436`. That reader takes `$FLW_HOME/config.toml` as an underlay, so one
+machine's area list would apply to every project on it and be right for at most one — which
+contradicts this record's own assumption that the areas are a fact about one project. It
+also catches only `TOMLDecodeError` and `UnicodeDecodeError`, so a `[spec]` key that is not
+a table reaches `merged.update()` and raises `ValueError: dictionary update sequence element
+#0 has length 1; 2 is required` out of five commands. `project_roots` at `cli/flw.py:2466`
+and `knowledge_dir` at `:3446` are the shape to follow: the project's own file, read once,
+with a non-table refused by name. Both are deliberately project-only and each is pinned by
+a test.
 
 **Scoped to records the contract has neither applied nor retired.** 41 of the 43 applied
 records fail the rule, and a record's landing commit is derived by
@@ -50,8 +60,20 @@ Retired matters for the same reason and is easy to miss. `skills-add-umbrella-pl
 first and adds `retires`; a retired record is never applied, so a refusal keyed on `applied`
 alone would bind it permanently with no repair — it cannot be applied, because it was
 abandoned, and renaming it dangles the `retires` entry that the same ancestor refuses.
-`skills-add-umbrella-plan` already builds that filter inside `unapplied()`; this reuses it
-rather than writing a second one.
+**The retired set is computed in `cli/flw.py` and handed down, not read out of `stale.py`.**
+A first draft of this record told the refusal to reuse the filter
+`skills-add-umbrella-plan` builds inside `unapplied()` at `core/scripts/stale.py:356`. That
+cannot be executed. `stale.py:37` already does
+`from validate_spec import DEFAULT_REPORTS, citation`, so `validate_spec` importing `stale`
+is a cycle; and `check_version(record, name, *, reports_dir, applied)` at
+`validate_spec.py:408` receives one record at a time and never the set, so it could not read
+another record's `retires` even if the import resolved. `cli/flw.py` sits above both modules
+and already reads the contract for `applied` in the same handler. It walks the records once
+through `validate_spec.load_records`, which returns each record's parsed document, unions the
+`retires` entries of the records `applied` names, and passes the result down beside `applied`
+by the keyword route that already exists. Nothing imports anything new, and before
+`skills-add-umbrella-plan` lands no record carries `retires`, so the set is empty — which is
+the right answer then.
 
 **When the refusal fires, stated precisely, because the first draft got this wrong.** It
 fires on the first `flw validate` of a freshly written record, inside the spec session that
@@ -70,11 +92,15 @@ Five of the six were dead code, and the tests a draft specced for them would hav
 the belt deleted. Only `-is-not-` can fire on a name the area rule admits, as in a
 hypothetical `skills-a-shape-is-not-a-judgment`, and it is kept for that alone.
 
-The refusal message cites `core/styles/terse_prose.md:69` and not `:66`. The rule text at 66
-names "X is not Y, it is Z" and "not X but Y" — two clauses — and a bare "X is not Y" is not
-in it. What bans the bare form is the worked example three lines down, "Bad: Minimal is not
-partial.", which is the exact shape of `a-shape-is-not-a-judgment`. A message citing the rule
-text would claim something the rule text does not say.
+**The refusal message quotes the example and carries no line number.** What bans the bare
+"X is not Y" is not the rule text under "No balanced aphorisms" — that names "X is not Y, it
+is Z" and "not X but Y", both two clauses — but the worked example three lines below it,
+`Bad: "Minimal is not partial."`, which is the exact shape of `a-shape-is-not-a-judgment`. So
+citing the heading would claim something the rule text does not say. Citing a line number is
+the other wrong answer: `eng-footprint` measured that example at line 66 for five commits and
+at 69 since `9731e1a`, and nothing re-reads a program message, so one inserted line above it
+would have the refusal cite the "Good:" example with no check failing. Quoting the example
+text is stable under both, and it is what a reader greps for.
 
 **What this does not do.** It does not check that the area named is the part changed. The
 check compares one segment against a declared list and reads no paths, so a record named
@@ -91,7 +117,9 @@ Two changes.
   its name does not open with one of the areas the project declares in its flw config, and
   refuses nothing on that ground in a project that declares no areas. A record already
   applied is never refused for this, because its landing commit is derived from the name in
-  the contract's history and renaming it would discard that."
+  the contract's history and renaming it would discard that. Inside the same check it also
+  refuses a name containing -is-not-, the construction the writing style bans by name, so a
+  project that declares no areas is refused nothing on either ground."
 
 2. Add to `assumptions`:
 
@@ -117,6 +145,45 @@ install, hook, debug and tab. Slugifying component names does not work either �
 `surface`, so a reader could not get from the contract to the list. Config is where flw
 already keeps per-project facts, and defaulting to no check means adopting flw never costs a
 project a refusal it did not ask for.
+"""
+
+[[decisions]]
+topic = "which config reader [spec] areas goes through"
+options = [
+  "the project's own file only, following project_roots at cli/flw.py:2466",
+  "_section_config, which is how [paths] reports is resolved",
+]
+chosen = "the project's own file only, following project_roots at cli/flw.py:2466"
+rationale = """
+_section_config takes $FLW_HOME/config.toml as an underlay, so an area list left in a
+machine-wide file would apply to every project on the machine and be right for at most one.
+This record's own assumption says the areas are a fact about one project, so routing them
+through a merged reader contradicts the sentence it adds to the contract. project_roots and
+knowledge_dir are already project-only for the same reason and each is pinned by a test, so
+the exception is established rather than new. _section_config also catches only
+TOMLDecodeError and UnicodeDecodeError: a [spec] key that is not a table reaches
+merged.update() and raises ValueError out of flw doctor, flw validate, flw stale --owed,
+flw test and flw scout. That defect is not this record's to fix, and adding a sixth caller
+to it would be.
+"""
+
+[[decisions]]
+topic = "where the retired set is computed"
+options = [
+  "in cli/flw.py from validate_spec.load_records, passed down as a keyword beside applied",
+  "inside check_version, by importing unapplied() from stale.py",
+  "inside check_chain, which already loads every record",
+]
+chosen = "in cli/flw.py from validate_spec.load_records, passed down as a keyword beside applied"
+rationale = """
+Importing stale.py into validate_spec.py is a cycle: stale.py:37 already does
+`from validate_spec import DEFAULT_REPORTS, citation`, and the comment under it says
+validate_spec sits at the bottom of the chain for exactly this reason. check_version's
+signature is the second obstacle — it takes one record and never the set, so it cannot see
+another record's retires whatever the import does. check_chain does hold the whole set and
+would work, but every other per-record refusal lives in check_version and splitting one
+rule across both functions buys nothing. cli/flw.py sits above both modules, already reads
+the contract for applied in the same handler, and already has the keyword route.
 """
 
 [[decisions]]
@@ -171,18 +238,20 @@ of truth for a record's identity, which is the thing the name exists to be.
 group = 1
 phase = "the refusal"
 tasks = [
-  { id = "config", desc = "In cli/flw.py, resolve [spec] areas from the project's flw config and pass it to validate_spec.validate_file as an `areas` keyword, following the shape cli/flw.py:2769 already uses for [paths] reports. A missing or empty key resolves to no areas." },
-  { id = "signature", desc = "Thread `areas` through validate_file into check_version beside the existing reports_dir and applied keywords. Default it to no areas, so a caller that does not pass it — and a directory with no config — gets no check rather than a refusal.", depends_on = ["config"] },
-  { id = "refusal", desc = "In check_version, refuse a record whose name does not open with one of the declared areas followed by a hyphen, when areas is non-empty and the record is neither in `applied` nor retired by an applied record. Reuse the retired filter skills-add-umbrella-plan builds inside unapplied() rather than writing a second one. A legacy v<major>.<minor> name is exempt, as it is for every other rule.", depends_on = ["signature"] },
-  { id = "aphorism", desc = "Add one shape to the same refusal: a name containing -is-not- anywhere. The message cites core/styles/terse_prose.md:69, the worked example 'Bad: Minimal is not partial.', and not the rule text at :66, which names only the two-clause forms and does not cover a bare X-is-not-Y. One shape, not six — the other five cannot fire on a name the area rule admits.", depends_on = ["refusal"] },
-  { id = "tests", desc = "In tests/test_validate_spec.py: no areas declared refuses nothing; a declared area list refuses an unapplied record outside it; the same name applied is not refused; a retired record is not refused; a legacy stem is exempt; and skills-a-shape-is-not-a-judgment is refused by the belt while skills-add-umbrella-plan is not. Assert the message names the declared areas, since a refusal that does not say what is wrong gets worked around rather than fixed.", depends_on = ["aphorism"] },
+  { id = "config", desc = "In cli/flw.py, read [spec] areas from the project's own flw config and from nothing else. Follow project_roots at cli/flw.py:2466, not _section_config at :2436: open flw_dir(root)/config.toml, refuse a [spec] that is not a table and an areas that is not an array of strings, naming the file and the key in each refusal. A missing file, a missing key or an empty list resolves to no areas. _section_config is wrong here for two reasons stated in the approach — it underlays $FLW_HOME/config.toml, and it tracebacks on a non-table section." },
+  { id = "retired", desc = "In the same cli/flw.py handler that already reads the contract for applied, build the retired set: walk the records once with validate_spec.load_records(specs/versions) and union the retires entries of every record whose own name is in applied. Only an applied record retires anything, which is skills-add-umbrella-plan's own gate. Before that record lands nothing carries retires and the set is empty." },
+  { id = "signature", desc = "Thread `areas` and `retired` through validate_file into check_version beside the existing reports_dir and applied keywords. Default both to empty, so a caller that passes neither — and a directory with no config — gets no check rather than a refusal.", depends_on = ["config", "retired"] },
+  { id = "refusal", desc = "In check_version, refuse a record whose name does not open with one of the declared areas followed by a hyphen, when areas is non-empty and the record's name is in neither `applied` nor `retired`. Both sets arrive as keywords and are not derived here. A legacy name is exempt, as it is for every other rule: skip a name matching LEGACY_NUMBER at validate_spec.py:300, which is defined in this module and needs no import. Nine legacy records — 1.0 through 3.4 — are in neither applied nor retired, because the contract's applied list starts at 4.0 and says so at current.toml:5, so without the exemption this rule refuses all nine and flw validate is red the moment the config key exists. Do not import stale: stale.py:37 imports from this module, so the reverse is a cycle, and check_version never receives the record set anyway.", depends_on = ["signature"] },
+  { id = "aphorism", desc = "Add one shape to the same refusal: a name containing -is-not- anywhere. The message cites core/styles/terse_prose.md and quotes the worked example it rests on — Bad: 'Minimal is not partial.' — and carries no line number. eng-footprint measured that line moving from 66 to 69 at 9731e1a, and a program message is the one copy nothing re-reads, so an inserted line above it would make the refusal cite the Good: example with no check failing. Quote the example rather than the heading 'No balanced aphorisms', whose rule text names only the two-clause forms and does not cover a bare X-is-not-Y. One shape, not six — the other five cannot fire on a name the area rule admits.", depends_on = ["refusal"] },
+  { id = "tests", desc = "In tests/test_validate_spec.py: no areas declared refuses nothing; a declared area list refuses an unapplied record outside it; the same name applied is not refused; a record named in an applied record's retires is not refused; a record named in an unapplied record's retires is still refused; a legacy stem is exempt; and skills-a-shape-is-not-a-judgment is refused by the belt while skills-add-umbrella-plan is not. Assert the message names the declared areas, since a refusal that does not say what is wrong gets worked around rather than fixed. In tests/test_cli.py: a [spec] that is not a table and an areas that is not an array of strings are each refused by name, and a ~/.flw/config.toml declaring areas leaves a project that declares none unchecked.", depends_on = ["aphorism"] },
+  { id = "docstring", desc = "Correct core/scripts/validate_spec.py's module docstring at :9-12. It says a version file gets checked for lineage, 'its base against the previous file', and that validating one version file 'walks the whole chain'. Both claims are false and two docstrings in the same file say so: check_version:418 says base 'is checked nowhere here' and check_chain:537 says 'There is no chain any more.' This record's third decision rests on base not being validated, so a reader checking that rationale against the module docstring reads the opposite of it." },
 ]
 
 [[dag]]
 group = 2
 phase = "the instruction"
 tasks = [
-  { id = "skill", desc = "Rewrite the naming paragraph in core/skills/flw-spec/SKILL.md for the area-verb-object rule, with examples that satisfy it and a line saying the areas come from the project's config. Carry forward, do not delete, the paragraph's existing rationale that a name never changes afterwards because two people speccing at once pick different names and neither is renumbered at merge — it survives nowhere else in core/skills/, core/shared/ or the contract.", depends_on = ["tests"] },
+  { id = "skill", desc = "Rewrite the naming paragraph in core/skills/flw-spec/SKILL.md for the area-verb-object rule, with examples that satisfy it and a line saying the areas come from the project's config. Carry forward, do not delete, the paragraph's existing rationale that a name never changes afterwards because two people speccing at once pick different names and neither is renumbered at merge. It survives in three other places — current.toml:200, core/skills/flw-execute/SKILL.md:98 and core/schemas/version.schema.json's name description — so this is about the reader of this paragraph rather than about the last copy of the reason.", depends_on = ["tests"] },
   { id = "config-line", desc = "Hand the user two edits rather than making them, both to files in .flw/, which sits in no component's paths and so is outside what any run may touch: the [spec] areas lines for .flw/config.toml — cli, skills, scripts, schemas, surface, knowledge — and the replacement first line of .flw/extensions/flw-spec.md, which currently reads 'One record per version under specs/versions/, named for what it does.' That file is printed at every flw-spec opening, so leaving it would have an author read the superseded instruction, name the record by it, and then meet the refusal. Say in the report that the check does nothing here until the config key exists.", depends_on = ["skill"] },
-  { id = "verify", desc = "Run flw validate, then flw test --no-stream. Before the config key exists, validate must stay at exit 0 with the check inert. After the user adds it, the four records in flight are area-named and the 43 applied ones are exempt, so it must still be 0. A red run means the scoping is wrong, not the names.", depends_on = ["config-line"] },
+  { id = "verify", desc = "Run flw validate, then flw test --no-stream. Before the config key exists, validate must stay at exit 0 with the check inert. After the user adds it, every record in flight is area-named and the applied ones are exempt, so it must still be 0. A red run means the scoping is wrong, not the names.", depends_on = ["config-line"] },
 ]
