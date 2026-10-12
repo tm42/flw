@@ -1,0 +1,216 @@
+name = "say-what-the-survey-creates"
+base = "say-who-does-what"
+summary = "flw-research asks before writing a flw directory into each declared member rather than only into the project it was pointed at, holds every members note category together with one key, stops calling test collection free, and pays for the additions by cutting two passes a field test showed produce nothing"
+
+sources = [
+  "plans/oss-field-test.md",
+]
+
+approach = """
+**Where this came from.** The field test recorded in `plans/oss-field-test.md`, under "T2 result"
+and the section after it. A fresh agent with no flw context ran `/flw-research` against
+`~/_projects/oss-fixtures/asgi`, a hand-made parent declaring starlette at `96d5023`, uvicorn at
+`31e3e00` and httpx at `b5addb6` as members. It wrote 16 files and ran nothing inside the three
+checkouts. The survey itself was good; what it reported back was where the instructions sent it
+wrong, and every item below is from that report rather than from reading the skill again.
+
+**This record waits for `skills-move-minority-sections`, and that is what makes the bytes work.**
+`core/skills/flw-research/SKILL.md` is 20,853 bytes against the 21,000 that
+`core/scripts/budget.py` enforces, so 147 bytes are free today and the additions below need well
+over a thousand. An earlier draft of this record proposed paying for them with the two cuts the
+field test justified; measured, those recover about 670 bytes and the additions cost 1,400 to
+2,200, so that did not work. `skills-move-minority-sections` is in flight and moves 4,097 bytes
+of cross-repo passages out of this file into `core/skills/flw-research/references/cross-repo-survey.md`,
+by its own measurement at `:25-29`, leaving roughly 4,000 bytes of headroom and a reference file
+that carries no ceiling at all. So this record does not start until
+`skills-move-minority-sections` is named in the contract's `applied` list, and the ceiling stops
+being the constraint once it is. That dependency cannot live in `base`, which the schema defines
+as the contract state a record was specced against and says orders nothing — `applied` does the
+ordering, and it is a flat list with no edges. So it lives in this paragraph and in the first
+task's stop condition, which is the only form an executor acts on. One consequence to expect
+rather than repair: once the move lands and edits the contract, this record's `base` names a
+contract state that has moved, which is the condition the field exists to report. If
+`flw validate` flags it, re-spec `contract_edit` against the new state rather than editing `base`
+by itself. The two cuts stay, because the field test showed those passes produce nothing,
+which is a reason on its own. `budget.py` output still goes in the run report, because the
+declared check at `specs/current.toml:331` is what would catch an edit that overran.
+
+**1. The skill never says to create a member flw directory.** It says the store is per member
+and the survey is one pass per member, which together require one, and no sentence covers
+creating it. The paragraph that does cover creating a flw directory is at `:221`, "Project root,
+when there is no flw directory yet", and it is written for the single root: at this parent the
+directory already existed, so the paragraph was dead and the three member directories were
+created with no gate at all. The run said so plainly: it created three, and had it been wrong
+about that, nothing in the skill would have stopped it. These are third-party checkouts. The
+gate the contract already promises for the project directory has to cover the member ones.
+
+**2. The survey splits the note store by member, silently, and this follows from 1.**
+`_kb_category` at `cli/flw.py:2860` reads `[kb] category` and falls back to the resolved root's
+directory name. Writing a member config makes that member a project root, so the category
+follows: the field test's opening printed `notes: category asgi` when no member had a flw
+directory, and after `starlette/.flw/config.toml` was written, a run from inside `starlette/`
+printed `notes: category starlette`. Nothing reports the change. The store does not hide the
+notes, because the resolved category sorts first and never filters, but a note written from
+inside a member is filed under a different category than one written at the parent, and an
+explicit `-c` then separates them. The fix is one key held to one value across the parent and
+every member config. The key is not in this skill at all: `[kb] category` appears nowhere in
+`SKILL.md`, whose config table at `:51-56` has rows for `[tests]`, the two extension paths and
+the knowledge directory, and whose nearest mention is `:234`, "the note-store category the user
+chose". So this introduces the key rather than connecting one the skill already documents.
+
+**3. The skill calls test collection free, and collection is execution.** The bullet spans
+`:125-127` and the claim is on `:127`: "Most runners will enumerate without running — `pytest --collect-only -q | tail -1` ... and that costs
+nothing." Collection imports every test module and runs every `conftest.py` and module-scope
+fixture. All three members set `filterwarnings` in `pyproject.toml`, so collection can also fail
+on a warning raised at import. An agent told this costs nothing will run it in a session that
+was told to run nothing, which is what the field test had to be told not to do by hand.
+
+**4. `[tests] yours` records a command and nothing about why.** The run could not run the checks
+and had to put the reason in a TOML comment it invented. A later reader seeing an entry cannot
+tell "this session was forbidden to run it" from "this needs hardware we do not have" from "this
+hung last time", and those have different consequences. One clause in the skill telling the
+agent to write the reason beside the command costs little and is what the run did anyway.
+
+**5. The ignore-lines instruction has no target in either direction here.** At `:237`: "Propose
+the ignore lines in the same block ... in whatever file this VCS ignores with." The parent is not
+a git repository at all — `git -C . rev-parse --show-toplevel` returns `fatal: not a git
+repository` — so there is no parent ignore file, and the three places the skill says assume the
+store is ignored are assuming something that cannot be arranged there. In each member the ignore
+file exists and belongs to upstream. The honest instruction is to say which lines go where and
+leave them, which is roughly what the run did, and to stop assuming the store ends up ignored.
+
+**6. The pairwise-intersection rule, which is the one addition that is not a repair, and which
+lands in the reference file rather than the skill.** `skills-move-minority-sections:120` cuts the
+duplicated-literal grep verbatim into `references/cross-repo-survey.md`, so after that record
+lands neither that passage nor the rarity sentence twelve lines below it is in `SKILL.md`. Both
+additions in this group are written against the reference file for that reason. The
+route-decorator grep at `:137` found nothing: current starlette registers routes as `Route` and
+`Mount` objects rather than with decorators, so `@app.route` and `@router.get` return zero hits,
+and that bullet is written for FastAPI and Express. What found the ASGI seam was the duplicated
+literal sweep at `:157`, run verbatim — the starlette-and-uvicorn intersection minus httpx came
+back as the ASGI protocol vocabulary and almost nothing else. The run named the sharper rule the
+skill does not state: in an N-repo system the pairwise intersections minus the full intersection
+are where the seams are, because the three-way intersection is HTTP header names and environ
+keys. One sentence, and it is the highest-value line the field test produced.
+
+**7. The two cuts, both justified by what they produced.** The compose and k8s read at `:116` is
+promoted ahead of everything else for a multi-repo system. Across three checkouts it returned one
+file, `httpx/.github/CONTRIBUTING.md` — no compose file, no Dockerfile, no manifest, no
+`.env.example`, no Makefile, no tox.ini, no noxfile — because a library does not ship the
+topology of a system someone builds with it. The promotion goes and the README sentence in the
+same paragraph stays, since that one is about reading and discounting a README and is unaffected.
+The cross-repo churn variant at `:149-152` offers same-day commits in two repositories as a
+seam-change detector and ships a shell loop for it. On three independently released upstream
+libraries a same-day commit is coincidence, and the useful part was one `git log -1` per member
+for its HEAD date and version. Bound it to repositories released together rather than deleting
+the idea, in fewer bytes than the pitch and the loop take now.
+
+**What this does not do.** It does not touch the CLI findings from the same field test, which
+belong to a different component and are not specced: `flw doctor` printing `exists` for a member
+and nothing about whether that member has its own config, store or extensions; `flw kb search`
+printing the resolved root's category on the line above its no-match message, which is what led
+the run to stop searching; the same command's "check the category and tag names above" when
+nothing above lists them; `flw know` taking `--root` where `flw scout` takes its path
+positionally; `flw know --stamp` reporting "httpx, starlette, uvicorn has uncommitted changes".
+It does not touch `flw know --stamp`'s advice to commit before stamping, which the field test
+showed is permanently untakeable for a store in a third-party checkout — the `+0 -0` half of that
+is already specced in `a-verdict-needs-a-measurement`. It does not rewrite
+`core/skills/flw-research/references/knowledge-example/`, which the run said covers neither a
+member store of six files nor a package with four interchangeable implementations of one job; a
+reference carries no byte ceiling, so that is a real gap and a separate record. And it does not
+delete the parent `flw-spec.md` from the extensions table at `:258`, which the run called wasted
+at a parent holding nothing but a flw directory: the table is right for an ordinary repository
+and the fix is a condition, which costs bytes this record does not have.
+"""
+
+contract_edit = """
+One change, to the sentence at `specs/current.toml:207`, which is one unwrapped line in the file.
+Match it by its opening — "A user can run flw-research on a repository that has no flw directory
+yet" — rather than by searching for the block below, which is hard-wrapped here for reading and
+will not match the file byte for byte. Replace the whole sentence, whose text is:
+
+  "A user can run flw-research on a repository that has no flw directory yet, which is the
+  ordinary case for a repo nobody set up: the skill says which directory it is about to create
+  and gets a yes before writing, the same gate flw-spec already applies to specs/, and proposes
+  the ignore lines alongside the config it writes."
+
+with this, also as one line in the file:
+
+  "A user can run flw-research on a repository that has no flw directory yet, which is the
+  ordinary case for a repo nobody set up: the skill says which directory it is about to create
+  and gets a yes before writing, the same gate flw-spec already applies to specs/, and that gate
+  covers a directory in each declared member as much as one in the project itself, because a
+  member is usually a checkout the user does not own. It proposes the ignore lines alongside the
+  config it writes wherever there is a file to put them in, and says where they go rather than
+  assuming the store ends up ignored. Every store a survey creates is filed under one note
+  category, declared in each config it writes, so a survey does not leave the store partitioned
+  by which member a session happened to stand in."
+"""
+
+[[decisions]]
+topic = "how the additions fit under the skill file's 21,000-byte ceiling"
+options = [
+  "land after skills-move-minority-sections, which frees 4,097 bytes of this file",
+  "pay for them with the two cuts the field test justified",
+  "raise the ceiling for this one skill, as say-who-does-what does for the style file",
+]
+chosen = "land after skills-move-minority-sections, which frees 4,097 bytes of this file"
+rationale = """
+Paying with the cuts was this record's first answer and it does not add up. Measured: the compose
+passage is 467 bytes and the task keeps its README sentences, so about 270 come back; the churn
+passage is 367 and the task keeps its first half, so about 250; and the collection correction is
+not a saving at all, because the sentence replacing it is longer than the two lines it replaces.
+About 670 against additions of 1,400 to 2,200, with the category item alone over 400. Raising the
+ceiling would be the second ceiling change in flight after say-who-does-what raises the style
+file's, which makes the budget a number nobody defends. Waiting costs nothing and needs no new
+number: skills-move-minority-sections is already written, already in flight, and already measured
+the 4,097 bytes it moves. The cuts stay on their own evidence rather than to pay for anything.
+The cost of waiting is an ordering this record cannot enforce, because base orders nothing and
+check_chain does not read it — so the dependency is stated here and in the first task.
+"""
+
+[[decisions]]
+topic = "how every member store ends up under one note category"
+options = [
+  "the survey writes [kb] category into the parent config and every member config",
+  "the resolved root's category stops being the fallback for a declared member",
+]
+chosen = "the survey writes [kb] category into the parent config and every member config"
+rationale = """
+The second is a code change in _kb_category at cli/flw.py:2860 and would make a member's category
+depend on whether some parent declares it, which is a rule nobody reading one config could see.
+The key already exists and is documented in the skill's own config table; what is missing is the
+instruction to write it. Choosing the value is the user's, as the field test's own run said when
+it declined to write the key for exactly that reason, so the skill asks rather than picks and the
+default it offers is the parent directory's name, which is what a single-root project already
+gets.
+"""
+
+[[dag]]
+group = 1
+phase = "what the survey creates"
+tasks = [
+  { id = "members", desc = "Before anything else, check that skills-move-minority-sections has landed: core/skills/flw-research/references/cross-repo-survey.md exists and SKILL.md is roughly 4,000 bytes smaller than 20,853. If it has not, stop and say so — every addition in this record needs the headroom that record frees, and base orders nothing that check_chain enforces. Then, in core/skills/flw-research/SKILL.md, extend the paragraph at :221 so the gate it describes covers a flw directory in each declared member and not only one in the project the skill was pointed at. Say that a member is usually a checkout the user does not own, name all of the directories about to be created in one block, and get one yes for the set rather than one per member. The existing paragraph is written for the case where the project has no flw directory; keep that and add the member case to it rather than writing a second paragraph." },
+  { id = "category", desc = "In the same file, in the step 4 passage about [knowledge] dir at :278, say that a survey of a project with [project.roots] writes [kb] category to the same value in the parent config and in every member config, because a member config makes that member a project root and the category otherwise follows the directory name. Offer the parent directory's name as the default and ask rather than pick, since the value is the user's. Name the consequence in one clause: without the key a note written from inside a member is filed under a different category than one written at the parent. The key is new to this file — [kb] category appears nowhere in it and the config table at :51-56 has no row for it — so this introduces it rather than connecting something already documented, and the table gets a row if the bytes allow.", depends_on = ["members"] },
+  { id = "collection", desc = "In the same file, in the bullet at :125-127 whose last line carries the claim, delete the claim that enumerating tests costs nothing, along with the three enumerate commands if the bytes are needed. Replace with one sentence: collection imports every test module and runs every conftest.py and module-scope fixture, so it is execution and belongs in the same judgement as running the suite. Keep the question itself — how many tests and how long — since the answer is still worth having where it can be had. This task is not a byte saving: the two lines carrying the claim are 166 bytes and the replacement sentence is about as long on its own, so do not count it against the additions.", depends_on = ["category"] },
+  { id = "reason", desc = "In the same file, where [tests] yours is described at :143 and in step 4, add one clause saying to record why a check is in yours beside the command, because a reader cannot otherwise tell a session that was forbidden from a check that needs hardware from one that hung. Put it wherever it costs fewer bytes of the two places.", depends_on = ["collection"] },
+  { id = "ignore", desc = "In the same file at :237, change the ignore-lines instruction so it does not assume there is a file to propose into or that the store ends up ignored. Two cases the field test hit: a parent that is not a repository at all, where there is no ignore file, and a member whose ignore file belongs to upstream. In both the instruction is to say which lines go where and leave them. Keep the lines themselves and keep following [knowledge] dir when the store has moved.", depends_on = ["reason"] },
+]
+
+[[dag]]
+group = 2
+phase = "what the sweep is for"
+tasks = [
+  { id = "intersections", desc = "In core/skills/flw-research/references/cross-repo-survey.md, which skills-move-minority-sections creates and into which it cuts the duplicated-literal grep verbatim, add the rule the field test produced, in one sentence: in a system of more than two repositories the pairwise intersections minus the full intersection are where the seams are, because what every repository shares is HTTP header names and environ keys and what exactly two share is their contract. This is the line that found the ASGI seam and it is the most valuable addition in the record. Put it next to the sentence about ordering by rarity, which it sharpens and which moves with that passage. If skills-move-minority-sections has not landed, stop and say so rather than writing into SKILL.md at :157: the passage is 1,279 bytes that record moves, and editing it in both places is how two copies start disagreeing." },
+  { id = "decorators", desc = "In the same reference file, in the moved framework-grep bullet, say in one clause that the framework names in that bullet are examples and that a framework registering routes as objects rather than with decorators produces no hits — starlette passes Route and Mount objects to the application, so @app.route and @router.get return zero there. Do not remove the framework names: they work where the framework is one of them, and the bullet says so already. If bytes are short, this task is the one to drop, because the intersections sentence covers the same ground from the side that worked.", depends_on = ["intersections"] },
+]
+
+[[dag]]
+group = 3
+phase = "what the cuts pay for"
+tasks = [
+  { id = "compose", desc = "In core/skills/flw-research/SKILL.md at :116-121, remove the promotion of docker-compose.yml, k8s manifests and .env.example ahead of everything else for a multi-repo system, and the sentence calling a compose file the machine-readable system diagram. Across the three field-test checkouts that read returned one file and no topology, because a library does not ship the topology of a system someone builds with it. Keep the last two sentences of the paragraph, about reading each README and then discounting it, which are unaffected and still right. Leave the compose file in the ordinary first-read list in step 2 if it is not there already." },
+  { id = "churn", desc = "In the same file at :149-152, bound the cross-repo churn variant rather than deleting the idea: same-day commits in two repositories indicate a seam change only where somebody releases them together, and on independently released upstreams the rate is coincidence. The shell loop can go, which is most of the bytes. Keep the paragraph's first half, which warns that churn is not a ranking substitute and is often inverted, since that is the part the field test did not dispute.", depends_on = ["compose"] },
+  { id = "budget", desc = "Run .venv/bin/python core/scripts/budget.py and paste its report. The file was 20,853 of 21,000 before this record and skills-move-minority-sections moves 4,097 bytes of it into the reference file, so the report is the evidence that this record landed in the headroom that record created rather than over the ceiling. If it is over, that record has not landed and this one should not have run: say so rather than cutting tasks to fit.", depends_on = ["churn", "decorators", "ignore"] },
+  { id = "verify", desc = "flw validate, then flw test --no-stream. Then run flw doctor, which reports whether an extension is read by an installed skill and is the one check that would notice a skill file broken by an edit. Say in the report that nothing was re-run against the ASGI fixture, because this record changes instructions rather than code and the fixture cannot tell whether an instruction is better.", depends_on = ["budget"] },
+]
