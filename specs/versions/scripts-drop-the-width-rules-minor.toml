@@ -1,0 +1,228 @@
+name = "scripts-drop-the-width-rules"
+base = "skills-flag-what-drifted"
+summary = "flw stops measuring how wide a reply is, because the style no longer asks for a width, and measures the trailing double spaces it still forbids with one rule named the same in a reply as in a file — and every document that stated the old pair of inverted rules is brought to what the style now says"
+
+sources = [
+  ".flw/reports/2026-10-10T0945-eng-correctness.md",
+]
+
+approach = """
+**What the style now says.** `core/styles/terse_prose.md:193` reads "Write each paragraph as
+one line. No hard wrap and no trailing double spaces. The width is the reader's, set by their
+terminal or their editor." It replaced three paragraphs that asked for the opposite in a
+reply: hard wrap at 120 columns, two trailing spaces on every line except a paragraph's last.
+That edit is in the working tree and uncommitted; this record is the agreement it needed.
+
+The same edit adds a second paragraph, which is not about width and which this record covers
+rather than letting it ride along uncommented: "**Match the shape to the question.** A short
+question gets prose. Headings are useful when the reply holds several categories the reader will
+move between. Length is not a reason to add them." The decision below settles it. The file is now
+at 9,908 of its 10,000-byte ceiling, so a task should assume there is no room to add to it.
+
+**The checker still enforces the deleted rule.** `core/scripts/style_lint.py:299` reports
+`over-120` on any line past `WRAP_COLUMNS = 120`, and `:276` reports `missing-two-spaces` on
+every line but the last of any paragraph `flush()` sees with two or more lines. Measured at
+the working tree, by rewriting each prose block of the style file to one line and running the
+reply set over the result:
+
+    import sys, pathlib
+    sys.path.insert(0, "core/scripts")
+    import style_lint
+    src = pathlib.Path("core/styles/terse_prose.md").read_text()
+    blocks = [b for b in src.split(chr(10) * 2)]
+    joined = (chr(10) * 2).join(
+        b if b.startswith(("    ", "```", "-", "|", "#", ">")) else " ".join(b.split())
+        for b in blocks
+    )
+    print({k: len(v) for k, v in style_lint.reply_findings(joined).items() if v})
+
+35 `over-120` findings, longest line 437 columns, on prose written exactly as the style now
+asks. So `flw style check` reports compliance as the violation, and all 819 tests stay green
+while it does: five tests at `tests/test_style_lint.py:279-308` pin the two rules, which
+`eng-correctness` counted as six assertions.
+
+**`missing-two-spaces` can only fire on prose that already broke the new rule.** `flush()`
+at `:273` needs `len(paragraph) >= 2`, and one line per paragraph never reaches it. The one
+finding the run above leaves is a wrapped bullet's continuation lines — `eng-correctness`
+reported 0 here, measuring a cleaner join than mine. Either way the rule survives only to fire
+on a paragraph an agent broke by accident, and what it then asks for is the trailing spaces the
+style forbids. Removing it takes `flush()`, the `paragraph` list and the `own_block` partition
+with it, because nothing else reads them: `fence-untagged` and the vocabulary rules do not.
+
+**What stays.** `FILE_RULES` at `style_lint.py:61-70` keeps `trailing-spaces` unchanged. The
+vocabulary rules are untouched, `flw style lint` is untouched, and the contract's sentence
+about document geometry at `current.toml:120` is still true as written.
+
+**The reply set gains `trailing-spaces`, which is why this is not simply a deletion.** The style
+at `:193` forbids the pair in a reply as well as in a file — "No hard wrap and no trailing
+double spaces" — and `missing-two-spaces` is the only rule that reads a reply's trailing
+whitespace today. Removing it leaves a stated rule nothing measures, in the set whose whole
+subject is what an agent writes. `FILE_RULES` already carries the pattern at `:67`, `\\S  +$`,
+so the reply rule is that pattern with its own message rather than new matching: a file's says
+the pair becomes a `<br>`, and a reply's reason is that the style asks for one line per
+paragraph and the pair is what hard wrapping leaves behind. It needs none of the paragraph
+machinery `missing-two-spaces` required, because a trailing pair is a property of one line.
+
+**How often this fires, measured on this session's own transcript.** `flw style check` cannot
+take it — this session dispatched a subagent, and the command refuses a session whose newest
+transcript belongs to one, naming the file and saying so, which `core/skills/flw-style/SKILL.md:52-56`
+documents. Measured directly instead, over
+`~/.claude/projects/-Users-tm42--projects-agentic-packages-flw/b0ea3cb5-1cb6-41f2-90f4-20b6774116dc.jsonl`:
+assistant text blocks only, fenced blocks and blank lines excluded, `\\S  +$` per line — 1,490 of
+10,108 prose lines across 1,345 replies carry the pair, 14.7%. The session straddles the style
+change, so that figure mixes replies written under both rules and is a floor on what the rule
+would have caught before the change rather than a measurement of either regime. An earlier
+figure of 61.3% was quoted in this session for the same question and is the inverse measurement
+— the share of lines that *needed* the pair under the old rule and lacked it, which is the
+quantity `reply_findings`' docstring records as 63.1% and `a-rule-nothing-breaks-major.toml:34`
+carries too. It is dropped rather than carried: no command was recorded for it, and re-taking
+the inverse on this transcript under the old `flush()` logic gives neither 61.3% nor 63.1%. The
+14.7% above is the only figure here with a command behind it, and it is the rate this rule
+would flag rather than the rate the old one missed.
+
+**Why `-minor`.** The contract's `provides` promises "plain, hard-wrapped prose" out of every
+reviewer and every report, and a reader who relied on that gets differently shaped replies —
+which reads as major. The user classified it minor: reversing a rule in a prose style is a
+correction to how flw writes, not a capability anyone built against. Files are not affected
+either way, because the paragraph the working-tree edit deleted already said a file gets
+"neither. No hard wrap, because the width is the reader's to choose in their editor". Rename the file to `-minor` if you
+read a rule reversal in a prose style as a correction instead.
+
+**What this does not do.** It does not add a width rule at a larger number. It does not touch
+the three other CRITICALs the same review round found — `cli/flw.py:2762` resolving the project
+root from the caller's directory, `_section_config` tracebacking on a non-table section, and
+`stale.py:374` hardcoding the double-quote form of a record name. Those are unspecced. Nor
+does it carry the fourth MAJOR from its own source: `stale.py:220`, where a `system.md` in a
+project that declares no `[project] roots` lands in no row, so `flw stale` reports it clean
+having measured nothing. `eng-tests` raises the same path as untested. No record in flight
+covers it.
+"""
+
+contract_edit = """
+One change. In the skills component's `provides`, replace:
+
+  "A user gets the same plain, hard-wrapped prose out of every reviewer and every report
+  whether or not the style is installed in the host, because the skills read it themselves."
+
+with:
+
+  "A user gets the same plain prose out of every reviewer and every report whether or not the
+  style is installed in the host, because the skills read it themselves. The reader sets its
+  width: flw neither wraps a reply nor measures how wide one is."
+"""
+
+[[decisions]]
+topic = "whether the checker keeps a width rule at a larger column count"
+options = [
+  "no width rule at all",
+  "the same rule at 200 columns, which the measured replies would mostly pass",
+]
+chosen = "no width rule at all"
+rationale = """
+The style states that the width is the reader's, set by their terminal or their editor. Any
+column number restates a rule the style no longer holds, and a checker enforcing a rule its
+own style file does not state is the defect this record repairs rather than a smaller version
+of it. 200 would also pass most of what it would be asked to catch. Measured by the same script this
+record uses for its 14.7%, over this session's transcript with assistant text blocks only and
+fenced blocks and blank lines excluded: of 10,222 prose lines, 550 exceed 200 columns and 258
+exceed 320. The transcript grows while the session runs, so those are the counts at the point
+this paragraph was written rather than a fixed figure.
+
+This reverses a decision already recorded. `a-rule-nothing-breaks-major.toml:278` put the same
+question — "The 120-column wrap, which is the most-violated rule in the file" — with dropping it
+as the first option, and chose "Keep it at 120 unchanged" on the rationale that "The user values
+the wrapping and said so directly", with 35.3% of prose lines landing in the ten columns below
+the target as evidence that the rule was being aimed at rather than ignored. Its task at `:219`
+says to keep the wrap and the trailing pair unchanged. What has changed is not the measurement
+but the preference it rested on: the user has since asked for the opposite and classified this
+record as minor on that basis. Naming it here is the point — a reversal nobody records reads to
+the next session as a decision never taken.
+"""
+
+[[decisions]]
+topic = "whether missing-two-spaces is removed or left unreachable"
+options = [
+  "removed, with flush(), the paragraph list and the own_block partition behind it",
+  "left in place, since one line per paragraph rarely reaches len(paragraph) >= 2",
+]
+chosen = "removed, with flush(), the paragraph list and the own_block partition behind it"
+rationale = """
+Leaving it is worse than it looks, because it is not quite unreachable. flush() needs two or
+more lines in one block, which one line per paragraph never produces — but a paragraph an agent
+broke by accident does, and a wrapped bullet's continuation lines do, which is the one finding
+the approach's run leaves on the style file. So the rule survives only to fire on prose that
+already broke the new rule, and what it asks for there is the trailing spaces the style forbids.
+flw style check prints every key that hit, so it would come out as a live finding. own_block,
+flush() and the paragraph list exist only to serve it and go with it; fence-untagged and the
+vocabulary rules read none of them.
+"""
+
+[[decisions]]
+topic = "whether the style file keeps the reply-shape paragraph the same working-tree edit added"
+options = [
+  "keep it, reworded in plain language and without its measurement",
+  "cut it, leaving this record the width half only",
+  "keep it and spec it in a record of its own",
+]
+chosen = "keep it, reworded in plain language and without its measurement"
+rationale = """
+The file had no rule about when to use a heading. The existing one says only what a heading
+should be named, so this covers something the file did not say, and the user asked for it after
+a reply came back under two headings that did not need them.
+
+plans/design-reply-shape.md:41 says "Nothing here edits terse_prose.md", and :222 lists a
+reply-length rule under what that plan deliberately did not build. That refusal does not bind
+here, because it is about reply length and the Length section already covers length. This
+paragraph is about form.
+
+Two things were wrong with the paragraph as first written, and both are fixed in the working
+tree. It said headings "earn their place", which is a figure of speech nobody says out loud and
+which this style's own rule against balanced aphorisms rules out. And it ended "Measured here: a
+12-word question came back with 578 words under two headings" — a number with no command and no
+corpus, in a file that requires both, naming one past reply to every future session that reads
+it. An agent reading an instruction needs to know what to do, not what someone once measured.
+Cutting that sentence also freed 92 bytes against the file's ceiling, which this record needed.
+"""
+
+[[decisions]]
+topic = "whether the reply rule set gains a trailing-spaces rule when missing-two-spaces goes"
+options = [
+  "it gains one, reusing FILE_RULES' pattern with its own message",
+  "it measures no geometry beyond the fence tag, and the trailing pair is a file rule only",
+]
+chosen = "it gains one, reusing FILE_RULES' pattern with its own message"
+rationale = """
+The style forbids the pair in a reply as well as in a file, so removing missing-two-spaces
+without replacing it leaves a stated rule that nothing measures, in the one rule set whose
+subject is what an agent writes. The alternative is defensible on the argument that a reply
+is read in a terminal where trailing whitespace is invisible, and it was the cheaper option
+— no new rule, one fewer thing to keep true. It was rejected because the reason the pair
+matters in a reply is not how it renders: it is the residue of hard wrapping, which is what
+this record removes the rule for, so a reply still carrying pairs is a reply still being
+wrapped. Measured on this session's transcript, 1,490 of 10,108 prose lines carry the pair,
+so this is not a rule written for a case that does not occur. The cost is one rule whose two
+messages must stay in step, which the shared name and the shared pattern keep down.
+"""
+
+[[dag]]
+group = 1
+phase = "the checker"
+tasks = [
+  { id = "style", desc = "In core/styles/terse_prose.md:190-199, keep the working-tree edit exactly as it stands — the one-line-paragraph rule and the reply-shape paragraph the third decision settles — and stage the file with this phase so it is committed with the work it is the agreement for. Nothing in the record edits it; this task exists because flw-execute stages the files its own task lines name, so without a task naming it the edit this record agrees to would be committed by nobody. The file is 9,908 bytes against a 10,000 ceiling, so add nothing." },
+  { id = "rules", desc = "In core/scripts/style_lint.py, remove the over-120 and missing-two-spaces rules from reply_findings, and with them WRAP_COLUMNS at :45, flush(), the paragraph list, the own_block partition, the _HEADING, _BULLET and _QUOTE patterns at :52-54 which only own_block reads, and the stripped local at :298 whose two readers are the over-120 line at :300 and own_block at :302-303. All of them exist only to serve the two rules being removed. Keep fence-untagged, keep every REPLY_RULES vocabulary pattern, and keep FILE_RULES' name, pattern and message unchanged — the style still states the file rule. Unchanged rather than untouched: the pair task below reuses the compiled pattern, which means hoisting it to a module-level name both sets read, and that edits the tuple's text without changing any of the three values. Keep the two keys out of the out dict's seed at :268 as well, so flw style check cannot print a key no rule can fill." },
+  { id = "pair", desc = "In core/scripts/style_lint.py, add a trailing-spaces rule to the reply set, so the pair the style forbids in a reply is measured after missing-two-spaces goes. Reuse FILE_RULES' pattern at :67 rather than writing a second one — the rule tuple holding it spans :65-69, and :63 is the heading-depth rule, which is not the one to copy, and give the reply rule its own message: a file's says the pair becomes a <br>, and a reply's says the style asks for one line per paragraph. Run it on the raw line and not on the code-span-stripped probe the vocabulary rules read, because stripping a span can leave whitespace the author did not write, and skip it inside a fence exactly as the width rule did — a fenced block's alignment is its content. Add its key to the out dict's seed beside fence-untagged. Use the same rule name as the file set, trailing-spaces, so a user reading either report sees one name for one rule.", depends_on = ["rules"] },
+  { id = "docstring", desc = "Rewrite reply_findings' docstring. The paragraph about two geometry rules inverting against a file and the paragraph about bullets being their own block both document what the task above deletes, including the 36.7%, 63.1%, 26% and 892-of-1,048 figures, which measured the removed rules. Keep the inline-code-span paragraph and the fence-untagged paragraph, and say in one sentence what geometry the reply set still measures after this record — the trailing pair and the fence tag, and no width at all — so the next reader neither restores the width rule nor removes the pair with it.", depends_on = ["rules"] },
+  { id = "tests", desc = "In tests/test_style_lint.py, delete the five tests that pin the removed rules: test_over_120_columns, test_a_bullet_over_120_columns_is_still_too_wide, test_missing_two_spaces_only_inside_a_paragraph, test_a_bullet_is_its_own_block and test_a_table_row_and_a_quote_are_their_own_blocks, at :279-308. Leave test_an_untagged_fence_in_a_reply_is_a_finding above them.", depends_on = ["rules"] },
+  { id = "pin", desc = "Add two tests to tests/test_style_lint.py. First: prose written as the style now asks — several paragraphs, each one line, none of them wrapped and none carrying trailing spaces — produces no finding from reply_findings except what the vocabulary rules find. Second: a single line carrying two trailing spaces is one trailing-spaces finding, and a line inside a fenced block carrying them is none. Without the first, nothing holds the checker and the style file together, which is how the two came apart in the first place; without the second, the rule the pair task adds has nothing pinning it and a later deletion of the width rules would take it along.", depends_on = ["tests", "pair"] },
+]
+
+[[dag]]
+group = 2
+phase = "the documents"
+tasks = [
+  { id = "help", desc = "In cli/flw.py, the flw style check description at :4054 lists what the command reports and names 'the 120-column wrap and the two trailing spaces a reply needs and a file must not have'. Replace that clause with what it reports after group 1: no width rule at all, and the trailing pair refused in a reply and in a file alike, which is one rule with one name rather than the two inverted ones the clause describes. Leave the flw style lint description at :4033 alone: it describes the file rules, which do not change.", depends_on = ["pin"] },
+  { id = "skill", desc = "In core/skills/flw-style/SKILL.md, the --format flag is described twice — at :20 in the usage block as 'the 120-column wrap, trailing spaces, headings on a short answer', and at :64 in the what-to-look-for table as 'a prose line over 120 columns, a reply line missing its two trailing spaces, a fence with no language, a heading deeper than ###, headings on a reply to a short question'. Both drop the two removed rules and keep the rest. The file is at 6,454 of 21,000 bytes, so there is room either way.", depends_on = ["help"] },
+  { id = "readme", desc = "In README.md:146, 'claim first, no preamble, replies hard-wrapped and files never' states the rule this record reverses. Replace the clause.", depends_on = ["skill"] },
+  { id = "copies", desc = "Hand the user one step rather than taking it: flw update, to bring the codex and opencode copies of the style file into line with core/styles/terse_prose.md, which flw doctor reports as behind. It prompts, so a run cannot do it. Say in the report that the installed copies are stale until it runs.", depends_on = ["readme"] },
+  { id = "verify", desc = "Run flw validate, then flw test --no-stream. State the result as a delta, not an absolute: this record deletes five tests and adds two, so the suite ends three smaller than whatever the previous record left it at. 819 is the count at the tree this record was written against, but its base is skills-flag-what-drifted, the last of five unapplied records, and scripts-refuse-badly-named-records adds tests of its own in between — so an absolute 815 would fire on the records ahead of this one rather than on anything this one did. Then run flw style check against this session and say what it reports, since this record changes what that command can say.", depends_on = ["copies"] },
+]
