@@ -1,0 +1,148 @@
+name = "say-who-does-what"
+base = "scout-says-what-resolved"
+summary = "the writing style gains one diagnostic question and a list of bad and good pairs for the constructions an agent reaches for by default, and terse_prose.md gets its own byte ceiling so the examples fit"
+
+approach = """
+**What this is for.** The style file already bans balanced aphorisms, evaluative words with no
+measurement, and longer words where a plain one exists. It is not catching a family of
+constructions that the user has flagged repeatedly in one session, by name each time. Measured
+over this session's own transcript with `assistant` text blocks only and fenced blocks excluded,
+across 1,357 reply blocks: `earns its place` and variants 17, the wider `earns it` shape 32,
+`X is the Y that <verb>s` 32, `is the X's` 24, `is X's to <verb>` 21, `the whole point` 5. The
+script is four lines of `re.finditer` over the transcript at
+`~/.claude/projects/-Users-tm42--projects-agentic-packages-flw/b0ea3cb5-1cb6-41f2-90f4-20b6774116dc.jsonl`
+and the figure cannot be re-taken from another session, because it is a count of one session's
+replies.
+
+**Why rules and examples rather than patterns in the checker.** `flw style check` reads Claude
+Code transcripts and nothing else; `core/skills/flw-style/SKILL.md:52-56` says so, because Codex
+and OpenCode write no session record it parses. A tenth pattern in `style_lint.py` would cover
+one host of the three flw installs into. The style file reaches all three: `flw style install` writes it to the Claude Code output style,
+and for a host with no styles directory into that host's ambient file — `~/.codex/AGENTS.md` and
+`~/.config/opencode/AGENTS.md` — at `cli/flw.py:1079-1098`, so it sits in the system prompt on
+every turn wherever it is installed. `flw install` is not that command: at `:473` it only reports
+the style as missing. That is the only channel that is everywhere, which is what the user asked for.
+
+Half of these could not be patterned anyway. Of the 45 hits across `is the X's` and
+`is X's to <verb>`, the samples include ordinary sentences doing real work: "the 15-passed line
+is the report's, not mine" is attribution, and "the record is yours to edit before anything
+runs" tells a reader what to do. A regex would flag those as often as the bad ones. The contract
+already describes this arrangement for three words — `clean`, `actually` and `surface` are stated
+as rules and enforced by no pattern, because each has a use the style permits — so this is that
+same arrangement and not a new kind of thing.
+
+**One diagnostic rather than five rules.** Four of the six measured constructions have one cause:
+the subject of the sentence is an abstraction doing something only a person can do. Headings
+cannot earn, a split cannot decide, a half cannot earn a command. Joseph Williams states the
+test as agent and action — make the subject the thing acting and the verb what it does — and it
+rewrites all four without a rule per shape. The two it does not cover get one line each: a
+figure of speech that arrives pre-assembled, which is Orwell's dying metaphor, and holding a
+finding back for effect, which the file already bans in a rule I walked past while writing the
+sentence that broke it.
+
+**The text to add, which is the deliverable and the thing to edit.** 1,082 bytes:
+
+    **Make the subject something that can act, and the verb what it does.** If the subject
+    cannot do the verb, rewrite. Most bad sentences here have an abstraction doing
+    something only a person can do.
+
+    - Bad: "Headings earn their place when the reply holds two categories."
+    - Good: "Use a heading when the reply holds two categories."
+    - Bad: "That split decides how to handle each."
+    - Good: "The two kinds need different handling."
+    - Bad: "The config decides which setting wins."
+    - Good: "A setting in the project's file overrides the same setting on the machine."
+
+    **No figure of speech you are used to seeing in print.** It arrives already assembled,
+    which is why it gets reached for. Earns its place, rides along, the whole point,
+    wearing something's clothes.
+
+    - Bad: "The second paragraph rides along uncommented."
+    - Good: "Nothing in the record mentions the second paragraph."
+
+    **Do not hold a finding back for effect.** No "and here is the thing", no "less than
+    you would expect", no "it turns out".
+
+    - Bad: "It collapses to less than you would expect."
+    - Good: "Two rules cover it."
+
+**Why the ceiling moves rather than something coming out.** `core/scripts/budget.py:27` sets
+`SHARED_CEILING = 10_000` for five files and `terse_prose.md` is at 9,908, so 92 bytes are free
+and the text above needs 1,082. The other four have room: `context.md` 8,615, `ambient.md` 5,668.
+That 9,908 is the working tree and not the committed file, which is 9,973: the uncommitted edit is
+`scripts-drop-the-width-rules`, three records back along this record's own `base` chain. The
+arithmetic holds once that record has landed, and the dependency runs one way — nothing in that
+record needs this one. If it has not landed, read `budget.py`'s own report rather than these
+numbers.
+Only the style file is against its ceiling, and it is the one file read on every turn on every
+host, so it gets its own number rather than all five being raised. The file becomes 10,990 bytes,
+leaving 1,010 of headroom at 12,000. The cost per turn is the 1,082 bytes of text and not the
+2,000 the ceiling moves, because nothing reads a ceiling at runtime: at the 4.10-4.33 bytes per
+token the budget script measured, about 260 tokens per turn per host.
+
+**What this does not do.** It adds no pattern to `style_lint.py`, so nothing counts these
+automatically on any host and nothing will. It does not touch the nine rules the reply set
+already has. It does not raise the 21,000-byte ceiling on a SKILL.md or the 10,000 on the other
+four shared files. And it does not claim the rules will work: the file already held a rule
+against holding a finding back, and this record exists because that rule did not stop me.
+"""
+
+contract_edit = """
+One change. In the validation and checks component, the `implementation` paragraph beginning
+"The files every run loads unconditionally have a size ceiling", replace:
+
+  "21,000 bytes for each core/skills/*/SKILL.md, and 10,000 for core/shared/context.md and
+  core/styles/terse_prose.md."
+
+with:
+
+  "21,000 bytes for each core/skills/*/SKILL.md, 12,000 for core/styles/terse_prose.md, which
+  is the one file installed into every host's system prompt and read on every turn, and 10,000
+  for the other files a run loads unconditionally."
+"""
+
+[[decisions]]
+topic = "where the rules and examples live, given they have to reach three hosts"
+options = [
+  "core/styles/terse_prose.md, with its ceiling raised to 12,000",
+  "a second file flw install writes into each host alongside the style",
+  "core/shared/ambient.md, which has 4,332 bytes free today",
+]
+chosen = "core/styles/terse_prose.md, with its ceiling raised to 12,000"
+rationale = """
+All three reach every host, so the choice is about where a reader finds them. The style file
+already holds every other rule about words and sentences, and a reader looking for how to write
+a sentence opens it. A second file is the same bytes in the same host files with an install step
+and a second place for the two halves to drift apart. ambient.md has the room but holds
+engineering posture, so writing rules there would split the writing rules across two files for
+no gain. Raising this one file's ceiling is the smallest change that puts the text where it
+belongs.
+"""
+
+[[decisions]]
+topic = "whether style_lint.py gains patterns for these constructions"
+options = [
+  "no patterns; rules and examples only",
+  "patterns for the fixed phrases, rules for the rest",
+]
+chosen = "no patterns; rules and examples only"
+rationale = """
+flw style check reads Claude Code transcripts and nothing else, so a pattern covers one host of
+three and this habit is not one host's. Of the six measured constructions, only earns its place
+has no defensible use; the 45 hits across the two possessive shapes include ordinary attribution
+and ordinary instruction, which a regex cannot separate. The contract already states this
+arrangement for clean, actually and surface, and the two tests holding that gap open from both
+sides are the precedent. A pattern for one phrase on one host is not worth a tenth rule and a
+tenth key in the output dict.
+"""
+
+[[dag]]
+group = 1
+phase = "the rules"
+tasks = [
+  { id = "ceiling", desc = "In core/scripts/budget.py, give core/styles/terse_prose.md its own ceiling of 12,000 and leave SHARED_CEILING at 10,000 for context.md, ambient.md and commits.md. The targets() function pairs each path with its ceiling already, so this is a different constant on one row rather than a new mechanism. Then fix tests/test_budget.py, which breaks on this change: at :42-44 it writes SHARED_CEILING + 1 bytes into terse_prose.md and at :53 asserts that path is reported over, so a 12,000 ceiling makes 10,001 bytes legal, the file drops out of the over list and the assertion fails. Write the new constant plus one there instead. Its docstring says one assertion pins both ceilings and the whole file list, so it now pins three. Extend budget.py's module docstring too: it names two ceilings and will name three, and the reason for the third is that this file is written into every host's system prompt by flw install and read on every turn." },
+  { id = "rules", desc = "In core/styles/terse_prose.md, add the three rules and their bad-and-good pairs from approach to the end of the Words section, after the sentence about stating uncertainty once. Use the text as drafted unless the user edited it; the words are this record's deliverable and not a sketch of one. Keep each paragraph as one line, per the file's own rule.", depends_on = ["ceiling"] },
+  { id = "instances", desc = "Fix the four lines in core/ that break the new rules, because the argument for the rules is that they stop a habit and these sit in files a run reads. core/styles/terse_prose.md:107 has 'What is actually on the machine' earns it, in the file the rules are being added to. core/reviews/quick.toml:40 has genuinely earns its. core/skills/flw-research/SKILL.md:287 has A file earns its tokens. core/skills/flw-spec/SKILL.md:225 has That is the whole point of it. Two of those files are against their own ceilings — flw-spec/SKILL.md is at 20,984 of 21,000 and flw-research/SKILL.md at 20,853 — so each rewrite must be the same length or shorter; say-what-the-survey-creates is in flight and changes the research file's size, so re-read budget.py's report rather than trusting these numbers if that record has landed. core/reviews/eng.toml:51 held the same phrase and was already fixed in the working tree, so expect four and not five.", depends_on = ["rules"] },
+  { id = "vocab", desc = "In core/skills/flw-style/SKILL.md, the --vocab row of the table at :62 lists what to look for and names balanced aphorisms. Add the three new rules to it in the shortest form that identifies each: an abstraction as the subject of a verb it cannot do, a pre-assembled figure of speech, a finding held back for effect. The file is at 6,454 of 21,000 bytes.", depends_on = ["instances"] },
+  { id = "verify", desc = "Run .venv/bin/python core/scripts/budget.py and paste its report, which prints size, ceiling and headroom per file, so the new ceiling and the new size are both visible. Then flw validate and flw test --no-stream. Then flw update, to carry the style file to the codex and opencode copies, which is the step that makes this reach the other two hosts at all — it prompts, so hand it to the user and say the two copies are stale until it runs.", depends_on = ["vocab"] },
+]
