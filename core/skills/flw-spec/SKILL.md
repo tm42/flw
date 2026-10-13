@@ -45,6 +45,10 @@ correct.** Rewrite that one file and `flw know --stamp` it, and name it when you
 That one file — not the store, and not a tree nobody asked for. The trigger is what a diff
 shows, not what you judge.
 
+**The boundaries on what is the user's to decide are recorded already, and
+`$FLW/core/shared/autonomy.md` says where each one lives** — the `decisions` this
+skill writes are the first of them.
+
 ## Two modes
 
 **`<specs>` is the directory `flw context` printed**, from `[paths] specs`, and it is

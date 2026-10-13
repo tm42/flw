@@ -48,6 +48,10 @@ That one file — the single exception to reporting and never fixing, because th
 records what is, and what is has already changed. The trigger is what a diff shows, not
 what you judge: a file you merely disagree with is a finding to report like any other.
 
+**What an agent was permitted to do here is recorded, and
+`$FLW/core/shared/autonomy.md` says where** — read it before calling a decision
+somebody took a mistake.
+
 ## 1. Decide what is under review
 
 The remaining arguments, if any — **or the request itself, if it names one.** "review the

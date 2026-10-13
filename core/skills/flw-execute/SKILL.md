@@ -46,6 +46,10 @@ and not a rewrite nobody asked for. The trigger is what a diff shows, not what y
 This is not a spec change: the store records what is, and the contract records what was
 agreed.
 
+**The boundaries on what you may change are recorded already, and
+`$FLW/core/shared/autonomy.md` says where each one lives** — read it when a decision
+may not be yours to take.
+
 **No silent spec drift.** If you need anything the contract does not cover — a component
 that has to exist, a capability nobody agreed to, a check that should have been declared —
 **stop and raise a proposal**: what is missing, why you need it, and the specific change
