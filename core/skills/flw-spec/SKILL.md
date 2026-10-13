@@ -160,10 +160,14 @@ validation.
    and `flw map <node>` where the change lands on a seam, because a contract edit at a seam
    is the one both sides have to survive.
 
-   **A cross-repo change gets one plan at the parent**, written before any repository
-   specs its own record, and every record cites it by path in `approach`. A seam under
-   design is not knowledge — it does not exist yet — so it stays a plan until it lands,
-   and then it moves into the repository-level files.
+   **A cross-repo change gets one plan, in the shape
+   `$FLW/core/skills/flw-spec/references/umbrella-plan.md` gives it**, written before any
+   repository specs its own record, and every record cites it by path in `approach`. It
+   sits in the project whose config declares `[project.roots]`, because a declared set of
+   siblings has no parent directory to hold it. Rewrite it rather than patch it whenever a
+   spec session touches the feature. A seam under design is not knowledge — it does not
+   exist yet — so it stays a plan until it lands, and then it moves into the
+   repository-level files.
 
    **Quote the decision you depend on, not only the path.** `flw ledger`'s corpus is
    bounded by the resolved project root, so from inside the member where the record is

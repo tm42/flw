@@ -58,3 +58,10 @@ Two traps specific to the sweep. A caller does not prove a callee exists — dea
 calling a renamed route greps identically to a live edge, and only running it separates
 them. And a matched name is not a matched meaning: `user_id` on both sides can be two ID
 spaces with a translation between them.
+
+**A seam file names an owner per field.** Writing "these two agree on the item shape"
+records that a seam exists and settles nothing. Name, field by field, which side owns it,
+which sides read it, which side renames it on the way out, and whether it may be null —
+the same vocabulary the umbrella plan's `## The seam` section uses, at
+`$FLW/core/skills/flw-spec/references/umbrella-plan.md`, so the plan above the change and
+the store describing it do not need translating between.
