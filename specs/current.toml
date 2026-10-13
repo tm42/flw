@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.17.2"
+spec_version = "0.17.3"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -43,6 +43,7 @@ applied = [
   "say-the-loop-is-open",
   "owe-what-a-phase-changed",
   "skills-move-minority-sections",
+  "skills-add-umbrella-plan",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -134,7 +135,7 @@ properties = [
   "A [project.roots] path resolves relative to the project directory whose config declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
   "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside the directory it would name. One name is in force at a time: a directory under another name is not a project, and a walk probes exactly one name per level. A name that is not a string, is empty, is `.` or `..`, or is absolute is refused naming its source, because each of those makes every directory a project or none.",
   "flw context --scope prints the full text of every contract component whose declared paths meet one of the given paths, after the names-and-paths block, so a skill that has to hand a contract to another agent passes command output rather than intersecting paths by hand. A scope path matching no component prints no component and is not an error; a scope path outside the resolved root is refused naming it.",
-  "flw stale exits 0 whenever it ran — including a project with no reports directory, no knowledge store and no notes, and including one where every document it read is stale, and including one holding a document it could not read, which it names and counts as read by nobody rather than failing the run — and 1 only for a --root it was given and could not use. Under --owed it also exits 1 when the project owes work it can name: a knowledge file orphaned or malformed, or a commit after the last applied record's landing commit that changes a component's paths outside plans/ while no record is in flight — none unapplied other than a legacy-numbered one, and none whose name is in applied without a landing commit yet. An unapplied record and an unstamped knowledge file are listed under --owed and never make it exit 1, because both are the normal state in the middle of a flw-execute run, and a check that failed on them would stop the run that clears them. Without --owed, nothing it reports is a failure, which is the reading flw context already takes at the other end of a run.",
+  "flw stale exits 0 whenever it ran — including a project with no reports directory, no knowledge store and no notes, and including one where every document it read is stale, and including one holding a document it could not read, which it names and counts as read by nobody rather than failing the run — and 1 only for a --root it was given and could not use. Under --owed it also exits 1 when the project owes work it can name: a knowledge file orphaned or malformed, or a commit after the last applied record's landing commit that changes a component's paths outside plans/ while no record is in flight — none unapplied other than a legacy-numbered one or one a landed record has retired, and none whose name is in applied without a landing commit yet. An unapplied record and an unstamped knowledge file are listed under --owed and never make it exit 1, because both are the normal state in the middle of a flw-execute run, and a check that failed on them would stop the run that clears them. Without --owed, nothing it reports is a failure, which is the reading flw context already takes at the other end of a run.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -195,7 +196,7 @@ provides = [
   "A user can amend how a skill behaves in one repo with prose that skill reads, without forking the skill or maintaining a copy of it — per skill, or in one file every skill reads, at whichever directory above the work the convention belongs to.",
   "A skill resolves its project root from what the request named rather than from where the shell happens to be, and says which root it resolved to, so a session started in a directory holding several checkouts works in the repository that was asked for.",
   "A user gets the same plain, hard-wrapped prose out of every reviewer and every report whether or not the style is installed in the host, because the skills read it themselves.",
-  "A user reads a contract that records what shipped, not what was planned: it moves when the work lands rather than when the plan is agreed, so a version still in flight is a record the contract's applied list does not yet name.",
+  "A user reads a contract that records what shipped, not what was planned: it moves when the work lands rather than when the plan is agreed, so a version still in flight is a record the contract's applied list does not yet name and no landed record has retired. A design that turned leaves a record nobody will run, and retiring it is how flw stale --owed stops counting it as work owed.",
   "A user can install a build posture alongside the skills that requires one runnable check behind the non-trivial logic an agent writes, and requires saying what was not done rather than implying a completeness the work does not have.",
   "A user gets commits that are one part of the product each, complete with the check that proves them, because what a commit is and what its message says are written once in one file every skill cites rather than restates — so an agent proposing a commit and an agent working outside a flw run follow the same rule.",
   "A user can spec two changes at once on separate branches without either having to be renumbered when it lands, because a version record is addressed by a name it keeps, the order they landed in is recorded by the contract rather than by the records, and the release number moves by itself when a run finishes.",
@@ -213,6 +214,8 @@ provides = [
   "A review report a record has superseded carries that record's name, so a later round reading past reports first can tell a filed finding from one a re-measurement has already overturned.",
   "A record citing a plan outside its own project quotes the decision it depends on, so the ledger a session can reach from where it is standing holds the reasoning and not only a path out of the corpus.",
   "A spec run checks the amendment it has just written against the extensions live in that repository and names any the amendment contradicts, so a convention a human made binding is not left standing over a contract that removed what it requires.",
+  "A change spanning several repositories gets one plan in the project whose config declares the set, in a standard shape rather than an invented one: what the feature is, which repository owns which field of the seam, the delivery slices as an indented list where a line needs the line above it, the order that matters and the order that does not, and what is expected to change. flw parses none of it, so a pull request number sits there as text and the plan is rewritten rather than patched when the design moves.",
+  "An agent reads the boundaries it may act within from one place: which decisions are approved, which still need the user, which files and behaviour it may change, which tests and commits are authorised, and what stays the user's to run. Each of those is recorded somewhere already, and this file names where.",
 ]
 
 [[final_state.components]]
@@ -250,6 +253,7 @@ provides = [
   "A commit is attributable to a version record from git alone: a record's landing commit is the one that added its name to applied in the contract, and every commit up to and including it that no earlier landing covers belongs to that record. Nothing is declared for this — no field, no trailer — so it holds for every record written before anyone asked. flw stale --owed names each commit after the last landing that changes a component's paths outside plans/, and treats one as owed only while no record is in flight.",
   "A claim a commit could falsify — a count written as digits or as a word, a path with a line number, a version string — is reported when it sits in a store that carries no revision, which is every extension and any note whose frontmatter records only a date. A note clears that row by recording the revision it was measured at, which flw kb write can put there and which is read only when it looks like one, so a sentence in the field does not silence the check. The report is of shape and never of truth: nothing checks whether the claim still holds, because that costs a run and is a judgment a command does not make.",
   "flw validate refuses a version record the contract has not applied when its summary, approach or contract_edit names a path under the reports directory and its sources field is empty. An applied record is never refused for this, so the rule binds the record being written and none already landed.",
+  "A record the contract has not applied and a landed record has retired is reported as retired rather than as work owed, so the backlog flw stale prints is the work someone still intends to do.",
 ]
 properties = [
   "A contract whose applied list names only records that exist validates clean; a record no applied list names is a version in flight rather than an error.",
@@ -290,6 +294,7 @@ paths = ["core/schemas/"]
 provides = [
   "A contract, a version record and a review team are each checked against a published shape by a stdlib-only validator, so a malformed one fails loudly at authoring time rather than quietly at execution time.",
   "A version record may name the review reports it came from in a sources field, which flw validate requires of a record the contract has not applied whose prose names a path under the reports directory, so the mapping from a report to the record that acted on it survives in the one artifact that is versioned, rather than in a directory most projects ignore.",
+  "A version record may retire others by name in a retires field, so a record written and then abandoned is marked as such in the artifact that is versioned rather than left for someone to remember. A retires entry naming no record is refused, and the field takes effect only from a record the contract has applied, so an unfinished draft cannot retire live work.",
 ]
 
 [[final_state.components]]
