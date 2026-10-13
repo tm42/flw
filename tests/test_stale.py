@@ -631,6 +631,36 @@ def test_owed_an_unapplied_record_and_an_unstamped_file_are_listed_not_red(tmp_p
 
 
 @needs_git
+def test_owed_a_retired_record_is_reported_as_retired_rather_than_owed(tmp_path, capsys):
+    """The design turned and the record will never land, so counting it as work
+    owed leaves a backlog nobody intends to clear."""
+    root = landed(tmp_path, "first")
+    record(root, "dead-end")
+    (root / "specs" / "versions" / "first-minor.toml").write_text(
+        'name = "first"\nsummary = "s"\nretires = ["dead-end"]\n'
+    )
+    code, out = run_owed(root, capsys, "--owed")
+    assert code == 0
+    assert "record retired: dead-end" in out
+    assert "record not yet applied: dead-end" not in out
+
+
+@needs_git
+def test_owed_an_unapplied_records_retires_entry_is_ignored(tmp_path, capsys):
+    """Gated on `applied`, so a draft nobody reviewed cannot empty the backlog and
+    two parallel spec sessions cannot each retire the other's record."""
+    root = landed(tmp_path, "first")
+    record(root, "dead-end")
+    (root / "specs" / "versions" / "draft-minor.toml").write_text(
+        'name = "draft"\nsummary = "s"\nretires = ["dead-end"]\n'
+    )
+    code, out = run_owed(root, capsys, "--owed")
+    assert code == 0
+    assert "record not yet applied: dead-end" in out
+    assert "record retired: dead-end" not in out
+
+
+@needs_git
 def test_owed_a_component_commit_with_nothing_in_flight_is_red(tmp_path, capsys):
     root = landed(tmp_path, "first")
     commit(root, "unagreed work", {"src/x.py": "x = 1\n"})

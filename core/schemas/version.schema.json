@@ -63,6 +63,16 @@
       },
       "description": "The review reports this record was specced from, as paths relative to the project root. Optional, because most records come from a conversation rather than from a report, and because every record written before this field existed still has to validate. It exists so the fold from a report to the record that acted on it survives in the versioned artifact: a reports directory is gitignored in most projects, so a report can be deleted and the record still says which one it answered. flw stale reads it, falling back to a regex over the record's prose for the records that carry none."
     },
+    "retires": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Records this one retires, by name: the design turned and those will never land, so flw stale reports them as retired rather than as work the project still owes. Optional, and a retirement marker rather than an order — nothing derives a sequence from it, because two people speccing in parallel from the same contract have no sequence between them. An entry naming no record in versions/ is refused. It takes effect only from a record the contract has applied, so an unfinished draft cannot retire live work.",
+      "examples": [["an-older-record"]]
+    },
     "release_line": {
       "type": "integer",
       "minimum": 0,

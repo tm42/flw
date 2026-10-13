@@ -350,16 +350,50 @@ def owed_rows(know: Knowledge, records: list, applied: list[str]) -> list[Owed]:
         Owed(f"record not yet applied: {name}", "flw-execute", False)
         for name in unapplied(records, applied)
     ]
+    rows += [
+        Owed(f"record retired: {name}", "flw-spec", False)
+        for name in retired(records, applied)
+        if name not in applied
+    ]
     return rows
 
 
 def unapplied(records: list, applied: list[str]) -> list[str]:
-    """Records absent from `applied`, less the legacy numbers that predate the list."""
+    """Records absent from `applied`, less the legacy numbers that predate the list
+    and the ones a landed record has retired.
+
+    Retired names are filtered here rather than in `owed_rows`, because
+    `in_flight` reads this too: a retired record left on disk would otherwise hold
+    the project in flight for good, and the one `--owed` row that exits 1 would
+    never fire again.
+    """
+    gone = retired(records, applied)
     return sorted(
         r.name
         for r in records
-        if r.name and r.name not in applied and not ledger.LEGACY_NUMBER.match(r.name)
+        if r.name
+        and r.name not in applied
+        and r.name not in gone
+        and not ledger.LEGACY_NUMBER.match(r.name)
     )
+
+
+def retired(records: list, applied: list[str]) -> list[str]:
+    """Names a record the contract has applied has retired.
+
+    Only an applied record retires anything. A draft that could retire live work
+    would let a file nobody reviewed empty the backlog, and two people speccing in
+    parallel could each retire the other's record with nothing having landed.
+    """
+    marked: set[str] = set()
+    for record in records:
+        if record.name in applied:
+            marked.update(
+                entry
+                for entry in record.document.get("retires", [])
+                if isinstance(entry, str)
+            )
+    return sorted(marked)
 
 
 def landing(root: Path, contract: str, name: str) -> str | None:

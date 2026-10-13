@@ -552,6 +552,31 @@ def test_an_applied_name_with_no_record_is_caught(specs):
     assert any("gone-missing" in e for e in errors), errors
 
 
+def test_a_retires_entry_naming_no_record_is_caught(specs):
+    """A retirement marker pointing at nothing retires nothing and reads as though
+    it did, so the record it names stays in the backlog with a file claiming it is
+    gone."""
+    record(specs, "one.toml", "the-new-way")
+    (specs / "versions" / "one.toml").write_text(
+        'name = "the-new-way"\nsummary = "a change"\nretires = ["never-existed"]\n'
+    )
+    errors = check_chain(specs / "versions")
+    assert any("never-existed" in e and "retires" in e for e in errors), errors
+
+
+def test_a_retires_entry_naming_a_real_record_validates(specs):
+    record(specs, "old.toml", "the-old-way")
+    (specs / "versions" / "new.toml").write_text(
+        'name = "the-new-way"\nsummary = "a change"\nretires = ["the-old-way"]\n'
+    )
+    applied(specs, "1.0")
+    text = (specs / "current.toml").read_text()
+    (specs / "current.toml").write_text(
+        text.replace('spec_version = "1.0"', 'spec_version = "0.1.0"')
+    )
+    assert check_chain(specs / "versions") == []
+
+
 def test_a_record_no_applied_list_names_is_a_version_in_flight(specs):
     """flw-spec wrote the record, flw-execute has not run it yet. Not an error —
     this is the ordinary state of every version between its spec and its run."""

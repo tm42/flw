@@ -546,6 +546,7 @@ def check_chain(versions_dir: Path) -> list[str]:
     errors: list[str] = []
     names: dict[str, Path] = {}
     release_lines: dict[str, int | None] = {}
+    retires: dict[str, list[str]] = {}
 
     for record in files:
         if record.error:
@@ -565,6 +566,19 @@ def check_chain(versions_dir: Path) -> list[str]:
         # Read alongside `name` rather than reopening the file later just to fold
         # the release number.
         release_lines[declared] = record.document.get("release_line")
+        retires[declared] = [
+            entry
+            for entry in record.document.get("retires", [])
+            if isinstance(entry, str)
+        ]
+
+    for declared, retired in retires.items():
+        for entry in retired:
+            if entry not in names:
+                errors.append(
+                    f"{names[declared].name}: retires {entry!r}, but no record in "
+                    f"{versions_dir.name}/ carries that name"
+                )
 
     contract = versions_dir.parent / "current.toml"
     if contract.exists():
