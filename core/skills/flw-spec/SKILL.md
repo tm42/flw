@@ -215,12 +215,9 @@ validation.
      versions by where `specs/` lives — `nearest_project()` resolves the nearest one, so a
      feature inside a larger service gets its own contract and its own numbering by
      holding its own `specs/` directory.
-   - **`release_line`, when this record moves the product to a new line** — 1 being
-     whatever reached production. Declaring it restarts the count, so the release this
-     record produces is `1.0.0` and the next minor is `1.0.1`. A record that is not
-     moving the line omits the field entirely. The contract carries no separate key for
-     it: the line is the first part of `spec_version`, so there is one place it can be
-     read and nothing to disagree with.
+   - **`release_line`, when this record moves the product to a new line** — the rules are
+     in `$FLW/core/skills/flw-spec/references/release-line.md`. A record that is not moving
+     the line omits the field entirely.
    - **Name it for what it does**, in kebab-case: `add-build-posture`, `version-names`.
      The name never changes afterwards. That is the whole point of it — two people
      speccing at once pick different names the way they pick different branch names, and
@@ -276,32 +273,10 @@ validation.
 
 ## Thrifty mode
 
-On `--thrifty`, `[interview] mode = "thrifty"`, or a request that plainly says it —
-*"don't make me sit through an interview"* — skip the conversation. Write the draft and
-**stop**. The user edits the file. Next invocation, re-read, `flw validate`, and ask only
-about what is still open.
-
-**Markers go inside the values, not in comments.** Required fields have a minimum length,
-so a TOML comment cannot hold one and the draft would not validate:
-
-```toml
-criteria = "TODO(flw): what does a human have to check beyond the tests?"
-```
-
-`flw validate` finds every `TODO(flw)` and reports the draft as unfinished, which is how
-one never ships by accident. Print the same list yourself and stop there.
-
-**Thrifty subtracts the conversation, not the steps.** The plan still goes on disk first —
-that rule has no exception, so if there is no plan, spend your one question there. Reading
-the code before an amend still happens; it is not conversation. What thrifty removes is
-the section-by-section confirmation and the final lock.
-
-**Amending thriftily** writes the version file as a draft and puts an unambiguous edit
-into `contract_edit`, not into the contract. Anything genuinely open goes in the version
-file's `approach` as a marker, not into `current.toml` — a contract of record with `TODO`
-in it is worse than an unfinished draft beside it.
-
-A marker is what you write instead of guessing.
+**On `--thrifty`, `[interview] mode = "thrifty"`, or a request that plainly says it —
+*"don't make me sit through an interview"* — read
+`$FLW/core/skills/flw-spec/references/thrifty.md` and follow it.** It subtracts the
+conversation and none of the steps.
 
 ## A second read, on any record that edits the contract
 
