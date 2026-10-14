@@ -71,6 +71,28 @@ file can pick this one out.
 - Not a count of what was done — "five fixes", "three lenses" — and not the reason
   standing in for the change: "fix what a reader could not follow" names neither.
 
+**Four constraints you can check by looking.** Applying the release-note test above takes
+a second reading of the subject. These four take one look each, and the release-note test
+still settles everything they do not.
+
+1. An imperative verb first. Not a noun phrase, not a gerund.
+2. Nothing after a comma. A subject that needs a second clause is one that needs a body.
+3. 72 characters or fewer, so a terminal shows it whole.
+4. No version or release number. The contract folds that from the record set, so a
+   subject carrying it tells a reader nothing and goes stale if the fold moves.
+
+Three from this repository's own history, each failing one:
+
+```text
+add --owed, which exits 1 on what the project or the knowledge store owes
+record what-nothing-would-catch, which moves the contract to 0.16.3
+add the multi-repo coherence design, with the field report it rests on
+```
+
+The first trails a relative clause the body should carry. The second does too and names a
+release number besides, which nothing reads. The third trails a clause naming where the
+work came from, which is what a body is for.
+
 A body only for what the diff cannot show: the reason, the rejected alternative, the trap.
 Most commits have none.
 
