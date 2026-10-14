@@ -2451,6 +2451,74 @@ def test_project_roots_ignores_the_machine_wide_config(tmp_path, monkeypatch):
     assert flw._section_config(project, "project") == {"roots": {"ds": "../datastore"}}
 
 
+# --- the areas a record's name may open with -------------------------------- #
+
+
+def test_spec_areas_is_empty_where_nothing_declares_any(tmp_path):
+    """No config, a config about other things and an empty list are one answer, and
+    it is the answer that leaves flw validate refusing nothing on this ground."""
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    assert flw.spec_areas(project) == []
+
+    config = project / ".flw" / "config.toml"
+    config.write_text('[tests]\nchecks = ["make test"]\n')
+    assert flw.spec_areas(project) == []
+
+    config.write_text("[spec]\nareas = []\n")
+    assert flw.spec_areas(project) == []
+
+
+def test_spec_areas_reads_the_declared_list(tmp_path):
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    (project / ".flw" / "config.toml").write_text('[spec]\nareas = ["nvim", "histdb"]\n')
+    assert flw.spec_areas(project) == ["nvim", "histdb"]
+
+
+def test_spec_areas_names_the_file_and_the_key_it_refused(tmp_path):
+    """A list silently dropped is a naming rule that stops firing, and nothing
+    downstream says the check went quiet."""
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    config = project / ".flw" / "config.toml"
+
+    config.write_text('spec = "areas"\n')
+    with pytest.raises(SystemExit) as caught:
+        flw.spec_areas(project)
+    assert str(config) in str(caught.value)
+    assert "[spec] is not a table" in str(caught.value)
+
+    config.write_text('[spec]\nareas = "cli"\n')
+    with pytest.raises(SystemExit) as caught:
+        flw.spec_areas(project)
+    assert "areas is not an array of strings" in str(caught.value)
+
+    config.write_text("[spec]\nareas = [\"cli\", 3]\n")
+    with pytest.raises(SystemExit) as caught:
+        flw.spec_areas(project)
+    assert "areas is not an array of strings" in str(caught.value)
+
+
+def test_spec_areas_ignores_the_machine_wide_config(tmp_path, monkeypatch):
+    """The third section that takes no underlay. Which areas a project is divided
+    into is a fact about that project, so a list in ~/.flw/config.toml would refuse
+    records in every other project on the machine."""
+    machine = tmp_path / "flw-home"
+    machine.mkdir()
+    (machine / "config.toml").write_text('[spec]\nareas = ["cli", "skills"]\n')
+    monkeypatch.setattr(flw, "FLW_HOME", machine)
+
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    (project / ".flw" / "config.toml").write_text('[kb]\ncategory = "x"\n')
+
+    assert flw.spec_areas(project) == []
+    # The merge every other section takes does reach it, so the empty answer above
+    # is the exception being made and not the file going unread.
+    assert flw._section_config(project, "spec") == {"areas": ["cli", "skills"]}
+
+
 def test_doctor_names_the_three_states_a_member_can_be_in(tmp_path, capsys, monkeypatch):
     """`not a project` rather than a bare `exists`: a directory holding neither
     specs/ nor .flw/ has no extensions and can have no store, so a doctor saying
@@ -3442,6 +3510,54 @@ def test_validate_opens_a_record_whose_name_does_not_start_with_v(
 
     assert flw.validate(argparse.Namespace(path=None)) != 0
     assert "sync-guard-minor.toml" in capsys.readouterr().err
+
+
+def test_validate_exempts_a_record_only_an_applied_record_retires(
+    home, tmp_path, monkeypatch, capsys
+):
+    """A retired record is never applied, so the naming rule has to see the
+    retirements too or it binds an abandoned record permanently. Only an applied
+    record retires anything: a draft nobody has run cannot abandon live work, so a
+    name in an unapplied record's `retires` is still refused."""
+    root = tmp_path / "retiring"
+    versions = root / "specs" / "versions"
+    versions.mkdir(parents=True)
+    (root / ".flw").mkdir()
+    (root / ".flw" / "config.toml").write_text('[spec]\nareas = ["scripts"]\n')
+    (root / "specs" / "current.toml").write_text(
+        """schema_version = 4
+spec_version = "0.0.1"
+applied = ["scripts-retirer"]
+assumptions = ["one is enough"]
+
+[final_state]
+
+[[final_state.components]]
+name     = "alpha"
+paths    = ["src/alpha.py"]
+provides = ["a user can alpha"]
+
+[success_criteria]
+tests = [{ command = "true" }]
+criteria = "The fixture behaves."
+"""
+    )
+
+    def record(stem, name, extra=""):
+        (versions / f"{stem}-minor.toml").write_text(
+            f'name    = "{name}"\nsummary = "a fixture record"\n{extra}'
+        )
+
+    record("scripts-retirer", "scripts-retirer", 'retires = ["a-dropped-idea"]\n')
+    record("scripts-other-draft", "scripts-other-draft", 'retires = ["a-live-draft"]\n')
+    record("a-dropped-idea", "a-dropped-idea")
+    record("a-live-draft", "a-live-draft")
+    monkeypatch.chdir(root)
+
+    assert flw.validate(argparse.Namespace(path=None)) != 0
+    err = capsys.readouterr().err
+    assert "'a-live-draft' does not open with one of the areas" in err
+    assert "a-dropped-idea" not in err
 
 
 # --- shape-independence: a run says which project it resolved to ---------- #

@@ -2488,6 +2488,37 @@ def project_roots(root: Path) -> dict[str, Path]:
     return members
 
 
+def spec_areas(root: Path) -> list[str]:
+    """`[spec] areas` — the words a record's name may open with, project file only.
+
+    The third exception to the merge, for the same reason as `[project] roots` and
+    `[knowledge] dir`: which areas a project is divided into is a fact about that
+    project, and a list left in `~/.flw/config.toml` would apply to every project
+    on the machine and be right for at most one.
+
+    No file, no key or an empty list means no areas, and `flw validate` then
+    refuses nothing on that ground. Adopting flw does not cost a project a
+    refusal it never asked for.
+    """
+    config = flw_dir(root) / "config.toml"
+    if not config.is_file():
+        return []
+    try:
+        document = tomllib.loads(config.read_text())
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"error: {config} does not parse: {exc}") from None
+
+    section = document.get("spec", {})
+    if not isinstance(section, dict):
+        raise SystemExit(f"error: {config}: [spec] is not a table")
+    declared = section.get("areas", [])
+    if not isinstance(declared, list) or not all(isinstance(a, str) for a in declared):
+        raise SystemExit(
+            f"error: {config}: [spec] areas is not an array of strings: {declared!r}"
+        )
+    return [a for a in declared if a]
+
+
 # Verbatim in `flw kb write --help`, and nowhere else at runtime. The gate that
 # decides *whether* a note happens is one sentence in each skill, because it is
 # paid on every run; these shape a write that is already happening.
@@ -2750,10 +2781,12 @@ def scout(args: argparse.Namespace) -> int:
 def validate(args: argparse.Namespace) -> int:
     """Validate a contract or a version file.
 
-    Resolves `[paths] reports` and the contract's own `applied` list once, ahead
-    of the loop, and hands both to every target: they are what check_version's
-    sources rule needs to tell a record being written from one already landed,
-    and neither comes from the file being validated itself.
+    Resolves `[paths] reports`, the contract's own `applied` list, `[spec] areas`
+    and the set of retired names once, ahead of the loop, and hands them to every
+    target. None of the four comes from the file being validated: `applied` and
+    `retired` are what tell a record being written from one the contract has
+    already settled, and `areas` is a fact about the project rather than about any
+    record in it.
     """
     sys.path.insert(0, str(checkout() / "core" / "scripts"))
     import validate_spec
@@ -2776,6 +2809,21 @@ def validate(args: argparse.Namespace) -> int:
                 applied = [n for n in tomllib.load(handle).get("applied", []) if isinstance(n, str)]
         except (tomllib.TOMLDecodeError, UnicodeDecodeError):
             pass  # validate_file reports this same failure against the contract below
+
+    areas = spec_areas(root)
+
+    # Only an applied record retires anything, which is the record that introduced
+    # `retires` saying so: a draft nobody has run cannot abandon live work. The
+    # union is built here because validate_spec sits at the bottom of the import
+    # chain — stale.py imports from it — and check_version receives one record at a
+    # time and never the set, so neither module can see another record's retires.
+    retired: set[str] = set()
+    for record in validate_spec.load_records(specs / "versions"):
+        if record.name not in applied:
+            continue
+        for entry in record.document.get("retires", []):
+            if isinstance(entry, str):
+                retired.add(entry)
 
     if not args.path and not contract.exists():
         # A repo with local checks and no specs/ is a normal, supported state —
@@ -2805,7 +2853,12 @@ def validate(args: argparse.Namespace) -> int:
             continue
         default = _schema_for(target)
         code, messages = validate_spec.validate_file(
-            target, schemas / default, reports_dir=reports_dir, applied=applied
+            target,
+            schemas / default,
+            reports_dir=reports_dir,
+            applied=applied,
+            areas=areas,
+            retired=retired,
         )
         for message in messages:
             print(message, file=sys.stderr if code else sys.stdout)

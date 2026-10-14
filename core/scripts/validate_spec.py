@@ -6,10 +6,11 @@ Usage:
 
 Two documents live under specs/. A contract declares its schema_version and gets
 checked for component-name uniqueness. A version file has none, and gets checked
-for lineage — its filename against its declared version, its base against the
-previous file — plus the integrity of its dag. Validating one version file walks
-the whole chain, because there is no index file and a hole in the sequence has
-nowhere else to show up.
+for its identity — its declared name against its filename, and the filename
+against the record's own naming rules — plus the integrity of its dag and the
+sourcing of any report its prose names. `base` is read by nobody here: the order
+versions landed in lives in the contract's `applied` list, so there is no chain to
+walk and no hole in a sequence to find.
 
 Exit codes:
     0 — validates
@@ -411,6 +412,8 @@ def check_version(
     *,
     reports_dir: str = DEFAULT_REPORTS,
     applied: list[str] | None = None,
+    areas: list[str] | None = None,
+    retired: set[str] | None = None,
 ) -> list[str]:
     """Identity, dag integrity and sourcing for one version file.
 
@@ -421,10 +424,15 @@ def check_version(
 
     `applied` is what tells the record being written from one already landed: a
     record carries no date, so without it the sources rule below would refuse
-    every old record whose prose happens to name a report. `reports_dir` and
-    `applied` default to the values a directory with no contract folds to — the
-    default reports directory and nothing applied — so every record in it is
-    unapplied, which is true.
+    every old record whose prose happens to name a report. `retired` says the same
+    about a record the design turned away from, which is never applied and so
+    would otherwise be refused forever with no repair. `areas` is the vocabulary
+    the project declares for its own record names, and empty means the naming rule
+    says nothing here.
+
+    All four default to what a directory with no contract and no config folds to —
+    the default reports directory, nothing applied, nothing retired and no areas —
+    so every record in it is unapplied and unrefused on its name, which is true.
     """
     errors: list[str] = []
 
@@ -441,6 +449,22 @@ def check_version(
             "a record is stored as <name>-minor.toml or <name>-major.toml, and the "
             "release number the contract carries moves by it"
         )
+
+    unsettled = stem not in (applied or []) and stem not in (retired or set())
+    if areas and unsettled and not LEGACY_NUMBER.match(stem):
+        if not any(stem.startswith(f"{area}-") for area in areas):
+            errors.append(
+                f"{stem!r} does not open with one of the areas this project declares "
+                f"in [spec] areas: {', '.join(sorted(areas))}. A record is named "
+                "<area>-<what it does>, so a directory listing says which part of the "
+                "product each record is about"
+            )
+        if "-is-not-" in stem:
+            errors.append(
+                f"{stem!r} contains -is-not-, the construction "
+                "core/styles/terse_prose.md bans by example — Bad: "
+                '"Minimal is not partial." Name the record for what it does'
+            )
 
     tasks = [
         task
@@ -703,16 +727,19 @@ def validate_file(
     *,
     reports_dir: str = DEFAULT_REPORTS,
     applied: list[str] | None = None,
+    areas: list[str] | None = None,
+    retired: set[str] | None = None,
 ) -> tuple[int, list[str]]:
     """(exit code, messages). Shape first, then meaning.
 
     check_chain is about the versions directory, not about any one file in it,
     so it is not run here — the caller runs it once per directory it validates.
 
-    `reports_dir` and `applied` reach `check_version` alone: a contract and a
-    review team have no sources field to check. The caller resolves both from
-    `[paths] reports` and the contract it already reads, or passes neither for a
-    directory with no contract, where every record is unapplied.
+    `reports_dir`, `applied`, `areas` and `retired` reach `check_version` alone: a
+    contract and a review team have no sources field and no name to check. The
+    caller resolves them from `[paths] reports`, `[spec] areas` and the contract it
+    already reads, or passes none of them for a directory with no contract, where
+    every record is unapplied, nothing is retired and no areas are declared.
     """
     try:
         with path.open("rb") as handle:
@@ -739,7 +766,14 @@ def validate_file(
     elif schema_path.name == "review.schema.json":
         meaning = check_review(document, path.name)
     else:
-        meaning = check_version(document, path.name, reports_dir=reports_dir, applied=applied)
+        meaning = check_version(
+            document,
+            path.name,
+            reports_dir=reports_dir,
+            applied=applied,
+            areas=areas,
+            retired=retired,
+        )
 
     markers = check_markers(document)
     if markers:

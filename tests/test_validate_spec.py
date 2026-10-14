@@ -809,3 +809,102 @@ def test_the_walk_returns_records_in_filename_order(specs):
     record(specs, "a-minor.toml", "a")
     names = [r.path.name for r in load_records(specs / "versions")]
     assert names == sorted(names)
+
+
+# The naming rule. `areas` comes from the project's own config and empty means the
+# rule says nothing, so every assertion below that expects a refusal has to declare
+# a list first.
+
+AREAS = ["cli", "skills", "scripts"]
+
+
+def test_no_declared_areas_refuses_nothing():
+    """Adopting flw must not cost a project a refusal it never asked for, so a
+    project that declares no areas is one this rule says nothing about."""
+    assert check_version({"name": "a-shape", "summary": "s"}, "a-shape-minor.toml") == []
+
+
+def test_a_record_outside_the_declared_areas_is_refused():
+    errors = check_version(
+        {"name": "a-shape", "summary": "s"}, "a-shape-minor.toml", areas=AREAS
+    )
+    assert any("does not open with one of the areas" in e for e in errors), errors
+
+
+def test_the_refusal_names_the_declared_areas():
+    """A refusal that does not say what the project declared gets worked around
+    rather than fixed: the author cannot guess the list from the message."""
+    errors = check_version(
+        {"name": "a-shape", "summary": "s"}, "a-shape-minor.toml", areas=AREAS
+    )
+    assert any("cli, scripts, skills" in e for e in errors), errors
+
+
+def test_a_record_opening_with_a_declared_area_passes():
+    assert (
+        check_version(
+            {"name": "scripts-refuse", "summary": "s"},
+            "scripts-refuse-minor.toml",
+            areas=AREAS,
+        )
+        == []
+    )
+
+
+def test_an_applied_record_is_never_refused_for_its_name():
+    """41 of flw's own 43 applied records fail this rule. Their landing commits are
+    derived with `git log -S` on the quoted name in the contract, so renaming them
+    discards the attribution and refusing them leaves validate red forever."""
+    assert (
+        check_version(
+            {"name": "a-shape", "summary": "s"},
+            "a-shape-minor.toml",
+            areas=AREAS,
+            applied=["a-shape"],
+        )
+        == []
+    )
+
+
+def test_a_retired_record_is_never_refused_for_its_name():
+    """A retired record is never applied, so a refusal keyed on `applied` alone
+    would bind it permanently: it cannot land, and renaming it dangles the
+    `retires` entry that the record retiring it carries."""
+    assert (
+        check_version(
+            {"name": "a-shape", "summary": "s"},
+            "a-shape-minor.toml",
+            areas=AREAS,
+            retired={"a-shape"},
+        )
+        == []
+    )
+
+
+def test_a_legacy_numbered_record_is_exempt_from_the_naming_rule():
+    """flw's own nine legacy records are in neither applied nor retired, because
+    the contract's applied list opens at 4.0. Without the exemption the rule
+    refuses all nine the moment the config key exists."""
+    assert check_version({"name": "1.0", "summary": "s"}, "v1.0.toml", areas=AREAS) == []
+
+
+def test_a_name_built_on_is_not_is_refused_by_the_belt():
+    """The one aphorism shape that can survive a valid area prefix, so it is the
+    one the area rule does not already catch."""
+    errors = check_version(
+        {"name": "skills-a-shape-is-not-a-judgment", "summary": "s"},
+        "skills-a-shape-is-not-a-judgment-minor.toml",
+        areas=AREAS,
+    )
+    assert any("Minimal is not partial" in e for e in errors), errors
+
+
+def test_the_belt_leaves_an_ordinary_area_named_record_alone():
+    assert (
+        check_version(
+            {"name": "skills-add-umbrella-plan", "summary": "s"},
+            "skills-add-umbrella-plan-minor.toml",
+            areas=AREAS,
+        )
+        == []
+    )

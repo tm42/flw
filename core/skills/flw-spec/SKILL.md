@@ -226,7 +226,11 @@ validation.
    - **`release_line`, when this record moves the product to a new line** — the rules are
      in `$FLW/core/skills/flw-spec/references/release-line.md`. A record that is not moving
      the line omits the field entirely.
-   - **Name it for what it does**, in kebab-case: `add-build-posture`, `version-names`.
+   - **Name it `<area>-<what it does>`**, in kebab-case, where the area is one of the words
+     the project declares in `[spec] areas` in its flw config:
+     `skills-add-umbrella-plan`, `scripts-refuse-badly-named-records`. `flw validate`
+     refuses a record the contract has neither applied nor retired whose name opens with
+     anything else, and refuses nothing on that ground in a project declaring no areas.
      The name never changes afterwards. That is the whole point of it — two people
      speccing at once pick different names the way they pick different branch names, and
      neither has to be renumbered when it lands. A number would have to be, and rewriting
