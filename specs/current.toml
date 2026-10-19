@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.17.6"
+spec_version = "0.17.7"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -47,6 +47,7 @@ applied = [
   "scripts-refuse-badly-named-records",
   "skills-tighten-commit-subjects",
   "skills-flag-what-drifted",
+  "scripts-drop-the-width-rules",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -199,7 +200,7 @@ provides = [
   "A user can bring flw to a repo they did not set up and have its conventions, test invocation and structure written into that repo's flw configuration, so later work builds on what exists instead of duplicating it.",
   "A user can amend how a skill behaves in one repo with prose that skill reads, without forking the skill or maintaining a copy of it — per skill, or in one file every skill reads, at whichever directory above the work the convention belongs to.",
   "A skill resolves its project root from what the request named rather than from where the shell happens to be, and says which root it resolved to, so a session started in a directory holding several checkouts works in the repository that was asked for.",
-  "A user gets the same plain, hard-wrapped prose out of every reviewer and every report whether or not the style is installed in the host, because the skills read it themselves.",
+  "A user gets the same plain prose out of every reviewer and every report whether or not the style is installed in the host, because the skills read it themselves. The reader sets its width: flw neither wraps a reply nor measures how wide one is.",
   "A user reads a contract that records what shipped, not what was planned: it moves when the work lands rather than when the plan is agreed, so a version still in flight is a record the contract's applied list does not yet name and no landed record has retired. A design that turned leaves a record nobody will run, and retiring it is how flw stale --owed stops counting it as work owed.",
   "A user can install a build posture alongside the skills that requires one runnable check behind the non-trivial logic an agent writes, and requires saying what was not done rather than implying a completeness the work does not have.",
   "A user gets commits that are one part of the product each, complete with the check that proves them, because what a commit is and what its message says are written once in one file every skill cites rather than restates — so an agent proposing a commit and an agent working outside a flw run follow the same rule.",
