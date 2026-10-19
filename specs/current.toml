@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.17.10"
+spec_version = "0.17.11"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -51,6 +51,7 @@ applied = [
   "a-verdict-needs-a-measurement",
   "scout-says-what-resolved",
   "say-who-does-what",
+  "say-what-the-survey-creates",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -214,7 +215,7 @@ provides = [
   "A user who runs flw-research on a repository gets its architecture written into that repo's knowledge store — the repo file, area files where reading one removes reading several, and with [project.roots] declared, system.md at the parent from a pass that reads the topology before any member — reviewed per level rather than in one block, and shaped like a shipped toy example rather than invented.",
   "A user's spec, execute and review runs read the store from where they are working: orientation across the declared roots at spec time, the walk from the record's paths at execute time, the walk from the diff at review time. An execute run that changes code re-reads and re-stamps the files describing what it changed, at the phase boundary, and its report lists them.",
   "Any skill may rewrite one knowledge file the code has already falsified, and re-stamp it. The trigger is evidence rather than judgment, and the run says which file it rewrote. That permission is one sentence in each skill and not a rule in the shared context, because a permission granted there reads as permission to write anything.",
-  "A user can run flw-research on a repository that has no flw directory yet, which is the ordinary case for a repo nobody set up: the skill says which directory it is about to create and gets a yes before writing, the same gate flw-spec already applies to specs/, and proposes the ignore lines alongside the config it writes.",
+  "A user can run flw-research on a repository that has no flw directory yet, which is the ordinary case for a repo nobody set up: the skill says which directory it is about to create and gets a yes before writing, the same gate flw-spec already applies to specs/, and that gate covers a directory in each declared member as much as one in the project itself, because a member is usually a checkout the user does not own. It proposes the ignore lines alongside the config it writes wherever there is a file to put them in, and says where they go rather than assuming the store ends up ignored. Every store a survey creates is filed under one note category, declared in each config it writes, so a survey does not leave the store partitioned by which member a session happened to stand in.",
   "A user can ask flw-research to re-check what a survey already recorded rather than run one again: it reads the recorded files, reports what moved, and skips the orientation and the probes whose answers are already in config.",
   "A user can name a writing failure they have just seen — by one of the skill's flags or in their own words — and get the agent's own instances of it, quoted from its recent turns, followed by the corrected behaviour in the same reply. The style is never restated, because an agent that can recite a constraint it is breaking is not helped by hearing it again. Listing the categories is a flag of its own, so a user does not have to remember them, and the transcript-reading command is a fallback for turns the context no longer holds rather than the skill's entry point — so the skill works on a host that writes no session record.",
   "A measurement a record carries from a review report arrives with the command that produced it and the revision it was taken at, or with a sentence saying it cannot be re-run there, so a decision resting on a number is a decision a later reader can re-take rather than one they have to believe.",
