@@ -233,8 +233,8 @@ file and never from the machine's.
 **Write and review per level, not in one block.** The repository file, shown and agreed;
 then the areas, shown and agreed. A tree delivered whole is a tree nobody reads.
 
-**The bar, and it is the sparseness rule too.** A file earns its tokens only by removing
-more code reading than it costs. A folder gets a file when reading it removes reading, not
+**The bar, and it is the sparseness rule too.** Write a file only where it removes
+more code reading than it costs to read. A folder gets a file when reading it removes reading, not
 when the folder exists — a repository of 1,800 files gets perhaps forty. Missing is normal;
 nothing checks this and nothing will.
 

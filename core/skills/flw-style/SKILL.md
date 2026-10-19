@@ -59,7 +59,7 @@ finding.
 
 | flag | what to look for | cite |
 |---|---|---|
-| `--vocab` | qualifiers that change nothing, evaluative words with no measurement, a longer word where a plain one exists, balanced aphorisms, reaction openers, closing offers, announcements, signposts | `terse_prose.md` §Words, §What to leave out |
+| `--vocab` | qualifiers that change nothing, evaluative words with no measurement, a longer word where a plain one exists, balanced aphorisms, an abstraction as the subject of a verb it cannot do, a pre-assembled figure of speech, a finding held back for effect, reaction openers, closing offers, announcements, signposts | `terse_prose.md` §Words, §What to leave out |
 | `--verbose` | your reply's prose word count against the word count of what was asked; a short question answered at length; the same point made twice at the same level of detail | `terse_prose.md` §Length, §What to put in |
 | `--format` | a line ending in two trailing spaces, a fence with no language, a heading deeper than `###`, headings on a reply to a short question, a paragraph hard-wrapped across several lines | `terse_prose.md` §Structure and formatting |
 | `--shape` | the reply never says what kind of thing it is; decisions you made that the user could have made differently are not first, or not named at all; a sentence that has to be read twice | `terse_prose.md` §Before you write, §Sentences |

@@ -104,8 +104,8 @@ project. One clause is usually enough. Do not gloss a term the reader has been u
 **Cut every qualifier that changes nothing when removed.** Honest, inherently, genuinely,
 really, quite. Read the sentence without the word, and if the meaning is the same the word was
 only emphasis. Keep the ones that narrow the claim: only, at most, per host — and *actually*
-where it marks a contrast with what was claimed. "What is actually on the machine" earns it;
-"actually quite good" does not.
+where it marks a contrast with what was claimed. Keep it in "what is actually on the machine"
+and cut it from "actually quite good".
 
 **State uncertainty once.** "I don't know" beats a stack of hedges. Do not refute an objection
 the reader has not raised.
@@ -120,6 +120,25 @@ four open questions, even if they were part of the conversation.
 
 **Keep commands, paths, numbers and error text exactly as they are.** Never paraphrase an error
 message, never round a number, never tidy a path.
+
+**Make the subject something that can act, and the verb what it does.** If the subject cannot do the verb, rewrite. Most bad sentences here have an abstraction doing something only a person can do.
+
+- Bad: "Headings earn their place when the reply holds two categories."
+- Good: "Use a heading when the reply holds two categories."
+- Bad: "That split decides how to handle each."
+- Good: "The two kinds need different handling."
+- Bad: "The config decides which setting wins."
+- Good: "A setting in the project's file overrides the same setting on the machine."
+
+**No figure of speech you are used to seeing in print.** It arrives already assembled, which is why it gets reached for. Earns its place, rides along, the whole point, wearing something's clothes.
+
+- Bad: "The second paragraph rides along uncommented."
+- Good: "Nothing in the record mentions the second paragraph."
+
+**Do not hold a finding back for effect.** No "and here is the thing", no "less than you would expect", no "it turns out".
+
+- Bad: "It collapses to less than you would expect."
+- Good: "Two rules cover it."
 
 ### What to leave out
 

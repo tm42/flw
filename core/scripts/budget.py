@@ -3,12 +3,13 @@
 
 Nothing in flw measured what a run loads, and `core/skills/flw-execute/SKILL.md` grew
 past 19,000 bytes without anything noticing until a user read a run and called it
-verbose. Two ceilings: 21,000 bytes for a `SKILL.md`, since that is what a run loads by
-naming the skill, and 10,000 for `core/shared/context.md` and
-`core/styles/terse_prose.md`, which every skill's opening reads whether or not it names
-one. A reference under `references/`, read only when something in the skill sends a
-reader to it, carries no ceiling here — a budget on a file read once in ten runs would
-price the wrong thing.
+verbose. Three ceilings: 21,000 bytes for a `SKILL.md`, since that is what a run loads by
+naming the skill; 12,000 for `core/styles/terse_prose.md`, which `flw style install`
+writes into every host's system prompt, so it is read on every turn of every session
+rather than once per run; and 10,000 for the other files a run loads unconditionally. A
+reference under `references/`, read only when something in the skill sends a reader to
+it, carries no ceiling here — a budget on a file read once in ten runs would price the
+wrong thing.
 
 Bytes rather than tokens: a token count needs a tokenizer, and flw ships none as a
 runtime dependency. Measured 2026-09-02 across these files with `cl100k_base` as a proxy
@@ -25,6 +26,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SKILL_CEILING = 21_000
 SHARED_CEILING = 10_000
+# Its own number, because it is the one file installed into a host's system prompt
+# and read on every turn, and it is the only one of the five near its ceiling.
+STYLE_CEILING = 12_000
 
 
 def targets() -> list[tuple[Path, int]]:
@@ -36,7 +40,7 @@ def targets() -> list[tuple[Path, int]]:
     found = [(path, SKILL_CEILING) for path in sorted(REPO.glob("core/skills/*/SKILL.md"))]
     found += [
         (REPO / "core" / "shared" / "context.md", SHARED_CEILING),
-        (REPO / "core" / "styles" / "terse_prose.md", SHARED_CEILING),
+        (REPO / "core" / "styles" / "terse_prose.md", STYLE_CEILING),
         # Written into each host's ambient instructions file by `flw install`, so
         # it is in context in every session in every repository on the machine —
         # more unconditional than any SKILL.md, and it grew 9% with nothing

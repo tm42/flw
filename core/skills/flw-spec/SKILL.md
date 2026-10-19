@@ -231,9 +231,9 @@ validation.
      `skills-add-umbrella-plan`, `scripts-refuse-badly-named-records`. `flw validate`
      refuses a record the contract has neither applied nor retired whose name opens with
      anything else, and refuses nothing on that ground in a project declaring no areas.
-     The name never changes afterwards. That is the whole point of it — two people
-     speccing at once pick different names the way they pick different branch names, and
-     neither has to be renumbered when it lands. A number would have to be, and rewriting
+     The name never changes afterwards, which is why a name and not a number: two
+     people speccing at once pick different names the way they pick different branch
+     names, and neither has to be renumbered when it lands. A number would have to be, and rewriting
      a record's identity at merge means the file in git is not the file anyone reviewed.
    - `approach` carries step 4's reasoning. Write only what stops being true once the work
      lands — if a sentence would still hold afterwards, it belongs in the contract. Its

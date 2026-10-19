@@ -32,7 +32,7 @@ def test_all_under_budget_exits_zero(tmp_path, monkeypatch, capsys):
 
 
 def test_a_file_over_its_ceiling_exits_one_and_names_it(tmp_path, monkeypatch, capsys):
-    """One assertion pins both ceilings and the whole file list: deleting the
+    """One assertion pins all three ceilings and the whole file list: deleting the
     shared block passed all 638 tests and took the real command from six rows to
     four, at exit 0 both times."""
     repo = _fake_repo(tmp_path, monkeypatch)
@@ -40,7 +40,7 @@ def test_a_file_over_its_ceiling_exits_one_and_names_it(tmp_path, monkeypatch, c
         "x" * (engine.SKILL_CEILING + 1)
     )
     (repo / "core" / "styles" / "terse_prose.md").write_text(
-        "x" * (engine.SHARED_CEILING + 1)
+        "x" * (engine.STYLE_CEILING + 1)
     )
     (repo / "core" / "shared" / "ambient.md").write_text("x" * (engine.SHARED_CEILING + 1))
     (repo / "core" / "shared" / "commits.md").write_text("x" * (engine.SHARED_CEILING + 1))

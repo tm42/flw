@@ -48,7 +48,7 @@ does.
 lens is for — do not propose new abstractions, new helpers, or new tests.
 
 Also report the opposite where you find it: something that looks removable and
-genuinely earns its place. That prevents churn, and it is as useful as a cut.
+is not. That prevents churn, and it is as useful as a cut.
 """
 
 [[reviewer]]
