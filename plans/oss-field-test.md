@@ -66,6 +66,18 @@ Three findings. The ranking underneath them is good: positions 5 through 11 are 
 
 **No resolution rate is printed.** `--help` commits to "roughly 85-90% of imports to resolve" and the header reports file counts, lines and definitions but never the share that resolved. A repository where it resolved 40% is indistinguishable from one where it resolved 90%, which is the one number that says whether to trust the ranking.
 
+Closed by `scout-says-what-resolved`, which prints both counts and deletes the 85-90% claim, met on none of the three repositories measured. Re-taken after that record landed:
+
+```text
+flw scout ~/_projects/oss-fixtures/pandas
+68.3% of imports resolved (5429 of 7950 naming a module this repository holds) · 645 reached every definer of a name rather than one, for 2351 edges
+
+flw scout ~/_projects/oss-fixtures/asgi/uvicorn
+62.6% of imports resolved (278 of 444 naming a module this repository holds) · 6 reached every definer of a name rather than one, for 12 edges
+```
+
+The 645 is where the benchmark fixture's `Any 167 files` came from, and the figure now says so on every run. The rule itself is unchanged, which that record's first decision records as the one worth overturning.
+
 Also worth a line: 1,156 of the 1,544 files are tests, and `asv_bench/benchmarks` ranks third in PACKAGES at 0.076, above every pandas package except `core/dtypes` and `core`.
 
 ## T2 result, at starlette `96d5023` · uvicorn `31e3e00` · httpx `b5addb6`

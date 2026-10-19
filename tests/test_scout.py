@@ -810,3 +810,62 @@ def test_allocate_serves_the_named_section_first():
     assert engine.allocate(sections, 1, first="A")[1:3] == ["A", "a1"]
     both = engine.allocate(sections, 2, first="B")
     assert both.index("A") < both.index("B")
+
+
+# --- what the ranking rests on ----------------------------------------------- #
+
+
+def test_the_header_says_what_share_of_imports_resolved(tmp_path):
+    """Four imports, each one of the cases the figure has to get right:
+    two naming an in-repo module that defines the name, one naming an in-repo
+    module that does not, one naming a module outside the repository, and one
+    whose module does not resolve at all over a name two files define.
+
+    So the denominator is 3 and the numerator 2 — neither the external import nor
+    the unresolvable one is in either, which is the decision this record took and the one a later reader is
+    most likely to undo by accident, because counting it looks more honest and
+    makes the figure a measure of how much of the standard library a repo uses.
+    """
+    out = engine.scout(
+        write(
+            tmp_path,
+            {
+                "pkg/__init__.py": "",
+                "pkg/thing.py": "class Thing:\n    pass\n",
+                "pkg/barrel.py": "",
+                "pkg/other.py": "class Thing:\n    pass\n",
+                "resolves.py": "from pkg.thing import Thing\n",
+                "resolves_too.py": "from pkg.other import Thing\n",
+                "undefined.py": "from pkg.barrel import Missing\n",
+                "external.py": "from typing import Any\n",
+                "no_module.py": "from elsewhere.gone import Thing\n",
+            },
+        )
+    )
+    rests_on = out.split("\n")[1]
+    assert "66.7% of imports resolved (2 of 3 naming a module this repository holds)" in rests_on
+
+
+def test_the_header_counts_the_imports_that_reached_every_definer(tmp_path):
+    """The branch that put a benchmark fixture second in pandas: 645 imports took
+    it there, for 2,351 edges. Here one import over a name two files define, whose
+    module resolves nowhere, so both definers take an edge."""
+    out = engine.scout(
+        write(
+            tmp_path,
+            {
+                "pkg/thing.py": "class Thing:\n    pass\n",
+                "pkg/other.py": "class Thing:\n    pass\n",
+                "no_module.py": "from elsewhere.gone import Thing\n",
+            },
+        )
+    )
+    rests_on = out.split("\n")[1]
+    assert "1 reached every definer of a name rather than one, for 2 edges" in rests_on
+
+
+def test_a_repository_with_no_in_repo_imports_says_so_rather_than_dividing(tmp_path):
+    out = engine.scout(write(tmp_path, {"alone.py": "from typing import Any\n"}))
+    assert out.split("\n")[1].startswith(
+        "no imports name a module this repository holds"
+    )

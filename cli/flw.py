@@ -4250,7 +4250,15 @@ resolves to nothing in the repository does not divide it at all.
 
 What a high rank does not mean: not that the file is good, not that it changed
 recently, not that it runs often. A file nothing imports ranks low whether it is
-dead code or the entry point everything else is reached from.
+dead code or the entry point everything else is reached from. A package's
+`__init__.py` tops the ranking because every file in the package imports it,
+which is the module-import rule working and says nothing about that file. And a
+file something resolves from a string at runtime — a registry of `"module:Class"`
+values, a plugin table, a dynamic import — produces no edge at all and ranks as a
+leaf: measured on uvicorn at `31e3e00`, `uvicorn/config.py` ranks first at 0.0940
+and `h11_impl.py`, which serves every HTTP request, ranks fourteenth at 0.0161.
+No number in the output can catch that, because there is no import to count as
+unresolved.
 
 Nothing is written and nothing is cached. Regenerating costs a fraction of a
 second on top of the parse, and an overview kept on disk rides in every request
@@ -4262,8 +4270,10 @@ service in a mixed monorepo produces no edges at all, and the header will
 confidently count the others. For those, `aider --show-repo-map` prints a map
 and exits without an API key.
 
-Expect roughly 85-90% of imports to resolve. `sys.path` manipulation and
-dynamic imports do not resolve and never will.""",
+The second header line says what share of imports resolved, over the imports that
+name a module the repository holds — so an import of `typing` is in neither half
+of it. `sys.path` manipulation and dynamic imports do not resolve and never
+will.""",
         epilog="""sections, as the Python scout prints them
 
   ENTRY POINTS       how do I run this: a __main__ guard, or a CLI framework

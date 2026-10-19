@@ -368,3 +368,30 @@ def test_the_js_scout_prints_a_component_size_not_its_members(tmp_path):
     out = run(tmp_path, 200).stdout
     assert "12 packages in one cycle" in out
     assert " <-> " not in out
+
+
+def test_the_js_header_says_what_the_ranking_rests_on(tmp_path):
+    """The same two counts as the Python scout's second header line. The contract's
+    property opens "Both scouts", so a figure printed in one and not the other is a
+    surface that disagrees with itself.
+
+    Three name imports whose specifier resolves here, two of them reaching a
+    definition, and one over a name two files export whose specifier resolves to
+    nothing — which takes the every-definer branch for two edges.
+    """
+    build(
+        tmp_path,
+        {
+            "src/thing.ts": "export class ThingHere {\n  run() {}\n}\n",
+            "src/other.ts": "export class ThingHere {\n  run() {}\n}\n",
+            "src/empty.ts": "export const unrelated = 1;\n",
+            "src/resolves.ts": 'import { ThingHere } from "./thing";\nexport const a = ThingHere;\n',
+            "src/resolves_too.ts": 'import { ThingHere } from "./other";\nexport const b = ThingHere;\n',
+            "src/undefined.ts": 'import { Missing } from "./empty";\nexport const c = Missing;\n',
+            "src/gone.ts": 'import { ThingHere } from "nowhere-at-all";\nexport const d = ThingHere;\n',
+        },
+    )
+    out = run(tmp_path).stdout
+    rests_on = out.split("\n")[1]
+    assert "66.7% of imports resolved (2 of 3 naming a module this repository holds)" in rests_on
+    assert "1 reached every definer of a name rather than one, for 2 edges" in rests_on

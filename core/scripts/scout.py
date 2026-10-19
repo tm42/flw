@@ -495,9 +495,21 @@ def scout(root: Path, budget: int = 20) -> str:
     out: dict[Path, list[Path]] = defaultdict(list)
     importers: dict[tuple[Path, str], set[Path]] = defaultdict(set)
     incoming: dict[Path, int] = defaultdict(int)
+    # What the ranking rests on, counted in the loop that already walks every
+    # import. `in_repo` is name imports naming a module this repository holds, and
+    # `found` is how many of those reached a definition — the denominator the
+    # deleted help figure never stated, and the only one a reader can act on,
+    # because an import of typing.Any was never going to produce an edge.
+    # `every_definer` and `fallback_edges` are the branch below: edges counted
+    # after the dst != src test, because the candidate list is the larger number
+    # and is not what the graph got — on pandas the two differ by 13.
+    in_repo = found = every_definer = fallback_edges = 0
     for src, seen in facts.imports.items():
         for target, name in seen:
             candidates = definers.get(name, [])
+            if target and facts.module_files.get(target) is not None:
+                in_repo += 1
+                found += 1 if candidates else 0
             # The definer in the module the import named, and every definer only
             # when none matches. The fallback is what keeps a re-export barrel
             # taking none of the score: a barrel defines nothing, so nothing
@@ -505,6 +517,9 @@ def scout(root: Path, budget: int = 20) -> str:
             named = facts.module_files.get(target) if target else None
             if named is not None and named in candidates:
                 candidates = [named]
+            elif candidates and len(candidates) > 1:
+                every_definer += 1
+                fallback_edges += sum(1 for dst in candidates if dst != src)
             for dst in candidates:
                 if dst != src:
                     out[src].append(dst)
@@ -538,7 +553,21 @@ def scout(root: Path, budget: int = 20) -> str:
     )
     if facts.unparsed:
         header += f" · {facts.unparsed} failed to parse"
-    lines = [header]
+    # Flush-left and outside the budget. `-n` is spent inside `allocate`, which
+    # iterates sections, and the header is joined onto its return — so the cost
+    # is nothing either way. What indentation would break is the two budget
+    # tests, which define the budgeted body as every line starting with a space.
+    resolved = (
+        f"{found / in_repo:.1%} of imports resolved ({found} of {in_repo} naming a "
+        "module this repository holds)"
+        if in_repo
+        else "no imports name a module this repository holds"
+    )
+    rests_on = (
+        f"{resolved} · {every_definer} reached every definer of a name rather "
+        f"than one, for {fallback_edges} edges"
+    )
+    lines = [header, rests_on]
     # Every section builds its body in full and `allocate` decides how much of
     # each is printed. Appending straight to `lines` is what let five of six
     # sections escape the budget.

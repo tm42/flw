@@ -343,15 +343,33 @@ function main(root, budget) {
     out.get(src).push(dst);
     incoming.set(dst, (incoming.get(dst) ?? 0) + 1);
   };
+  // What the ranking rests on, counted in the loop that already walks every
+  // import. `inRepo` is name imports whose specifier resolved to a file here, and
+  // `found` is how many of those reached a definition. `everyDefiner` is the
+  // fallback below, with its edges counted after the self-edge test, because the
+  // candidate list is the larger number and is not what the graph got.
+  let inRepo = 0;
+  let found = 0;
+  let everyDefiner = 0;
+  let fallbackEdges = 0;
   for (const [src, seen] of importsOf) {
     for (const [name, targets] of seen) {
       const all = definers.get(name) ?? [];
       for (const target of targets) {
+        if (target) {
+          inRepo += 1;
+          if (all.length) found += 1;
+        }
         // The definer in the module the import named, and every definer only
         // when none matches. The fallback is what keeps a re-export barrel
         // taking none of the score: a barrel exports nothing of its own, so
         // nothing matches there and the edge reaches the definition instead.
-        for (const dst of target && all.includes(target) ? [target] : all) {
+        const matched = target && all.includes(target);
+        if (!matched && all.length > 1) {
+          everyDefiner += 1;
+          fallbackEdges += all.filter((dst) => dst !== src).length;
+        }
+        for (const dst of matched ? [target] : all) {
           if (dst === src) continue;
           push(src, dst);
           const key = `${dst}\0${name}`;
@@ -414,7 +432,11 @@ function main(root, budget) {
 
   const code = files.filter((f) => !isTest(rel(f)));
   const defCount = [...defs.values()].reduce((a, v) => a + v.length, 0);
-  console.log(`${files.length} ts files (${files.length - code.length} test), ${defCount} exported definitions\n`);
+  console.log(`${files.length} ts files (${files.length - code.length} test), ${defCount} exported definitions`);
+  const resolved = inRepo
+    ? `${((found / inRepo) * 100).toFixed(1)}% of imports resolved (${found} of ${inRepo} naming a module this repository holds)`
+    : "no imports name a module this repository holds";
+  console.log(`${resolved}, ${everyDefiner} reached every definer of a name rather than one, for ${fallbackEdges} edges\n`);
 
   const cache = new Map();
   const packageOfFile = new Map(code.map((f) => [f, packageOf(root, f, cache)]));
