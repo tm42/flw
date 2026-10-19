@@ -180,7 +180,7 @@ class Knowledge:
 
 
 def knowledge_state(
-    stores: list[tuple[Path, Path]], members: dict[str, Path]
+    stores: list[tuple[Path, Path]], members: dict[str, Path], *, exclude: str
 ) -> Knowledge:
     """`flw know --check`'s rows, folded to counts.
 
@@ -217,12 +217,19 @@ def knowledge_state(
             elif "unstamped" in concept.problems:
                 unstamped.append(where)
             elif concept.level == "System":
-                per_member = knowledge.changed_system(concept, members)
-                row = by_state.get(knowledge.system_state(per_member))
+                per_member = knowledge.changed_system(concept, members, exclude=exclude)
+                # No declared members is a diff with nothing to run over, which
+                # the contract already calls unverifiable. system_state takes an
+                # empty map through its three-way loop and answers "current", and
+                # by_state has no "current" row, so the file was counted and
+                # listed under nothing.
+                row = by_state.get(
+                    "unverifiable" if not per_member else knowledge.system_state(per_member)
+                )
                 if row is not None:
                     row.append(where)
             else:
-                diff = knowledge.changed(concept)
+                diff = knowledge.changed(concept, exclude=exclude)
                 row = by_state.get(diff.state)
                 if row is changed:
                     # The one state that carries a measurement. An unverifiable
@@ -404,8 +411,21 @@ def landing(root: Path, contract: str, name: str) -> str | None:
     while the name appears nowhere else in the contract, the contract has never
     moved, and the history is deep enough to hold it — a shallow clone finds
     nothing, and nothing is the answer for a project not under git as well.
+
+    How the contract quotes the name is not one of those conditions. TOML reads
+    'x' and "x" as the same value and the schema accepts both, so a pickaxe on the
+    double-quoted form alone never matched a contract written with single quotes
+    and every applied entry in it came back unattributed. One regex call over both
+    quotings rather than two calls concatenated: `found[-1]` is the oldest hit
+    because git orders the output, and over two concatenated lists it would be the
+    oldest of the second call instead — which a contract whose history carries both
+    quotings would hit. The name is escaped before it goes in, because a legacy
+    record is named 4.2 and a dot matches anything.
     """
-    code, out = knowledge.git(["log", "--format=%H", "-S", f'"{name}"', "--", contract], root)
+    quoted = f"""['"]{re.escape(name)}['"]"""
+    code, out = knowledge.git(
+        ["log", "--format=%H", "-S", quoted, "--pickaxe-regex", "--", contract], root
+    )
     found = [line.strip() for line in out.splitlines() if line.strip()] if code == 0 else []
     return found[-1] if found else None
 
@@ -496,10 +516,15 @@ def owed(
     specs_dir: str = "specs",
     knowledge_stores: list[tuple[Path, Path]] | None = None,
     members: dict[str, Path] | None = None,
+    exclude: str,
 ) -> tuple[str, bool]:
-    """`flw stale --owed`: what the project owes, and whether any of it is red."""
+    """`flw stale --owed`: what the project owes, and whether any of it is red.
+
+    `exclude` is the flw directory's name, carried down to `numstat` because this
+    module has no way to learn it: nothing here reads the environment or the CLI.
+    """
     corpus = ledger.corpus(root, specs_dir)
-    know = knowledge_state(knowledge_stores or [], members or {})
+    know = knowledge_state(knowledge_stores or [], members or {}, exclude=exclude)
     applied = [n for n in corpus.contract.get("applied", []) if isinstance(n, str)]
     rows = owed_rows(know, corpus.records, applied)
     attribution = unattributed(
@@ -516,6 +541,7 @@ def fold(
     knowledge_stores: list[tuple[Path, Path]] | None = None,
     members: dict[str, Path] | None = None,
     notes: list | None = None,
+    exclude: str,
 ) -> str:
     """Every store, read once, rendered as one block.
 
@@ -525,7 +551,7 @@ def fold(
     """
     corpus = ledger.corpus(root, specs_dir)
     found = reports((root / reports_dir), corpus.records, reports_dir)
-    know = knowledge_state(knowledge_stores or [], members or {})
+    know = knowledge_state(knowledge_stores or [], members or {}, exclude=exclude)
     markers = ledger.extension_markers(corpus)
     given = notes or []
     return render(

@@ -240,7 +240,7 @@ def test_fold_carries_the_declared_directory_into_the_matcher(tmp_path):
         tmp_path, first='summary = "acted on reviews/2026-09-04T1200-eng.md"\n'
     )
     moved(root, "reviews", "2026-09-04T1200-eng.md")
-    text = stale.fold(root, reports_dir="reviews")
+    text = stale.fold(root, exclude=".flw", reports_dir="reviews")
     assert "1 spent, 0 nobody has read" in text
 
 
@@ -296,7 +296,7 @@ def test_the_extensions_header_counts_files_and_the_row_counts_lines(tmp_path):
     (directory / "shared.md").write_text("**Python 3.11 is the floor**, for `tomllib`.\n")
     (directory / "flw-spec.md").write_text("# no countable here\n")
     (directory / "flw-execute.md").write_text("# nor here\n")
-    text = stale.fold(root)
+    text = stale.fold(root, exclude=".flw")
     assert "EXTENSIONS  (3)" in text
     assert "claims with no revision  (1)" in text
 
@@ -317,7 +317,7 @@ def test_a_broken_symlink_in_an_extension_still_prints_every_block(tmp_path):
     directory = root / ".flw" / "extensions"
     directory.mkdir(parents=True)
     (directory / "gone.md").symlink_to("/nonexistent/gone.md")
-    text = stale.fold(root)
+    text = stale.fold(root, exclude=".flw")
     for block in ("REPORTS", "KNOWLEDGE", "EXTENSIONS  (0)", "NOTES"):
         assert block in text
 
@@ -335,7 +335,7 @@ def test_the_whole_fold_runs_over_a_project_with_no_stores_at_all(tmp_path):
     """The exit-0 case the contract names: no reports directory, no knowledge
     store, no notes. It prints what it can rather than refusing."""
     root = project(tmp_path, first='summary = "s"\n')
-    text = stale.fold(root)
+    text = stale.fold(root, exclude=".flw")
     assert "no reports/ directory" in text
     assert "no store" in text
     assert "Nothing here is a failure" in text
@@ -344,7 +344,7 @@ def test_the_whole_fold_runs_over_a_project_with_no_stores_at_all(tmp_path):
 def test_an_empty_knowledge_store_counts_no_files(tmp_path):
     root = project(tmp_path, first='summary = "s"\n')
     (root / ".flw" / "knowledge").mkdir(parents=True)
-    assert stale.knowledge_state([(root, root / ".flw" / "knowledge")], {}).files == 0
+    assert stale.knowledge_state([(root, root / ".flw" / "knowledge")], {}, exclude=".flw").files == 0
 
 
 def test_a_knowledge_file_describing_a_path_that_is_gone_is_orphaned(tmp_path):
@@ -356,7 +356,7 @@ def test_a_knowledge_file_describing_a_path_that_is_gone_is_orphaned(tmp_path):
     (store / "src" / "engine.md").write_text(
         '+++\ntype = "area"\ndescription = "the engine"\nrevision = "abc1234"\n+++\n# src/engine\n'
     )
-    state = stale.knowledge_state([(root, store)], {})
+    state = stale.knowledge_state([(root, store)], {}, exclude=".flw")
     assert state.files == 1
     assert state.orphaned == [f"{root.name}/src/engine.md"]
     assert state.changed == []
@@ -426,7 +426,7 @@ def test_a_stamp_the_repository_cannot_resolve_reaches_its_own_row(tmp_path):
     after the rewrite, which is the run a reader most needs told about."""
     root = project(tmp_path, first='summary = "s"\n')
     stamped_repo(root)
-    state = stale.knowledge_state([(root, root / ".flw" / "knowledge")], {})
+    state = stale.knowledge_state([(root, root / ".flw" / "knowledge")], {}, exclude=".flw")
     assert state.files == 1
     assert state.unverifiable == [f"{root.name}/src/src.md"]
     assert state.changed == []
@@ -468,7 +468,7 @@ def test_each_knowledge_state_reaches_its_own_row(tmp_path):
         '+++\ntype = "Area"\ndescription = "d"\nrevision = "abc1234"\n+++\n# v\n',
     )
 
-    state = stale.knowledge_state([(root, store)], {})
+    state = stale.knowledge_state([(root, store)], {}, exclude=".flw")
     assert state.files == 4
     assert state.orphaned == [f"{root.name}/orphan/orphan.md"]
     assert state.malformed and state.malformed[0].startswith(f"{root.name}/malformed")
@@ -494,7 +494,7 @@ def test_a_knowledge_file_the_code_has_moved_under_reaches_the_changed_row(tmp_p
     monkeypatch.setattr(
         knowledge, "numstat", lambda *a, **k: knowledge.Diff("changed", 3, 41, 12)
     )
-    state = stale.knowledge_state([(root, store)], {})
+    state = stale.knowledge_state([(root, store)], {}, exclude=".flw")
     assert state.changed == [f"{root.name}/src/src.md — 3 files · +41 −12"]
     assert state.unverifiable == []
 
@@ -507,7 +507,7 @@ def test_the_extension_markers_reach_the_block(tmp_path):
     directory = root / ".flw" / "extensions"
     directory.mkdir(parents=True)
     (directory / "shared.md").write_text("**Python 3.11 is the floor**, for `tomllib`.\n")
-    text = stale.fold(root)
+    text = stale.fold(root, exclude=".flw")
     assert "EXTENSIONS  (1)" in text
     assert "shared.md:11" not in text
     assert "shared.md:1  3.11" in text
@@ -525,7 +525,7 @@ def test_a_note_with_no_revision_reaches_the_block(tmp_path):
         "+++\ntitle = 'counts'\n+++\nThe row is built at `core/scripts/scout.py:478`.\n"
     )
     notes = note_store.walk(home, None)
-    text = stale.fold(root, notes=notes)
+    text = stale.fold(root, exclude=".flw", notes=notes)
     assert "NOTES  (1)" in text
     assert "flw/counts — e.g. core/scripts/scout.py:478" in text
 
@@ -770,3 +770,83 @@ def test_owed_reads_components_under_final_state_not_a_top_level_key(tmp_path, m
     assert stale.unattributed(tmp_path, nested, "specs/current.toml", []).commits == [
         ("abc1234", "wrong place")
     ]
+
+
+# --- a verdict with nothing behind it ---------------------------------------- #
+#
+# landing() drives every attribution row, so a name it cannot find means --owed
+# reports nothing however much drift is in the history.
+
+
+def single_quoted(root: Path, *applied: str) -> None:
+    """The same contract, quoted the way TOML also permits."""
+    (root / "specs" / "versions").mkdir(parents=True, exist_ok=True)
+    names = ", ".join(f"'{n}'" for n in applied)
+    (root / "specs" / "current.toml").write_text(OWED_CONTRACT.format(applied=names))
+
+
+@needs_git
+def test_owed_finds_a_landing_however_the_contract_quotes_the_name(tmp_path, capsys):
+    """TOML reads 'x' and "x" as one value and the schema accepts both, so a
+    pickaxe on the double-quoted form alone exited 0 over a drift commit that was
+    sitting right there. Two trees identical but for the quote character."""
+    for quoting, write in (("double", contract), ("single", single_quoted)):
+        root = tmp_path / quoting
+        (root / "src").mkdir(parents=True)
+        (root / "src" / "x.py").write_text("x = 0\n")
+        write(root, "first")
+        commit(root, "land")
+        commit(root, "drift", {"src/x.py": "x = 1\n"})
+
+        code, out = run_owed(root, capsys, "--owed")
+        assert code == 1, quoting
+        assert "drift" in out, quoting
+
+
+@needs_git
+def test_a_contract_quoted_both_ways_in_its_history_resolves_to_the_oldest(tmp_path):
+    """The report's suggested fix was two pickaxe calls concatenated, keeping
+    found[-1]. Over two newest-first lists that is the oldest of the second call
+    rather than the oldest overall, which is exactly this history."""
+    root = tmp_path / "both"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "x.py").write_text("x = 0\n")
+    single_quoted(root, "first")
+    commit(root, "land, single-quoted")
+    oldest = subprocess.run(
+        [GIT, "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    contract(root, "first", "second")
+    commit(root, "requote and apply another")
+
+    assert stale.landing(root, "specs/current.toml", "first") == oldest
+
+
+@needs_git
+def test_a_record_name_containing_a_dot_is_not_read_as_a_pattern(tmp_path):
+    """A legacy record is named 4.2, and an unescaped dot matches any character —
+    so the pickaxe would answer about "4x2" as readily as about the real name."""
+    root = tmp_path / "legacy"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "x.py").write_text("x = 0\n")
+    contract(root, "4x2")
+    commit(root, "a name that only an unescaped dot would match")
+
+    assert stale.landing(root, "specs/current.toml", "4.2") is None
+
+
+def test_a_system_file_whose_project_declares_no_members_is_unverifiable(tmp_path):
+    """system_state takes an empty map through its three-way loop and answers
+    "current", which by_state has no row for — so the file was counted in `files`
+    and listed under nothing. A diff with nothing to run over is the word the
+    contract already has."""
+    store = tmp_path / "parent" / ".flw" / "knowledge"
+    concept(
+        store,
+        "system.md",
+        '+++\ntype = "System"\ndescription = "d"\n\n[revision]\nds = "abc1234"\n+++\n# system\n',
+    )
+    found = stale.knowledge_state([(tmp_path / "parent", store)], {}, exclude=".flw")
+    assert found.files == 1
+    assert found.unverifiable == ["parent/system.md"]
+    assert found.changed == []

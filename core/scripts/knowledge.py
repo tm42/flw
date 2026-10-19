@@ -341,7 +341,7 @@ class Diff:
         return f"{self.files} {noun} {DASH} +{self.insertions} −{self.deletions}"
 
 
-def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
+def numstat(revision: str, cwd: Path, rel: Path, *, exclude: str) -> Diff:
     """`git diff --numstat <revision> -- <rel>`, summed, plus untracked paths.
 
     The revision against the working tree and not against HEAD, so an
@@ -352,8 +352,22 @@ def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
     see it: `git ls-files --others --exclude-standard -- <rel>` finds it, and
     each line is one more changed file with no insertions or deletions, the
     way a binary file's `-\t-` row already counts as one change with no
-    lines. `--exclude-standard` is what keeps an ignored store from counting
-    itself — the project's own ignore rules decide, not a second policy here.
+    lines.
+
+    `exclude` is the flw directory's name, and it is dropped from both calls
+    explicitly. `--exclude-standard` used to carry this on its own, on the
+    argument that the project's ignore rules decide and no second policy belongs
+    here — which holds only while the project ignores its own store. In a
+    checkout whose ignore file belongs to someone else, the directory
+    `flw-research` just wrote is untracked, so every repository file in the store
+    reported itself as the change under it: measured on the ASGI field-test
+    fixture as `changed · 14 files · +0 −0`, immediately after the same run
+    stamped them, and it could never clear, because clearing it would mean
+    committing a flw directory into a repository that is not ours. Nothing in the
+    store describes that directory, so nothing there is a change any file in it
+    answers for. It is required rather than defaulted to `.flw`, because a
+    default is right on every machine that has not moved the directory and
+    silently wrong on the ones that have.
 
     No output from either call is current; any output is changed. There is no
     classification: a function-body edit and a new directory both count, and
@@ -367,7 +381,10 @@ def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
     beginning with `-` reaches git as an option and steers the command that is
     supposed to be reading it.
     """
-    code, out = git(["diff", "--numstat", "--end-of-options", revision, "--", rel.as_posix()], cwd)
+    drop = f":(exclude){exclude}"
+    code, out = git(
+        ["diff", "--numstat", "--end-of-options", revision, "--", rel.as_posix(), drop], cwd
+    )
     if code != 0:
         return Diff("unverifiable")
     lines = [line for line in out.splitlines() if line.strip()]
@@ -385,7 +402,7 @@ def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
     files = len(lines)
 
     untracked_code, untracked_out = git(
-        ["ls-files", "--others", "--exclude-standard", "--", rel.as_posix()], cwd
+        ["ls-files", "--others", "--exclude-standard", "--", rel.as_posix(), drop], cwd
     )
     if untracked_code == 0:
         untracked = [line for line in untracked_out.splitlines() if line.strip()]
@@ -398,7 +415,7 @@ def numstat(revision: str, cwd: Path, rel: Path) -> Diff:
     return Diff("changed", files, insertions, deletions, first)
 
 
-def changed(concept: Concept) -> Diff:
+def changed(concept: Concept, *, exclude: str) -> Diff:
     """One file's staleness. `system.md` goes through `changed_system` instead."""
     if concept.level == "System":
         raise Refused(
@@ -407,7 +424,12 @@ def changed(concept: Concept) -> Diff:
         )
     if "unstamped" in concept.problems:
         return Diff("unstamped")
-    return numstat(str(concept.revision), concept.root, mirror(concept.store, concept.root, concept.path))
+    return numstat(
+        str(concept.revision),
+        concept.root,
+        mirror(concept.store, concept.root, concept.path),
+        exclude=exclude,
+    )
 
 
 @dataclass(frozen=True)
@@ -424,7 +446,7 @@ class Owed:
         return self.state == "changed"
 
 
-def owed(root: Path, store: Path, rels: list[Path]) -> list[Owed]:
+def owed(root: Path, store: Path, rels: list[Path], *, exclude: str) -> list[Owed]:
     """What the store owes these paths, measured over these paths alone.
 
     Two differences from a walk. The repository file is excluded from the
@@ -449,7 +471,7 @@ def owed(root: Path, store: Path, rels: list[Path]) -> list[Owed]:
         concept = load(path, store, root)
         if "unstamped" in concept.problems or not isinstance(concept.revision, str):
             continue
-        diffs = [numstat(concept.revision, root, rel) for rel in given]
+        diffs = [numstat(concept.revision, root, rel, exclude=exclude) for rel in given]
         moved = [d for d in diffs if d.state == "changed"]
         if moved:
             total = Diff(
@@ -492,7 +514,9 @@ def members_by_basename(members: dict[str, Path]) -> dict[str, Path]:
     return out
 
 
-def changed_system(concept: Concept, members: dict[str, Path]) -> dict[str, Diff]:
+def changed_system(
+    concept: Concept, members: dict[str, Path], *, exclude: str
+) -> dict[str, Diff]:
     """One diff per declared member, run in that member's own repository.
 
     `system.md` sits in a parent that is not a repository and spans several that
@@ -505,7 +529,7 @@ def changed_system(concept: Concept, members: dict[str, Path]) -> dict[str, Diff
         if not isinstance(revision, str) or not revision.strip():
             found[name] = Diff("unstamped")
             continue
-        found[name] = numstat(revision.strip(), path, Path("."))
+        found[name] = numstat(revision.strip(), path, Path("."), exclude=exclude)
     return found
 
 

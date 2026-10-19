@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -234,11 +235,11 @@ def test_no_output_is_current_and_any_output_is_changed_with_the_right_sums(monk
 
     canned(monkeypatch, {"diff": (0, "")})
     concept = knowledge.load(store / "shop.md", store, shop)
-    assert knowledge.changed(concept) == knowledge.Diff("current")
+    assert knowledge.changed(concept, exclude=".flw") == knowledge.Diff("current")
 
     canned(monkeypatch, {"diff": (0, NUMSTAT)})
     concept = knowledge.load(store / "api" / "api.md", store, shop)
-    diff = knowledge.changed(concept)
+    diff = knowledge.changed(concept, exclude=".flw")
     assert (diff.state, diff.files, diff.insertions, diff.deletions) == (
         "changed", 3, 41, 12,
     )
@@ -251,7 +252,7 @@ def test_an_untracked_path_alone_turns_current_into_changed_and_names_it(monkeyp
     store = store_of(shop)
     canned(monkeypatch, {"diff": (0, ""), "ls-files": (0, "api/new.py\n")})
     concept = knowledge.load(store / "api" / "api.md", store, shop)
-    diff = knowledge.changed(concept)
+    diff = knowledge.changed(concept, exclude=".flw")
     assert (diff.state, diff.files, diff.insertions, diff.deletions) == (
         "changed", 1, 0, 0,
     )
@@ -264,7 +265,7 @@ def test_untracked_paths_beside_a_numstat_add_to_the_file_count_only(monkeypatch
     store = store_of(shop)
     canned(monkeypatch, {"diff": (0, NUMSTAT), "ls-files": (0, "api/new.py\n")})
     concept = knowledge.load(store / "api" / "api.md", store, shop)
-    diff = knowledge.changed(concept)
+    diff = knowledge.changed(concept, exclude=".flw")
     assert (diff.state, diff.files, diff.insertions, diff.deletions) == (
         "changed", 4, 41, 12,
     )
@@ -279,7 +280,7 @@ def test_an_ignored_untracked_path_never_reaches_the_count(monkeypatch):
     store = store_of(shop)
     calls = canned(monkeypatch, {"diff": (0, ""), "ls-files": (0, "")})
     concept = knowledge.load(store / "api" / "api.md", store, shop)
-    assert knowledge.changed(concept) == knowledge.Diff("current")
+    assert knowledge.changed(concept, exclude=".flw") == knowledge.Diff("current")
     ls_files_args = next(args for args, _ in calls if "ls-files" in args)
     assert "--exclude-standard" in ls_files_args
 
@@ -292,7 +293,7 @@ def test_a_failed_ls_files_call_leaves_the_numstat_s_answer_standing(monkeypatch
         {"diff": (0, NUMSTAT), "ls-files": (128, "fatal: not a git repository")},
     )
     concept = knowledge.load(store / "api" / "api.md", store, shop)
-    diff = knowledge.changed(concept)
+    diff = knowledge.changed(concept, exclude=".flw")
     assert (diff.state, diff.files, diff.insertions, diff.deletions) == (
         "changed", 3, 41, 12,
     )
@@ -303,16 +304,20 @@ def test_the_diff_runs_against_the_mirrored_path_in_the_file_s_own_repo(monkeypa
     store = store_of(shop)
     calls = canned(monkeypatch, {"diff": (0, "")})
 
-    knowledge.changed(knowledge.load(store / "api" / "api.md", store, shop))
+    knowledge.changed(knowledge.load(store / "api" / "api.md", store, shop), exclude=".flw")
     args, cwd = calls[0]
     # No HEAD: the revision is compared against the working tree, so an
     # uncommitted edit under api/ counts.
-    assert args == ["diff", "--numstat", "--end-of-options", "8be0117", "--", "api"]
+    # The flw directory is dropped explicitly rather than left to the repository's
+    # own ignore rules, which belong to upstream in a checkout nobody here set up.
+    assert args == [
+        "diff", "--numstat", "--end-of-options", "8be0117", "--", "api", ":(exclude).flw",
+    ]
     assert cwd == shop
 
-    knowledge.changed(knowledge.load(store / "shop.md", store, shop))
+    knowledge.changed(knowledge.load(store / "shop.md", store, shop), exclude=".flw")
     diffs = [args for args, _ in calls if "diff" in args]
-    assert diffs[1][-1] == "."
+    assert diffs[1][-2] == "."
 
 
 def test_a_diff_that_cannot_run_is_unverifiable_and_never_a_failure(monkeypatch):
@@ -320,14 +325,14 @@ def test_a_diff_that_cannot_run_is_unverifiable_and_never_a_failure(monkeypatch)
     store = store_of(shop)
     canned(monkeypatch, {"diff": (128, "")})
     concept = knowledge.load(store / "shop.md", store, shop)
-    assert knowledge.changed(concept).state == "unverifiable"
+    assert knowledge.changed(concept, exclude=".flw").state == "unverifiable"
 
 
 def test_an_unstamped_file_is_never_diffed(monkeypatch):
     worker = ACME / "worker"
     store = store_of(worker)
     calls = canned(monkeypatch, {"diff": (0, NUMSTAT)})
-    assert knowledge.changed(knowledge.load(store / "worker.md", store, worker)).state == (
+    assert knowledge.changed(knowledge.load(store / "worker.md", store, worker), exclude=".flw").state == (
         "unstamped"
     )
     assert calls == []
@@ -338,7 +343,7 @@ def test_system_md_is_checked_once_per_member_in_that_member_s_own_directory(mon
     calls = canned(monkeypatch, {"diff": (0, "")})
     concept = knowledge.load(store / "system.md", store, ACME)
 
-    per_member = knowledge.changed_system(concept, members_of(ACME))
+    per_member = knowledge.changed_system(concept, members_of(ACME), exclude=".flw")
     assert {name: d.state for name, d in per_member.items()} == {
         "shop": "current", "worker": "current",
     }
@@ -355,7 +360,7 @@ def test_a_declared_member_with_no_revision_key_is_unstamped_for_that_member(mon
     concept = knowledge.load(store / "system.md", store, ACME)
     members = {**members_of(ACME), "billing": ACME / "billing"}
 
-    per_member = knowledge.changed_system(concept, members)
+    per_member = knowledge.changed_system(concept, members, exclude=".flw")
     assert per_member["billing"].state == "unstamped"
     assert knowledge.system_state(per_member) == "unstamped"
 
@@ -1353,9 +1358,10 @@ def test_a_module_file_mirrors_the_file_it_describes_and_orphans_with_it(
     out = capsys.readouterr().out
     assert "api/orders.py.md           module" in out
     assert "changed since 8be0117" in out
-    assert ["diff", "--numstat", "--end-of-options", "8be0117", "--", "api/orders.py"] in [
-        a for a, _ in calls
-    ]
+    assert [
+        "diff", "--numstat", "--end-of-options", "8be0117", "--", "api/orders.py",
+        ":(exclude).flw",
+    ] in [a for a, _ in calls]
 
     (shop / "api" / "orders.py").rename(shop / "api" / "purchases.py")
     assert knowledge.orphans(store, shop) == [(path, shop / "api" / "orders.py")]
@@ -1424,7 +1430,7 @@ def test_a_type_that_disagrees_with_position_hides_the_file_like_a_missing_one(
 def test_a_binary_file_counts_as_a_file_and_adds_no_lines(monkeypatch):
     """`-\t-\tpath` is a real change with no line counts, and int() on it raises."""
     canned(monkeypatch, {"diff": (0, NUMSTAT + "-\t-\tapi/logo.png\n")})
-    diff = knowledge.numstat("8be0117", ACME / "shop", Path("api"))
+    diff = knowledge.numstat("8be0117", ACME / "shop", Path("api"), exclude=".flw")
     assert (diff.files, diff.insertions, diff.deletions) == (4, 41, 12)
 
 
@@ -1578,7 +1584,9 @@ def test_owed_a_change_elsewhere_in_the_tree_is_not_owed(capsys, monkeypatch):
     shop = ACME / "shop"
     assert run(["know", "--owed", "api/orders.py", "--root", str(shop)]) == 0
     assert "owed: 0 changed · 0 with no file" in capsys.readouterr().out
-    assert all(args[-1] == "api/orders.py" for args, _ in calls)
+    # The given path is the last positional; the exclusion pathspec follows it.
+    assert all(args[-2] == "api/orders.py" for args, _ in calls)
+    assert all(args[-1] == ":(exclude).flw" for args, _ in calls)
 
 
 def test_owed_a_path_with_only_the_repository_file_above_it_is_no_file(
@@ -1590,7 +1598,7 @@ def test_owed_a_path_with_only_the_repository_file_above_it_is_no_file(
     assert run(["know", "--owed", "web.py", "--root", str(shop)]) == 0
     assert capsys.readouterr().out == "  no file  shop/web.py\nowed: 0 changed · 1 with no file\n"
     assert calls == []
-    assert knowledge.owed(shop, store_of(shop), [Path("web.py")]) == [
+    assert knowledge.owed(shop, store_of(shop), [Path("web.py")], exclude=".flw") == [
         knowledge.Owed("no file", Path("web.py"))
     ]
 
@@ -1619,3 +1627,64 @@ def test_owed_measures_a_path_the_phase_deleted(acme, capsys, monkeypatch):
     assert run(["know", "--owed", "api/gone.py", "--root", str(shop)]) == 1
     assert "changed  shop/api/api.md · 1 file · +0 −9" in capsys.readouterr().out
     assert run(["know", "--owed", str(acme.parent / "outside.py"), "--root", str(shop)]) == 1
+
+
+# --- the store counting itself ----------------------------------------------- #
+
+
+def test_a_store_in_a_repository_that_ignores_nothing_is_not_the_change_under_it(tmp_path):
+    """The second test in this file that runs git, and it has to: a canned call
+    cannot honour a pathspec, and the pathspec is the whole subject.
+
+    numstat counts an untracked file as one change with no lines, and relied on
+    --exclude-standard to keep an ignored store out of its own diff. In a checkout
+    whose ignore file belongs to upstream, the flw directory flw-research just
+    wrote is untracked, so every repository file reported itself: measured on the
+    ASGI field-test fixture as `changed · 14 files · +0 −0`, straight after the run
+    that stamped them, and it could never clear — clearing it would mean committing
+    a flw directory into a repository that is not ours.
+    """
+    if shutil.which("git") is None:
+        pytest.skip("git is not on PATH")
+    root = tmp_path / "upstream"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "app.py").write_text("x = 0\n")
+    ident = [
+        "-c", "user.email=flw@example.invalid",
+        "-c", "user.name=flw",
+        "-c", "commit.gpgsign=false",
+    ]
+    subprocess.run(
+        [shutil.which("git"), "init", "--initial-branch=main", str(root)],
+        capture_output=True,
+        check=True,
+    )
+    for args in (["add", "-A"], ["commit", "-m", "upstream, ignoring nothing"]):
+        subprocess.run(
+            [shutil.which("git"), *ident, *args],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    head = subprocess.run(
+        [shutil.which("git"), "rev-parse", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    store = root / ".flw" / "knowledge"
+    store.mkdir(parents=True)
+    (store / "upstream.md").write_text(
+        f'+++\ntype = "Repository"\ndescription = "d"\nrevision = "{head}"\n+++\n# upstream\n'
+    )
+
+    diff = knowledge.changed(
+        knowledge.load(store / "upstream.md", store, root), exclude=".flw"
+    )
+    # The state alone would pass against a diff that counted the store and found
+    # no lines, which is the exact verdict this closes.
+    assert diff.files == 0
+    assert diff == knowledge.Diff("current")

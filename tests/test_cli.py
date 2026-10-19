@@ -2451,6 +2451,50 @@ def test_project_roots_ignores_the_machine_wide_config(tmp_path, monkeypatch):
     assert flw._section_config(project, "project") == {"roots": {"ds": "../datastore"}}
 
 
+# --- a config section that is not a table ---------------------------------- #
+
+
+def test_a_project_section_that_is_not_a_table_is_refused_by_name(tmp_path):
+    """merged.update() on a string raised ValueError out of flw doctor, validate,
+    stale --owed, test and scout, with no path in the message."""
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    config = project / ".flw" / "config.toml"
+
+    config.write_text('paths = "oops"\n')
+    with pytest.raises(SystemExit) as caught:
+        flw._section_config(project, "paths")
+    assert str(config) in str(caught.value)
+    assert "[paths] is not a table" in str(caught.value)
+
+
+def test_a_section_that_is_an_integer_is_refused_the_same_way(tmp_path):
+    """An integer raised TypeError rather than ValueError, so the guard has to be
+    a type check and not a wider except around the merge."""
+    project = tmp_path / "work"
+    (project / ".flw").mkdir(parents=True)
+    (project / ".flw" / "config.toml").write_text("kb = 7\n")
+    with pytest.raises(SystemExit) as caught:
+        flw._section_config(project, "kb")
+    assert "[kb] is not a table" in str(caught.value)
+
+
+def test_a_machine_wide_paths_that_is_not_a_table_is_refused_by_name(tmp_path, monkeypatch):
+    """The worst limb: _resolve_flw_dir reads [paths] flw before _section_config
+    runs and before any handler, so this one broke every command on the machine."""
+    machine = tmp_path / "flw-home"
+    machine.mkdir()
+    config = machine / "config.toml"
+    config.write_text('paths = "oops"\n')
+    monkeypatch.setattr(flw, "FLW_HOME", machine)
+    monkeypatch.delenv("FLW_DIR", raising=False)
+
+    with pytest.raises(SystemExit) as caught:
+        flw._resolve_flw_dir()
+    assert str(config) in str(caught.value)
+    assert "[paths] is not a table" in str(caught.value)
+
+
 # --- the areas a record's name may open with -------------------------------- #
 
 
@@ -3558,6 +3602,79 @@ criteria = "The fixture behaves."
     err = capsys.readouterr().err
     assert "'a-live-draft' does not open with one of the areas" in err
     assert "a-dropped-idea" not in err
+
+
+def _project(root, *, applied=(), reports=None):
+    """A project with a contract and nothing else, for the two tests below."""
+    (root / "specs" / "versions").mkdir(parents=True)
+    names = ", ".join(f'"{n}"' for n in applied)
+    release = f"0.0.{len(applied)}" if applied else "0.0.0"
+    (root / "specs" / "current.toml").write_text(
+        f"""schema_version = 4
+spec_version = "{release}"
+applied = [{names}]
+assumptions = ["one is enough"]
+
+[final_state]
+
+[[final_state.components]]
+name     = "alpha"
+paths    = ["src/alpha.py"]
+provides = ["a user can alpha"]
+
+[success_criteria]
+tests = [{{ command = "true" }}]
+criteria = "The fixture behaves."
+"""
+    )
+    if reports is not None:
+        (root / ".flw").mkdir()
+        (root / ".flw" / "config.toml").write_text(f'[paths]\nreports = "{reports}"\n')
+
+
+def test_validate_by_path_reads_the_record_set_of_the_project_that_path_is_in(
+    home, tmp_path, monkeypatch, capsys
+):
+    """validate() resolved its root from $PWD, so naming a member's contract from
+    the parent checked it against the parent's record set and printed OK over a
+    contract whose applied names a record no file carries. Asserting on the record
+    name and not the exit code: the old behaviour also exits 1 on a neighbouring
+    input, for a release number in a contract nobody asked about."""
+    parent = tmp_path / "system"
+    member = parent / "ds"
+    _project(parent)
+    _project(member, applied=["ghost-record"])
+    # One real record, so check_chain gets past "has no version files" and reaches
+    # the applied name with nothing behind it.
+    (member / "specs" / "versions" / "alpha-real-minor.toml").write_text(
+        'name    = "alpha-real"\nsummary = "a record that exists"\n'
+    )
+    monkeypatch.chdir(parent)
+
+    assert flw.validate(argparse.Namespace(path="ds/specs/current.toml")) != 0
+    assert "ghost-record" in capsys.readouterr().err
+
+
+def test_validate_by_path_reads_the_reports_directory_that_project_declared(
+    home, tmp_path, monkeypatch, capsys
+):
+    """The second half of the same resolution: check_version's sources rule is
+    built from [paths] reports, which is the member's to declare. Read from the
+    parent, the member's own `reviews` directory is not the pattern, so a record
+    citing a report there carries no sources and is not refused."""
+    parent = tmp_path / "system"
+    member = parent / "ds"
+    _project(parent)
+    _project(member, reports="reviews")
+    (member / "specs" / "versions" / "alpha-fix-minor.toml").write_text(
+        'name    = "alpha-fix"\n'
+        'summary = "a record specced from reviews/2026-01-01T0000-eng-tests.md"\n'
+    )
+    monkeypatch.chdir(parent)
+
+    assert flw.validate(argparse.Namespace(path="ds/specs/versions/alpha-fix-minor.toml")) != 0
+    err = capsys.readouterr().err
+    assert "carries\n  no sources field" in err or "no sources field" in err
 
 
 # --- shape-independence: a run says which project it resolved to ---------- #

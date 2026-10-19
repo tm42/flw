@@ -2252,7 +2252,13 @@ def _resolve_flw_dir() -> tuple[str, str]:
                 document = tomllib.loads(config.read_text())
             except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
                 raise SystemExit(f"error: {config} does not parse: {exc}") from None
-            value = document.get("paths", {}).get("flw")
+            paths = document.get("paths", {})
+            # This read runs before any handler and before _section_config, so a
+            # non-table [paths] here took out every command on the machine —
+            # flw doctor included, which is what a user would run to find out why.
+            if not isinstance(paths, dict):
+                raise SystemExit(f"error: {config}: [paths] is not a table")
+            value = paths.get("flw")
 
     if value is None:
         return ".flw", "default"
@@ -2439,9 +2445,17 @@ def _section_config(root: Path, section: str) -> dict:
         if not config.exists():
             continue
         try:
-            merged.update(tomllib.loads(config.read_text()).get(section, {}))
+            document = tomllib.loads(config.read_text())
         except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
             raise SystemExit(f"error: {config} does not parse: {exc}") from None
+        # A section that is not a table reached merged.update() and raised out of
+        # five commands with no path named — ValueError for a string, TypeError
+        # for an integer. `_knowledge_dir` and `project_roots` already refuse it
+        # by name, and this is the same message so one reader covers all three.
+        found = document.get(section, {})
+        if not isinstance(found, dict):
+            raise SystemExit(f"error: {config}: [{section}] is not a table")
+        merged.update(found)
     return merged
 
 
@@ -2792,7 +2806,10 @@ def validate(args: argparse.Namespace) -> int:
     import validate_spec
 
     schemas = checkout() / "core" / "schemas"
-    root = project_root()
+    # From the path given, the way flw test resolves it: a contract named from
+    # outside its own project has to be checked against that project's record set,
+    # applied list and reports directory rather than against the caller's.
+    root = project_root(Path(args.path) if args.path else None)
     specs = root / _specs_dir(root)
 
     contract = specs / "current.toml"
@@ -3663,14 +3680,18 @@ def _member_head(engine, path: Path):
     concept = engine.load(own, store, path)
     if not concept.listable:
         return None, None, concept.problems[0]
-    return concept, engine.changed(concept), ""
+    return concept, engine.changed(concept, exclude=flw_dir_name()), ""
 
 
 def _know_orientation(engine, root: Path, store: Path, members: dict[str, Path]) -> int:
     if not members:
         own = store / f"{root.name}.md"
         concept = engine.load(own, store, root) if own.is_file() else None
-        diff = engine.changed(concept) if concept is not None else engine.Diff("current")
+        diff = (
+            engine.changed(concept, exclude=flw_dir_name())
+            if concept is not None
+            else engine.Diff("current")
+        )
         where = tilde(own) if concept is not None else f"({own.name} not written)"
         print(engine.render_repo_orientation(root.name, concept, diff, where), end="")
         return 0
@@ -3711,14 +3732,16 @@ def _know_walk(args, engine, root: Path, store: Path, members: dict[str, Path]) 
     if target_store.is_dir():
         for path in reversed(engine.walk(target, target_store, rel)):
             concept = engine.load(path, target_store, target)
-            rows.append((concept, engine.changed(concept)))
+            rows.append((concept, engine.changed(concept, exclude=flw_dir_name())))
 
     system_path = store / engine.SYSTEM
     if members and system_path.is_file():
         # From a parent the walk ends at system.md, so it is the outermost
         # candidate and the first thing printed.
         system = engine.load(system_path, store, root)
-        state = engine.system_state(engine.changed_system(system, members))
+        state = engine.system_state(
+            engine.changed_system(system, members, exclude=flw_dir_name())
+        )
         rows.insert(0, (system, engine.Diff(state)))
         total += 1
 
@@ -3758,7 +3781,9 @@ def _know_check(engine, root: Path, members: dict[str, Path]) -> int:
             elif not concept.listable:
                 state = concept.problems[0]
             elif concept.level == "System":
-                per_member = engine.changed_system(concept, members)
+                per_member = engine.changed_system(
+                    concept, members, exclude=flw_dir_name()
+                )
                 state = engine.system_state(per_member)
                 detail = _system_detail(engine, concept, per_member)
                 notes += [
@@ -3767,7 +3792,7 @@ def _know_check(engine, root: Path, members: dict[str, Path]) -> int:
                     for key in engine.undeclared_members(concept, members)
                 ]
             else:
-                diff = engine.changed(concept)
+                diff = engine.changed(concept, exclude=flw_dir_name())
                 state = diff.state
                 if diff.state == "changed":
                     detail = (
@@ -3823,7 +3848,12 @@ def _know_owed(args, engine, root: Path, members: dict[str, Path]) -> int:
 
     rows = []
     for target, rels in by_target.items():
-        rows += [(target, row) for row in engine.owed(target, knowledge_dir(target), rels)]
+        rows += [
+            (target, row)
+            for row in engine.owed(
+                target, knowledge_dir(target), rels, exclude=flw_dir_name()
+            )
+        ]
     for target, row in rows:
         if row.red:
             where = row.path.relative_to(knowledge_dir(target)).as_posix()
@@ -3987,6 +4017,7 @@ def stale(args: argparse.Namespace) -> int:
             specs_dir=_specs_dir(root),
             knowledge_stores=_knowledge_stores(root, members),
             members=members,
+            exclude=flw_dir_name(),
         )
         print(text, end="")
         return 1 if red else 0
@@ -4005,6 +4036,7 @@ def stale(args: argparse.Namespace) -> int:
             knowledge_stores=_knowledge_stores(root, members),
             members=members,
             notes=found,
+            exclude=flw_dir_name(),
         ),
         end="",
     )
