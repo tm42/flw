@@ -2,56 +2,27 @@
 
 A spec-driven workflow for coding agents, and the tool that keeps it current across them.
 
-It takes intent to a versioned contract, works against that contract, and refuses to let
-the work drift from what was agreed. It also installs itself into every host you use,
-runs whatever checks your project declares, and extends the same way it ships — so
-adding your own skill is copying the shape of an existing one.
+It takes intent to a versioned contract, works against that contract, and stops when the work would drift from what was agreed.
 
-Host-agnostic: flw installs as [Agent Skills](https://agentskills.io) into Claude Code,
-Codex and OpenCode. Language-agnostic: it bakes in no toolchain, no test runner and no
-manifest — a project declares its own commands and flw runs them.
+Host-agnostic: flw installs as [Agent Skills](https://agentskills.io) into Claude Code, Codex and OpenCode. Language-agnostic: it bakes in no toolchain, no test runner and no manifest — a project declares its own commands and flw runs them.
 
-> **Status: in construction.** The schemas, the skills, the scout, the check
-> runner and the CLI work and are tested. What running flw against a real host and a
-> real repository has found is recorded as a comment at the code each finding
-> explains, not in a separate document. See `plans/design-v3.md` for the full design,
-> `specs/current.toml` for what "done" means, and its `applied` list for the order it
-> was built in.
+> **Status.** The schemas, the skills, the scout, the check runner and the CLI work and are tested. flw has been used on its own development and on one other project. `plans/backlog/index.md` lists what is known and not yet built, each item with what it is blocked on. `plans/design-v3.md` is the design, `specs/current.toml` is what "done" means, and its `applied` list is the order it was built in.
 
 ## The idea
 
-An agent asked to build something will happily build something adjacent to it, and the
-gap only becomes visible later. flw closes that gap by making the agreement a file:
+An agent asked to build something will build something adjacent to it, and the gap becomes visible later. flw makes the agreement a file:
 
-- **The contract is the source of truth.** One per project, complete and current, stating
-  what exists when the work is done and how you will know it works.
-- **The contract is edited, not operated on.** Ordinary edits, so `git diff` is the review
-  surface. Change only what was agreed and the diff shows exactly that.
-- **Gaps surface as proposals.** When work hits something the contract does not cover, it
-  stops and asks rather than inventing. That refusal is the whole product.
-- **Every version leaves a record.** One file per version under `specs/versions/`, carrying
-  what changed, why, and the reasoning behind the plan. Size follows the change: a one-line
-  correction is a four-line file. A record is addressed by a name chosen when it is specced
-  and never changed, so two people can spec at once without either being renumbered when it
-  lands; the contract's `applied` list is where the order they landed in is kept.
-- **flw claims nothing about whether work is done.** No flag, no verdict. It runs what it
-  can of your checks, hands back what it could not run, and leaves the judgment to you.
+- **The contract is the source of truth.** One per project, stating what exists when the work is done and how you will know it works.
+- **The contract is edited, not operated on.** Ordinary edits, so `git diff` is the review surface.
+- **Gaps surface as proposals.** When work hits something the contract does not cover, it stops and asks rather than inventing.
+- **Every version leaves a record.** One file per version under `specs/versions/`, carrying what changed, why, and the reasoning behind the plan. A record is addressed by a name chosen when it is specced and never changed, so two people can spec at once; the contract's `applied` list holds the order they landed in.
+- **flw claims nothing about whether work is done.** It runs what it can of your checks, hands back what it could not run, and leaves the judgment to you.
 
 ## What it is not
 
-Not a hook layer. flw does not intercept, wrap, or police your agent's operation — hosts
-have their own permission systems and theirs are better. Its entire runtime presence is
-skills a host chooses to load.
+Not a hook layer. flw does not intercept, wrap or police your agent's operation — hosts have their own permission systems. Its entire runtime presence is skills a host chooses to load.
 
-Not a framework. There is no plugin API, and both ways of extending flw are things you
-can write by hand. A **bundle** adds a skill: a folder with a `SKILL.md` in it, shaped
-exactly like flw's own, which is why an agent can write one by copying the shape of an
-existing one. An **extension** amends a skill you already have — prose at
-`.flw/extensions/<skill name>.md`, read from every project root at or above the one it
-resolved to, outermost first, so a directory holding several checkouts can carry what all
-of them obey; within a level `shared.md` is read before the skill's own file. Nothing to
-register and no shape to conform to. `flw doctor` says which extensions are live at each
-level and which sit there read by nobody.
+Not a framework. There is no plugin API. A **bundle** adds a skill: a folder with a `SKILL.md` in it, shaped like flw's own. An **extension** amends a skill you already have: prose at `.flw/extensions/<skill name>.md`, read from every project root at or above the one it resolved to. `flw doctor` says which extensions are live and which sit there read by nobody.
 
 Not a scaffolder. It writes no boilerplate and invents no files.
 
@@ -60,96 +31,81 @@ Not a scaffolder. It writes no boilerplate and invents no files.
 ```sh
 git clone https://github.com/tm42/flw.git ~/.agentic/flw
 ln -s ~/.agentic/flw/cli/flw.py ~/.local/bin/flw    # one time, so `flw` is on PATH
-                                                    # moving the checkout later dangles
-                                                    # this link and the skill links with
-                                                    # it; re-run this line to repair, as
-                                                    # `flw sync` is itself unreachable
 
 flw install            # symlink the skills into every host's discovery path
 flw doctor             # verify: links resolve, no overrides, no orphans
-flw validate           # check the contract and every version record
-flw test              # run the project's declared checks
-flw scout              # rank a repo by what depends on what
-flw know [path]        # the knowledge store: what this system is built of, found from a path
-flw map [node]         # every seam the store declares, folded into a picture nobody authored
-flw ledger <terms>     # search the contract, the version records, the review configs and plans/*.md
-flw kb                 # the note store: what an agent worked out, kept for the next one
-flw add <path>         # register your own bundle of skills
-flw style install      # put flw's writing style in front of the host, optional
 ```
 
-`install`, `doctor`, `scout`, `kb`, `add` and `style` run anywhere. `validate`, `test`,
-`ledger`, `know` and `map` read a project's own files, so run those from inside one — flw's
-own checkout will do.
+`docs/install.md` has the rest, including the optional ambient block and the writing style.
 
-`flw install --ambient` also offers a tagged block for your top-level `CLAUDE.md` or
-`AGENTS.md`, describing the workflow and the posture. It asks first, and
-`flw uninstall` strips it exactly.
+Moving the checkout dangles the PATH link and the skill links with it. Re-run the `ln` line, then `flw install`.
 
-## The four workflow skills
+## Commands
 
-The commands above are the plumbing. The workflow itself is four skills, which your host
-loads after `flw install` and you invoke by name — `/flw-spec` in Claude Code, the
-equivalent in Codex and OpenCode. A newly linked skill is not discoverable until the host
-rescans; in Claude Code that is `/reload-skills`.
+```sh
+flw install            symlink the skills into every host; uninstall removes exactly that
+flw doctor             verify the install: links, hosts, style, live extensions
+flw update             pull, then re-verify; -n reports what a pull would bring
+flw sync               repair links after a checkout moved
+flw add <path>         register your own bundle of skills; list and remove go with it
+flw style install      put flw's writing style in front of the host, optional
+flw context <skill>    what a skill reads at its opening; every skill runs this first
+flw validate           check the contract and every version record
+flw test               run the project's declared checks; -A for the full definition of done
+flw scout              rank a repo by what depends on what
+flw know [path]        the knowledge store: what this system is built of, found from a path
+flw map [node]         every seam the store declares, folded together
+flw stale              which documents are spent, and which nobody has read
+flw ledger <terms>     search the contract, the records, the review configs and plans/*.md
+flw kb                 the note store: what an agent worked out, kept for the next one
+flw version            which checkout flw is running from, and at what revision
+```
+
+`install`, `doctor`, `update`, `sync`, `add`, `style`, `scout` and `kb` run anywhere. The rest read a project's own files, so run those from inside one.
+
+Every command takes `--help`, and that is where its flags and its own rules are written.
+
+## The skills
+
+Your host loads these after `flw install`, and you invoke them by name — `/flw-spec` in Claude Code, the equivalent elsewhere. A newly linked skill is not discoverable until the host rescans; in Claude Code that is `/reload-skills`.
 
 | Skill | Use |
 |---|---|
 | `/flw-spec` | Author or amend the contract. Interview-driven; nothing inferred silently. |
-| `/flw-execute` | Walk the pending version record's phases, run the project's declared checks, propose the commits. |
+| `/flw-execute` | Walk the pending record's phases, run the declared checks, propose the commits. |
 | `/flw-review` | Review at any stage — one reader by default, a team of lenses when you name one. Reports; fixes nothing. |
 | `/flw-research` | Bring flw to a repo you did not set up: learn how it is tested and built, write that into its own config. |
+| `/flw-style` | Find this session's own instances of a writing failure you name, and stop doing it. |
 
-`/flw-style` is a fifth skill and not a stage: it reports what the writing style has drifted
-from in this session's own replies. Nothing depends on it and it depends on nothing.
+Nothing chains. You drive, and each skill stops and hands back.
 
-Nothing chains. You drive, and each skill stops and hands back — `flw-execute` proposes
-commits rather than making them, and `flw-review` reports rather than fixing.
+## The two artifacts
+
+`specs/current.toml` is the contract — what is true when the work is done. `specs/versions/<name>.toml` is one file per version — how that version came about. There is no index file; the directory listing is the index.
+
+Read together, never instead of each other. A version record never restates what the contract says.
 
 ## Two stores, and why they do not merge
 
-`flw ledger` reads what was agreed: the contract, every version record, the review team
-configs and `plans/*.md`. Every sentence in it is binding or was written to justify
-something binding, and `flw validate` enforces the schema of the two that have one.
+`flw ledger` reads what was agreed: the contract, every version record, the review team configs and `plans/*.md`. `flw validate` enforces the schema of the two that have one.
 
-`flw kb` reads what an agent worked out and nobody checked — freeform markdown under
-`~/.flw/kb/`, which follows the machine, and `<project>/plans/notes/`, which follows the
-repository. A note is a file: no schema, no registry, no database, no index on disk, and
-nothing about the format can refuse one, so any agent that can write a file can write a
-note. Every surface prints its age and its size for the same reason, because a note is a
-hint to verify rather than a fact to act on.
+`flw kb` reads what an agent worked out and nobody checked — markdown under `~/.flw/kb/`, which follows the machine, and `<project>/plans/notes/`, which follows the repository. A note is a file: no schema, no registry, no index on disk. Every surface prints a note's age and size, because a note is a hint to verify rather than a fact to act on.
 
-The two corpora are disjoint by directory — the ledger keeps `plans/*.md`, the store's
-project root is `plans/notes/` — so no file is reachable from both and a query spanning
-them is two commands.
+The two corpora are disjoint by directory, so no file is reachable from both.
 
 ```sh
 flw kb                              # what is in the store, per category and per root
-flw kb -c python                    # that category's notes
 flw kb search discriminator -T      # whole words, ANDed, as titles and descriptions
 flw kb show pydantic-unions         # one note, whole, with its path, age and size
 flw kb write python "title" -d "…" < note.md
-flw kb lint                         # seven checks; reports, decides nothing, exits 0
+flw kb lint                         # reports, decides nothing, exits 0
 ```
-
-`docs/layout.md` says which files are loaded on every run and which are found when you go looking,
-and why nothing here is untracked without being ignored. `plans/backlog/` holds what is known and
-not yet specced.
-
-`docs/measuring.md` is the protocol for timing any of this on a machine that is not this one:
-seeded corpus generators, the commands worth timing, a baseline to compare against, and the
-shape a report should come back in.
 
 ## The writing style
 
-`core/styles/terse_prose.md` is how flw writes: claim first, no preamble, one line per
-paragraph with the width left to your terminal. The skills read it themselves and hand it to every
-reviewer they dispatch, so flw's own reports follow it whether or not you install
-anything.
+`core/styles/terse_prose.md` is how flw writes. The skills read it themselves and hand it to every reviewer they dispatch, so flw's own reports follow it whether or not you install anything.
 
-Installing it puts the same rules in front of the host for everything else you do, which
-is a bigger claim on your session than a skill makes — so it is a separate command and
-never happens on its own.
+Installing it puts the same rules in front of the host for everything else you do, which is a bigger claim on your session than a skill makes — so it is a separate command.
 
 ```sh
 flw style install            # the shipped style, into every host present
@@ -157,46 +113,26 @@ flw style install <name>     # your own, from ~/.flw/styles/<name>.md
 flw style uninstall          # remove it, and put back whatever it replaced
 ```
 
-Claude Code gets a file in `~/.claude/output-styles/` and is asked before the
-`outputStyle` key is set; Codex and OpenCode have no style slot, so the text goes into
-their instructions file as its own tagged block beside the ambient one. `flw doctor`
-reports it as installed, installed but not selected, or no longer matching the file it
-was copied from — and in that last case whether flw's source moved on or the copy was
-edited by hand, because install records what it wrote.
-
-The skills are symlinks, so `flw update` — a pull, then a re-verify — makes them
-live on every host the moment it lands, with no sync step. Two installs are copies
-instead, and flw treats them differently. The style is a copy because Claude Code needs
-a frontmatter header the source file deliberately does not carry; install records its
-digest, and `flw update` offers to refresh every copy that no longer matches, one host
-at a time, saying which side moved before it asks. The ambient block is a copy nothing
-re-verifies, by decision: every skill opens with its own `flw context` call, so the
-block serves only a session that invokes none, and a stale one costs that session a
-line it would have run anyway. Reinstalling replaces it whole, between its markers.
-
-`flw update -n` writes nothing: it fetches, reports which commits a pull would bring, and
-says what the style check found without refreshing anything. HEAD and your working tree do
-not move — the same thing `-n` means on `install`, `sync` and `style install`.
+The skills are symlinks, so an edit is live on every host at once. The style is a copy, because Claude Code needs a frontmatter header the source file does not carry — `flw doctor` reports a copy that no longer matches, and `flw update` offers to refresh it.
 
 ## Requirements
 
-Python 3.11 or later, as a system interpreter. No runtime dependencies at all.
+Python 3.11 or later, as a system interpreter. No runtime dependencies.
 
-Running flw's own checks is the one exception: `flw test` in this checkout creates
-`.venv/` and pip-installs pytest and ruff, because flw's `.flw/config.toml` declares that
-as its `[tests] setup`. It is one project's own line and nothing inherits it.
+Running flw's own checks is the one exception: `flw test` in this checkout creates `.venv/` and installs pytest and ruff, because that is what this project's `.flw/config.toml` declares as its `[tests] setup`. Nothing inherits it.
 
 ## Layout
 
 ```text
-cli/flw.py           install, uninstall, doctor, add/list/remove, update, version
+cli/flw.py           the CLI: install, verify, and the front end for every engine
 core/skills/         the skills, as standard SKILL.md folders
 core/reviews/        reviewer teams, as data
-core/scripts/        validation, the check runner and the scout (stdlib only)
-core/shared/         fragments every skill reads: project context, the ambient block
+core/scripts/        validation, the check runner, the scout, the stores (stdlib only)
+core/shared/         fragments every skill reads
+core/styles/         the writing style
 core/schemas/        contract and version-record shapes
-docs/                install and extension notes for someone bringing flw to a repo
-plans/design-v3.md   why flw is shaped this way, and what was deliberately not built
+docs/                install, extending, measuring, layout
+plans/               design prose, and plans/backlog/ for what is not yet specced
 specs/               flw's own contract and version records
 ```
 

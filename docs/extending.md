@@ -1,9 +1,7 @@
 # Extending flw
 
-Two ways, and the difference is whether you are adding a skill or amending one you already
-have. There is no plugin API in either case: a bundle is a folder shaped like flw's own,
-and an extension is prose. Both are things you can write by hand, which is why an agent can
-write one by copying the shape of something that exists.
+Two ways: a bundle adds a skill, an extension amends one you already have. There is no
+plugin API — a bundle is a folder shaped like flw's own, and an extension is prose.
 
 ---
 
@@ -28,14 +26,11 @@ code goes, what a reviewer should judge against.
 **An extension amends how a skill works here; it cannot waive a Rule.** A skill told to
 ignore its own lane will surface that rather than comply.
 
-### The path is fixed, and that is the point
+### The path is fixed
 
-There is no config key pointing at an extension. A configurable path could point anywhere,
-which means nothing could ever verify it — and the failure worth catching is a file named
-`spec.md` when the skill is `flw-spec`. It looks right, it is read by nobody, and nothing
-says so.
-
-Because the name is derivable, `flw doctor` can check it:
+There is no config key pointing at an extension, so the name is derivable and `flw doctor`
+can check it. The failure worth catching is a file named `spec.md` when the skill is
+`flw-spec`: it looks right and nothing reads it.
 
 ```text
 extensions: ~/work/.flw/extensions
@@ -46,8 +41,6 @@ extensions: ~/work/ds/.flw/extensions
   ✗ spec.md — read by nobody: no installed skill is named 'spec'
       skills here: flw-execute, flw-research, flw-review, flw-spec, and shared.md
 ```
-
-That check and a configurable path are mutually exclusive features. The checkable one won.
 
 ### Generated, not typed
 
@@ -102,21 +95,15 @@ The body is prose an agent follows. What holds up in practice:
 - **Reference files load lazily.** Put the rare path in `references/` and name it at the
   point of use, so it costs nothing on the runs that do not need it.
 
-### It cannot be unit-tested
+### How a skill gets checked
 
-A skill is prose, and there is no fixed behaviour to assert against. flw tried it — a test
-per phrase a cold reader had tripped on — and the tests only ever fired on deliberate
-rewrites, so each failure was answered by editing the test to match. A check that is always
-wrong when it fails trains you to stop reading it. They were deleted in full.
+Two things are tested, both in `tests/test_validate_spec.py`: `SKILL.md` frontmatter, which
+the hosts require in a fixed shape and refuse to load without, and the review configs, which
+are data with a schema. The prose is not, because there is no fixed behaviour to assert
+against.
 
-What is still tested is the part that is not prose: `SKILL.md` frontmatter, which the hosts
-require in a fixed shape and silently refuse to load without, and the review configs, which
-are data with a schema. Both live in `tests/test_validate_spec.py`.
-
-The real check is **giving the skill to an agent that has never seen it and asking where it
-had to guess.** Every flw skill has been through that, and each time it found a
-contradiction that reading it had not. Rewrite skills deliberately, and re-read them cold —
-that is the control, not a test suite.
+The check that works is **giving the skill to an agent that has never seen it and asking
+where it had to guess.**
 
 ### Overrides are reported, never silent
 
@@ -140,13 +127,9 @@ without being uninstalled.
 
 ## What is deliberately not offered
 
-**A code plugin API.** Extensions are prose. A plugin API is where lean tools become
-frameworks, and every mechanism flw might add to police an agent is redundant with the
-human who reads the diff.
+**A code plugin API.** Extensions are prose.
 
-**Remote bundles.** Local paths only. Remote fetch means trust, verification and update
-semantics — a materially larger surface for no benefit here.
+**Remote bundles.** Local paths only.
 
-**Hooks.** flw does not intercept, wrap or police tool calls. Hosts have their own
-permission systems and theirs are better. flw's entire runtime presence is skills a host
-chooses to load.
+**Hooks.** flw does not intercept, wrap or police tool calls. Hosts have their own permission
+systems. flw's entire runtime presence is skills a host chooses to load.

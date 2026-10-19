@@ -1,34 +1,21 @@
 # Installing flw
 
-This is the walkthrough as actually performed, on macOS with Claude Code, including what
-each step reported. Findings behind it are recorded as comments at the code each one
-explains.
-
 ## What you need
 
-Python 3.11 or later as a system interpreter. Nothing else — flw has no runtime
-dependencies, and an installer that exists to stop a workflow assuming a package manager
-cannot itself require one.
+Python 3.11 or later, as a system interpreter. flw has no runtime dependencies.
 
-**Running flw's own checks is the exception.** `flw test` inside this checkout runs
-`python3 -m venv .venv && .venv/bin/pip install -q pytest ruff` the first time, because
-that is what flw's own `.flw/config.toml` declares as `[tests] setup`. It needs the
-network once and takes a fresh clone from 2 MB to 63 MB. Every other project declares its
-own `setup` or none, so nothing here is inherited.
+Running flw's own checks is the exception: `flw test` inside this checkout creates `.venv/` and installs pytest and ruff, because that is what this project's `.flw/config.toml` declares as `[tests] setup`. It needs the network once. Every other project declares its own setup line or none.
 
 ## Put `flw` on PATH
 
-Clone wherever you keep things, then link the CLI onto PATH:
-
 ```sh
-ln -s /path/to/flw/cli/flw.py ~/.local/bin/flw
+git clone https://github.com/tm42/flw.git ~/.agentic/flw
+ln -s ~/.agentic/flw/cli/flw.py ~/.local/bin/flw
 ```
 
-**A symlink, not a copy.** `flw update` is then a `git pull` with nothing to re-copy and no
-stale duplicate to detect. `cli/flw.py` is already executable and carries
-`#!/usr/bin/env python3`.
+A symlink, not a copy, so `flw update` is a `git pull` with nothing to re-copy. Any directory on your PATH will do instead of `~/.local/bin`.
 
-If `~/.local/bin` is not on your PATH, any directory that is will do.
+Moving the checkout later dangles this link and the skill links with it. Re-run the `ln` line to repair it, then `flw install`.
 
 ## Install the skills
 
@@ -36,33 +23,13 @@ If `~/.local/bin` is not on your PATH, any directory that is will do.
 flw install
 ```
 
-Skills are linked into each present host's discovery path — again symlinks, so editing
-`core/skills/<name>/SKILL.md` is live everywhere immediately.
+The skills are symlinked into each present host's discovery path, so editing `core/skills/<name>/SKILL.md` is live everywhere at once. A host that is not on this machine is named and skipped; name one to install anyway:
 
-**Only hosts that are actually here.** flw checks for the host's own binary or its config
-directory. A host that is not installed is named and skipped:
-
-```text
-  codex: not on this machine — skipping
-  opencode: not on this machine — skipping
-  claude-code: ~/.claude/skills
-    + flw-execute
-    + flw-research
-    + flw-review
-    + flw-spec
-
-  ~/.flw/root -> /path/to/flw
-
-  style: flw ships a writing style and has not installed it — `flw style install`
-
-Run `flw doctor` to verify.
+```sh
+flw install claude-code
 ```
 
-Name a host to install regardless — `flw install claude-code` — which is what you want when
-setting up ahead of a host, or building an image.
-
-**Two link sets serve three hosts.** OpenCode reads Claude Code's and Codex's skill
-directories as well as its own, so installing all three usually creates two.
+OpenCode reads Claude Code's and Codex's skill directories as well as its own, so installing all three usually creates two link sets.
 
 ## Verify
 
@@ -70,51 +37,11 @@ directories as well as its own, so installing all three usually creates two.
 flw doctor
 ```
 
-```text
-flw: /path/to/flw
-  ✓ ~/.flw/root -> /path/to/flw
-
-skills: 4
-
-links:
-  ~/.claude/skills
-    ✓ flw-execute
-    ✓ flw-research
-    ✓ flw-review
-    ✓ flw-spec
-
-hosts:
-  ✓ claude-code: via ~/.claude/skills
-  · codex: not installed
-  ✓ opencode: reachable via ~/.claude/skills
-
-style:
-  · not installed — `flw style install` writes it into each host
-
-OK
-```
-
-**`reachable via` is not `via`.** Claude Code is here and reads that directory. OpenCode
-is not here, but reads the same one, so its skills would resolve the moment it arrived —
-which is why `flw install` calls it absent and `flw doctor` still ticks it.
-
-**`·` is not a failure.** It means nothing of flw's reaches that host, and the line says
-which of the two reasons applies: `not installed` is a host that is not on this machine,
-and `on this machine, not installed into` is one that is here and was never named. A host
-that is here and whose links are all broken gets `!` instead, because that one is worth
-acting on. `✗` is a failure — a link that is dangling, hijacked, stale, or recorded but
-no longer there. `flw doctor -v` adds each host's notes and quirks.
-
-Run inside a project, `doctor` also reports which extensions an installed skill will
-actually read and which sit there read by nobody — one section per project root on the
-chain, from the outermost inward, because a parent holding several checkouts can carry
-`.flw/extensions/` files every one of them reads.
+It reports which links resolve, which hosts the skills reach, whether the writing style is installed, and — run inside a project — which extensions an installed skill will read and which sit there read by nobody. `flw doctor -v` adds each host's notes. The last line is `OK` or a problem count.
 
 ## The host has to reload
 
-A newly linked skill is not discoverable until the host rescans. In Claude Code that is
-`/reload-skills`; other hosts differ. Nothing is wrong if `flw doctor` is clean and the
-skill has not appeared yet.
+A newly linked skill is not discoverable until the host rescans. In Claude Code that is `/reload-skills`; other hosts differ. Nothing is wrong if `flw doctor` is clean and the skill has not appeared yet.
 
 ## Optional: the ambient block
 
@@ -122,9 +49,17 @@ skill has not appeared yet.
 flw install --ambient
 ```
 
-Offers a tagged block for your top-level `CLAUDE.md` or `AGENTS.md` describing the workflow
-and the posture. It asks first, and `flw uninstall` strips it exactly, leaving the
-surrounding file untouched. This is your global instruction file and flw is a guest in it.
+Offers a tagged block for your top-level `CLAUDE.md` or `AGENTS.md` describing the workflow and the engineering posture. It asks first, and `flw uninstall` strips it exactly, leaving the rest of the file untouched.
+
+## Optional: the writing style
+
+```sh
+flw style install
+```
+
+Puts `core/styles/terse_prose.md` in front of the host for everything you do, not only for flw's skills. Claude Code gets a file in `~/.claude/output-styles/` and is asked before `outputStyle` is set; Codex and OpenCode have no style slot, so the text goes into their instructions file as its own tagged block.
+
+The style is a copy rather than a symlink, because Claude Code needs a frontmatter header the source file does not carry. `flw doctor` reports a copy that no longer matches its source, and `flw update` offers to refresh it.
 
 ## Removing it
 
@@ -133,19 +68,10 @@ flw uninstall            # every host
 flw uninstall codex      # one
 ```
 
-`uninstall` reaches a host **even if you have since removed that host** — that is how
-leftover links get cleaned. It removes only what flw recorded creating, and only from the
-root each host writes to, never one it merely reads.
+`uninstall` reaches a host even if you have since removed that host, which is how leftover links get cleaned. It removes only what flw recorded creating.
 
 ## First run
 
-`flw scout` in any repository gives you a ranked orientation in about a second, with
-nothing installed and nothing cached. `flw-research` configures a repository flw did not
-set up. Neither needs a contract.
+`flw scout` in any repository gives a ranked orientation with nothing installed and nothing cached. `/flw-research` configures a repository flw did not set up. Neither needs a contract.
 
-`flw kb` needs one even less: it reads `~/.flw/kb/` and, inside a project, that project's
-`plans/notes/`. Both are empty until something writes to them, and an empty store prints
-that rather than failing. The skills fill it — flw-execute, flw-research and every
-flw-review reviewer, the one that runs by default as much as each one a team dispatches,
-are offered a note at the point they have just measured something, and decline by doing
-nothing.
+`-n` on `install`, `sync`, `update` and `style install` writes nothing and reports what the command would do.

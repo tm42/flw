@@ -1,10 +1,10 @@
 # Measuring flw
 
-A protocol, not a benchmark suite. Its job is to make numbers from two machines comparable, which
-takes a fixed corpus and a fixed set of commands more than it takes a stopwatch.
+A protocol for making numbers from two machines comparable: a fixed corpus and a fixed set of
+commands.
 
-Point an agent at this file. It needs the repository, a Python 3.11 or later interpreter, and
-nothing else — no install, no `flw install`, no network.
+Point an agent at this file. It needs the repository and a Python 3.11 or later interpreter —
+no install, no network.
 
 ## What is worth measuring, and what is not
 
@@ -158,14 +158,9 @@ Apple M3 Pro, macOS 26.6.2, Python 3.12.14, at flw 0.11.5. Wall clock, second ru
 About 20 ms of every one of those is interpreter startup, so the small numbers are partly Python
 booting rather than flw working.
 
-**This table replaces one measured on Python 3.11.14, and the whole table was re-run rather than
-corrected row by row, because a table measured on two interpreters is not a baseline.** Two
-things a reader comparing against the old one should know. The `flw kb search proxy` row read
-0.03 s and was wrong: it sat below the interpreter's own startup floor, and the store is parsed
-in full on every query, so a search cannot beat `flw kb -s` over the same corpus. It was never
-0.03 s. The three `flw scout` rows are genuinely about 1.7x their 3.11 figures, which is the
-3.12 slowdown already recorded in `specs/versions/declared-behaviour-major.toml` and not a
-regression in flw.
+The table was taken at flw 0.11.5 and the repository has moved since, so treat a row as a
+starting point rather than as the current figure. Re-run the protocol before comparing against
+it.
 
 ## What is already known, so nobody re-finds it
 
@@ -177,16 +172,15 @@ regression in flw.
 - **`walk` holds every note's body in memory at once.** A single 256 MB note was measured taking
   the process to 568 MB RSS. Nothing refuses an enormous body. Worth re-measuring the shape of
   that curve on a machine with less memory.
-- **`flw scout` extrapolates to roughly 3 s at 20,000 files**, which is what the contract claims.
-  It has not been measured at that size on real code, only on generated trees — a real
-  monorepo is the interesting test, because generated imports resolve cleanly and real ones do
-  not.
+- **`flw scout` has never been measured above 8,000 files, and never on real code.** Generated
+  imports resolve cleanly and real ones do not, so a generated tree says nothing about the
+  ranking's quality at any size. A real monorepo is the test that would settle it.
 - **The TypeScript scout has no numbers at all.** It runs on the target repository's own
   `typescript`, so it needs a real TS monorepo to measure and none has been.
 - **Two concurrent `flw kb write` calls with the same title both succeed and the later wins.**
   The refusal is check-then-write with no lock.
 
-## The trap that will waste your afternoon
+## Clear `__pycache__` between mutation runs
 
 If you are mutating source to check whether a test catches something, **clear `__pycache__`
 between every run.** A timestamp-based `.pyc` validates on `(int(mtime), size)`, so a same-size
