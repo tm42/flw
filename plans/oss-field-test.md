@@ -52,6 +52,28 @@ One caveat specific to this test: django's layout is in the training corpus, so 
 
 A Rust or Go checkout — `astral-sh/ruff` or `prometheus/prometheus`, neither cloned yet. `flw scout --help` claims it names what it did not read rather than confidently reporting a ranking over zero edges. Five minutes to find out whether it does.
 
+## T3 result, at django `dab0a5c47f` — the machinery half only
+
+Not run as specified. T3's own caveat says django's layout is in the training corpus, so a model can write a plausible tree without reading anything, and the model available to run it is that model. What follows is the half nobody can fake: counts, timings and one claim checked against the code.
+
+**The bar contradicts itself, and django is where it shows.** `core/skills/flw-research/SKILL.md:231` says "Five to thirty per repository"; `:256` says "a repository of 1,800 files gets perhaps forty". Django is 2,933 files, 2,607 of them Python. Counted: 87 folders under `django/` hold three or more Python files, none of them translations. A surveyor following the range writes at most 30 files and leaves 57 plausible units undescribed; one following the worked case writes about 40 and breaks the range it was given four lines earlier. Either the range is wrong above a certain size or the worked case is, and the skill does not say which.
+
+**The scout's numbers on django.** 2,607 Python files (1,743 test), 154,187 lines, 41,801 definitions, 1 failed to parse, 3.47 seconds wall. 90.3% of imports resolved (12,711 of 14,072 naming a module the repository holds) — the first of the three fixtures to land in the 85-90% range the old `--help` promised, against pandas at 68.3% and uvicorn at 62.6%. 1,595 imports reached every definer of a name rather than one, for 8,281 edges.
+
+**One claim checked against the code, which the caveat requires.** The scout ranks `django/utils/functional.py` second and labels it `cached_property 91 files`. `class cached_property` is at `django/utils/functional.py:7`, so the definer is right. An independent `grep -rl` for files importing from `django.utils.functional` and mentioning `cached_property` returns 97, and 102 files mention the name anywhere — so the scout under-counts by six rather than over-claiming.
+
+`django/db/models/__init__.py` ranks first, which is the package `__init__.py` case `flw scout --help` now warns about by name.
+
+**What is still owed.** The tree itself, written by a reader who does not already know django, and three of its files checked for whether each removes more reading than it costs.
+
+## T4 result, at ripgrep `3fce3b5` — passes
+
+**A repository in neither language is refused rather than ranked.** `flw scout ~/_projects/oss-fixtures/ripgrep` over 110 `.rs` files and no Python or TypeScript exits 1 in 0.08 seconds with one line: it names the path, says the scout covers Python and TypeScript because a repository in either already carries the parser, and names `aider --show-repo-map` as the fallback. No ranking over zero edges and no empty sections.
+
+**A mixed tree names what it did not read.** Two Python files beside 95 `.rs` and one `.sh`: the ranking is correct about the two, and the last line reads `not read: 95 .rs, 1 .sh. The scout parses Python and TypeScript only; for the rest, aider --show-repo-map prints a map.`
+
+One observation rather than a finding. That line is the last thing printed, after the ranking, so a reader who stops at the header sees `2 python files` and a confident-looking ranking with nothing qualifying it. The header is where it would be read.
+
 ## What this plan does not do
 
 It runs none of the project's own checks, writes no record, and changes nothing in flw. Each test produces either a pass or a finding, and a finding becomes a record through `flw-spec` the usual way.
