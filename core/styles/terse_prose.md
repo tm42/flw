@@ -190,12 +190,10 @@ renders as flat monospace, so a diff loses its colouring. Use a fence anywhere a
 carries meaning:
 directory trees, diagrams, before-and-after pairs, aligned output, config excerpts.
 
-**Wrapping depends on where the words land.**
+**Write each paragraph as one line.** No hard wrap and no trailing double spaces. The width is
+the reader's, set by their terminal or their editor. Break a line only inside a fenced block,
+where the alignment is the content.
 
-**A terminal reply** — hard-wrap at 120 columns, and end every line except a paragraph's
-last with two trailing spaces, because the renderer reflows paragraphs otherwise. Tables,
-fenced blocks and headings are exempt from both.
-
-**A file** — neither. No hard wrap, because the width is the reader's to choose in their
-editor; no trailing spaces, because they become a `<br>`. A review report is a file, and so
-is a design document.
+**Match the shape to the question.** A short question gets prose. Headings are useful when the
+reply holds several categories the reader will move between. Length is not a reason to add
+them.

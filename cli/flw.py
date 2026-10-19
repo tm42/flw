@@ -4103,8 +4103,10 @@ sentence" produces noise that teaches people to ignore it.""",
         "check",
         help="what this session's own recent replies broke",
         description="""Reads this project's session transcript and reports what the agent's
-own recent replies broke, with examples: the overused words, the openers and offers, the
-120-column wrap and the two trailing spaces a reply needs and a file must not have.
+own recent replies broke, with examples: the overused words, the openers and offers, a
+fence with no language tag, and two trailing spaces — refused in a reply as in a file,
+under one name, because the pair is what hard wrapping leaves behind. There is no width
+rule: the style leaves the width to your terminal.
 
 It never restates a rule. Constraint restatement accuracy is measured at 97.3% while the
 same models violate the constraint they just restated, so repeating a rule an agent can

@@ -142,8 +142,8 @@ shape a report should come back in.
 
 ## The writing style
 
-`core/styles/terse_prose.md` is how flw writes: claim first, no preamble, replies
-hard-wrapped and files never. The skills read it themselves and hand it to every
+`core/styles/terse_prose.md` is how flw writes: claim first, no preamble, one line per
+paragraph with the width left to your terminal. The skills read it themselves and hand it to every
 reviewer they dispatch, so flw's own reports follow it whether or not you install
 anything.
 

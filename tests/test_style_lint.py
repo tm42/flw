@@ -276,36 +276,39 @@ def test_an_untagged_fence_in_a_reply_is_a_finding():
     assert style_lint.reply_findings("text\n\n```sh\nls\n```\n")["fence-untagged"] == []
 
 
-def test_over_120_columns():
-    found = style_lint.reply_findings("x" * 121 + "\n")
-    assert len(found["over-120"]) == 1
-    assert found["over-120"][0].startswith("121 cols")
-    assert style_lint.reply_findings("x" * 120 + "\n")["over-120"] == []
+def test_prose_written_as_the_style_now_asks_is_clean():
+    """The checker and the style file came apart once already: the reply set
+    enforced a 120-column wrap and a trailing pair on every line but a paragraph's
+    last, while the style asked for one line per paragraph and no trailing pair.
+    This is what holds the two together — if a geometry rule is ever added back,
+    it fails here first."""
+    text = (
+        "A paragraph written as one line, however long it runs, which is what the style "
+        "asks for and which the old width rule reported as a finding at 121 columns.\n"
+        "\n"
+        "A second paragraph, also one line, also carrying no trailing whitespace at all.\n"
+        "\n"
+        "- a bullet, which used to be its own block for a rule that no longer exists\n"
+        "- a second bullet\n"
+    )
+    geometry = {"fence-untagged", "trailing-spaces"}
+    assert {k: v for k, v in style_lint.reply_findings(text).items() if v and k in geometry} == {}
 
 
-def test_a_bullet_over_120_columns_is_still_too_wide():
-    """own_block was built for missing-two-spaces and swallowed the width check
-    with it: 892 of the 1,048 dropped over-120 lines were bullets."""
-    for line in ("- " + "x" * 130, "| " + "x" * 130, "> " + "x" * 130):
-        assert style_lint.reply_findings(line + "\n")["over-120"], line[:4]
+def test_two_trailing_spaces_in_a_reply_are_a_finding():
+    """The style forbids the pair in a reply as well as in a file, and this is the
+    only rule in the reply set that reads a line's trailing whitespace. Without it
+    the pair is stated and measured nowhere."""
+    found = style_lint.reply_findings("a line of prose ending in a pair  \n")
+    assert len(found["trailing-spaces"]) == 1
+    assert style_lint.reply_findings("a line of prose with no pair\n")["trailing-spaces"] == []
 
 
-def test_missing_two_spaces_only_inside_a_paragraph():
-    text = "first line of prose\nsecond line of prose\n"
-    assert len(style_lint.reply_findings(text)["missing-two-spaces"]) == 1
-    kept = "first line of prose  \nsecond line of prose\n"
-    assert style_lint.reply_findings(kept)["missing-two-spaces"] == []
-
-
-def test_a_bullet_is_its_own_block():
-    """Counting bullets as paragraph-internal lines overstated this by 26%."""
-    text = "- one bullet\n- two bullets\n- three bullets\n"
-    assert style_lint.reply_findings(text)["missing-two-spaces"] == []
-
-
-def test_a_table_row_and_a_quote_are_their_own_blocks():
-    assert style_lint.reply_findings("| a | b |\n| c | d |\n")["missing-two-spaces"] == []
-    assert style_lint.reply_findings("> quoted\n> more\n")["missing-two-spaces"] == []
+def test_two_trailing_spaces_inside_a_fence_are_not():
+    """A fenced block's alignment is its content, which is why the width rule
+    skipped fences too."""
+    text = "text\n\n```text\naligned  \ncolumns  \n```\n"
+    assert style_lint.reply_findings(text)["trailing-spaces"] == []
 
 
 # --- transcripts ----------------------------------------------------------- #

@@ -42,17 +42,16 @@ SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".flw"}
 # fires on it. It is the one file that cannot be checked against itself.
 SKIP_FILES = {"terse_prose.md"}
 
-WRAP_COLUMNS = 120
 # How many of this project's transcripts to collect, and how far into each to
 # look for the cwd record that identifies it.
 MATCH_CAP = 40
 CWD_SCAN_LINES = 200
 
 FENCE = re.compile(r"^\s*```(.*)$")
-_HEADING = re.compile(r"^#{1,6}\s")
-_BULLET = re.compile(r"^\s*([-*+]|\d+[.)])\s")
-_QUOTE = re.compile(r"^\s*>")
 _CODE_SPAN = re.compile(r"`[^`\n]*`")
+# Both rule sets measure the trailing pair, so they share the pattern rather than
+# each carrying its own. Only the message differs, and each set states its own.
+TRAILING_PAIR = re.compile(r"\S  +$")
 
 Rule = tuple[str, re.Pattern[str], str]
 
@@ -64,7 +63,7 @@ FILE_RULES: tuple[Rule, ...] = (
     # "Never do this in a file — two trailing spaces become a <br> there."
     (
         "trailing-spaces",
-        re.compile(r"\S  +$"),
+        TRAILING_PAIR,
         "two trailing spaces, which become a <br> in a file",
     ),
 )
@@ -244,20 +243,18 @@ def report(paths: list[Path], root: Path) -> tuple[list[str], int, int]:
 def reply_findings(text: str) -> dict[str, list[str]]:
     """{rule: examples} for one reply. The count is len() of each list.
 
-    Two geometry rules invert against a file: a file must NOT carry the trailing
-    spaces, and a file's width is the reader's to choose. They are also the only
-    two rules measurement found the agent breaking at volume — 36.7% of replies
-    over 120 columns, 63.1% of the lines that need the trailing pair lacking it.
-
-    A paragraph is consecutive prose lines. A bullet, a quote and a table row are
-    each their own block and do not reflow into a neighbour, so a missing pair on
-    one of them is not a finding — counting them overstated this by 26%. Width is
-    checked before that branch, because a bullet still has to fit the terminal:
-    892 of the 1,048 over-120 lines the branch used to swallow were bullets.
+    Two geometry rules are measured here and no others: the trailing double space,
+    and a fence with no language tag. There is no width rule, because the style
+    states that the width is the reader's — so do not add one back, and do not take
+    the trailing pair out with it. Both sets refuse the pair under the same name and
+    the same pattern, TRAILING_PAIR, and say why differently: in a file the pair
+    becomes a <br>, and in a reply it is what hard wrapping leaves behind.
 
     The vocabulary rules read the line with its inline code spans removed. A word
     inside backticks is being quoted rather than used, and 25 of 44 measured false
     positives were exactly that — a reply reporting this checker's own output.
+    trailing-spaces reads the raw line instead, because substituting a span leaves
+    whitespace the author never wrote.
 
     fence-untagged is the one rule both sets run. The style asks for a language tag
     wherever a fence is written, and a reply is written.
@@ -265,16 +262,8 @@ def reply_findings(text: str) -> dict[str, list[str]]:
     # Every rule gets a key whether it fired or not, so a caller can ask about
     # one without knowing whether it hit. style_check skips the empty ones.
     out: dict[str, list[str]] = {name: [] for name, _, _ in REPLY_RULES}
-    out.update({"over-120": [], "missing-two-spaces": [], "fence-untagged": []})
+    out.update({"fence-untagged": [], "trailing-spaces": []})
     in_fence = False
-    paragraph: list[str] = []
-
-    def flush() -> None:
-        if len(paragraph) >= 2:
-            for line in paragraph[:-1]:
-                if not line.endswith("  "):
-                    out["missing-two-spaces"].append(line.strip()[:60])
-        paragraph.clear()
 
     for line in text.split("\n"):
         fence = FENCE.match(line)
@@ -282,7 +271,6 @@ def reply_findings(text: str) -> dict[str, list[str]]:
             if not in_fence and not fence.group(1).strip():
                 out["fence-untagged"].append(line.strip()[:52] or "```")
             in_fence = not in_fence
-            flush()
             continue
         if in_fence:
             continue
@@ -295,21 +283,10 @@ def reply_findings(text: str) -> dict[str, list[str]]:
                 out[name].append(
                     f"{hit.group(0).strip()}: {line.strip()[:52]}"
                 )
-        stripped = line.strip()
-        if len(line) > WRAP_COLUMNS:
-            out["over-120"].append(f"{len(line)} cols: {stripped[:52]}")
-        own_block = (
-            not stripped
-            or stripped.startswith("|")
-            or _HEADING.match(line)
-            or _BULLET.match(line)
-            or _QUOTE.match(line)
-        )
-        if own_block:
-            flush()
-            continue
-        paragraph.append(line)
-    flush()
+        # On the raw line, not on `probe`: substituting a code span leaves a space
+        # the author never typed, which would read as a pair they never wrote.
+        if TRAILING_PAIR.search(line):
+            out["trailing-spaces"].append(line.strip()[:60])
     return out
 
 
