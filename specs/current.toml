@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.17.8"
+spec_version = "0.17.9"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -49,6 +49,7 @@ applied = [
   "skills-flag-what-drifted",
   "scripts-drop-the-width-rules",
   "a-verdict-needs-a-measurement",
+  "scout-says-what-resolved",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -244,7 +245,7 @@ provides = [
   "A contract a run has just written is validated before that run reports success, so an edit producing a document the schema or the record set refuses stops the run instead of being handed over as finished work.",
   "A project that has never carried a legacy version number folds its release from its first record, so the check is live on the day flw is adopted rather than only in a repository with history.",
   "A run of the full definition of done in a directory with no contract to read says so rather than reporting success.",
-  "A scout says what it did not read: files in languages neither scout parses are counted and named, so a ranking of the minority language in a mixed repository is never mistaken for the repository.",
+  "A scout says what it did not read and what its ranking rests on: files in languages neither scout parses are counted and named, so a ranking of the minority language in a mixed repository is never mistaken for the repository; and the share of imports that reached a definition is printed with the denominator it is a share of, alongside how many reached every definer of a name rather than one.",
   "A user is told which project root a command resolved to before it runs, so one issued from the wrong directory is visible rather than silently answered by an ancestor.",
   "A user can search everything the project has written down about itself — the contract, every version record, the conventions its extensions impose and the design documents beside them — with `flw ledger`, each hit grouped by what kind of thing it is, so a settled decision is not made again for want of finding it, and a live convention that contradicts the contract is visible beside it rather than reachable only by opening the file that holds it.",
   "A task from a record the contract has not applied is reported as planned and counted apart from what was built, so asking whether a capability exists answers with whether it was built rather than with whether somebody wrote it down.",
@@ -272,7 +273,7 @@ properties = [
   "A definition reached through files that are themselves depended on outranks one imported by the same number of files that nothing depends on; with damping at zero the two tie exactly, because what separates them is transitivity and not how many importers each has.",
   "An importer's rank divides evenly across what it imports, and an import that resolves to nothing in the repository does not divide it at all: a file importing one local name and twenty from elsewhere gives that name the same score as a file importing nothing else.",
   "The printed ranking is converged: running more iterations changes no score the scout prints.",
-  "Both scouts rank the file that defines an imported name rather than the file a specifier names. Where more than one file defines that name, the edge goes to the definer in the module the import actually named, and to every definer only when no module resolves — so a re-export barrel still takes none of the score, and a name defined once per package does not edge to every package.",
+  "Both scouts rank the file that defines an imported name rather than the file a specifier names. Where more than one file defines that name, the edge goes to the definer in the module the import actually named, and to every definer whenever no definer sits in the module the import named — because that module resolves to no file here, or because it resolves and defines nothing of that name. A re-export barrel still takes none of the score, and a name the named module does define edges to that module's definer alone, whatever other packages define it too.",
   "The release fold is computed for any applied list, including one naming no legacy numbered record, so a declared release number is checked from a project's first record onward.",
   "The corpus `flw ledger` reads is exactly the contract, the version records, the review team configs, the flw directory's extensions and plans/*.md. Nothing else under the project is read. An extension is binding because a human wrote it rather than because a schema checks it, so it is grouped apart from the contract and the two are never merged into one authority.",
   "Matching is whole words with their plural and participle forms, so a query for one word never matches a longer word containing it.",
