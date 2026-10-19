@@ -101,18 +101,16 @@ Find out how the place actually runs. Read first — `Makefile`, `justfile`, CI 
 `pyproject.toml`, `package.json` scripts, `tox.ini`, `CONTRIBUTING.md`. Those state
 intent. Then **run the cheap ones** to find out what is true here.
 
-Add `docker-compose.yml`, k8s manifests and `.env.example` to that first read, and put
-them ahead of the rest when the system spans more than one repo. A compose file names
-every service, its ports, and which environment variable in one holds the URL of another —
-the system diagram, machine-readable, kept current by the fact that people run it. Read
-each `README` and then discount it: it is the file that goes stale first and the one most
-likely to be believed.
+Add `docker-compose.yml`, k8s manifests and `.env.example` to that first read where the
+repository has them. Read each `README` and then discount it: it is the file that goes stale
+first and the one most likely to be believed.
 
 - **How is it tested?** The real invocation, including whatever must precede it. `pytest`
   is a guess; `poetry run pytest -n 4` is an answer, and so is `cargo test --workspace`.
-- **How many tests, and how long?** This decides whether a targeted set is worth having.
-  Most runners will enumerate without running — `pytest --collect-only -q | tail -1`,
-  `cargo test -- --list`, `go test -list . ./...` — and that costs nothing.
+- **How many tests, and how long?** This decides whether a targeted set is worth having,
+  where it can be had. Enumerating is not free: `pytest --collect-only` imports every test
+  module and runs every `conftest.py` and module-scope fixture, so it is execution and takes
+  the same judgement as running the suite.
 - **What is the setup line?** Activation, environment, whatever must come first.
 - **What is it built on?** The scout's external-dependency list for TypeScript; the
   manifest for everything else — `pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`.
@@ -125,19 +123,22 @@ likely to be believed.
   wrappers built around another service's base URL — `@app.route`, `@router.get`,
   `express.Router()`, an `httpx.AsyncClient` or `axios.create` holding a base URL. Naming
   frameworks here is fine, because this is prose you apply with judgment, which is exactly
-  why it is not in the scout.
+  why it is not in the scout — and they are examples, not a list: a framework that registers
+  routes as objects rather than with decorators gives none of these a hit, as starlette does
+  by passing `Route` and `Mount` to the application.
 - **What runs here and what does not?** The question that matters most in a restricted
   session. Try each check once. Anything that cannot run is not a failure and not a
-  mystery — it is `[tests] yours`.
+  mystery — it is `[tests] yours`, and write beside it why: a reader cannot otherwise tell a
+  session that was forbidden from a check needing hardware from one that hung.
 - **Recent history.** `git log --oneline -30` and the most-changed files. Read it for what
   is durable — a migration in progress, a convention in commit messages — and do not
   record the log itself. Last week's commits are stale next week and nothing says so.
   **Churn is not a ranking substitute and is often inverted**: a stable core everything
   imports has low churn *because* it is stable, so most-changed puts this month's work on
-  top and buries what the repo rests on. Across several repos it answers a different
-  question and answers it well — days where two repos both have commits are almost always
-  a seam change, and the pair of diffs shows both sides of a contract no file states:
-  `for r in */; do git -C "$r" log --since=6.months --date=short --format="%ad ${r%/} %s"; done | sort`
+  top and buries what the repo rests on. Across repositories somebody releases together, two
+  of them committing on the same day usually means a seam changed and the pair of diffs shows
+  both sides. Across independently released upstreams it means nothing, so take one
+  `git log -1` per member for its HEAD and its date and stop there.
 - **Conventions.** How errors are handled, where new code goes, how modules are named,
   what the tests look like. Take these from reading the top-ranked files, not from a
   style guide nobody follows.
@@ -173,6 +174,14 @@ only kind of repo this skill exists for. Use `$PWD`, say which directory you are
 create `.flw/` in, and get a yes before writing. Do not guess upward. There is no
 subcommand for it: the skill creates the directory, the way `flw-spec` creates `specs/`.
 
+**The same yes covers a directory in each declared member.** A member is usually a checkout
+the user does not own, and a survey of a parent with `[project.roots]` writes one store per
+member, which needs one flw directory per member. Name every directory you are about to
+create in one block and get one yes for the set, not one per member. Measured on a parent
+declaring three: the gate above was dead there, because the parent's own directory already
+existed, and three member directories were created inside third-party checkouts with nothing
+asking.
+
 **Config first.** `.flw/config.toml` (or the directory `flw doctor` names), `[tests]`:
 `setup`, `checks` for the working set, `yours` for what this session cannot run. Only
 commands, only what you verified.
@@ -183,19 +192,22 @@ that what was recorded is stale, and a re-run that writes the file fresh drops t
 path, the interview mode and the note-store category the user chose. Leave every key you
 did not measure exactly as you found it.
 
-**Propose the ignore lines in the same block.** Nothing creates them, and three places
-here assume the reports directory and the knowledge store are ignored — so without them a
-review that was told to change nothing leaves ` M .flw/knowledge/…` and `?? .flw/reports/`
-in the user's tree. Show the lines beside the config, in whatever file this VCS ignores
-with, and let the user take them:
+**Say where the ignore lines go, in the same block.** Nothing creates them, and three places
+here read better when the reports directory and the knowledge store are ignored — so without
+them a review that was told to change nothing leaves ` M .flw/knowledge/…` and
+`?? .flw/reports/` in the user's tree. Show the lines beside the config and let the user take
+them:
 
 ```text
 .flw/reports/
 .flw/knowledge/
 ```
 
-Read the ignore file first and propose only what is missing from it, and follow
-`[knowledge] dir` when the store is not at the default.
+Name the file for each place they belong, and do not assume the store ends up ignored. Two
+cases a field test hit: a parent that is not a repository at all, where there is no ignore
+file to propose into, and a member whose ignore file belongs to upstream. In both, say which
+lines go where and leave them. Where there is an ignore file of the user's, read it first and
+propose only what is missing, and follow `[knowledge] dir` when the store has moved.
 
 **Then the extensions**, each holding only what its readers need. Do not restate across
 them: a fact every skill needs goes in `shared.md` once, not into three files.
@@ -229,6 +241,12 @@ directory's `knowledge/`, which is already inside whatever ignores the flw direc
 repository that keeps its architecture somewhere else says so with one key, and the user
 confirms it — it is a fact about that repository, so it is read from the project's config
 file and never from the machine's.
+
+**With `[project.roots]`, write `[kb] category` to one value in the parent config and in every
+member config.** A member config makes that member a project root, and the category then
+follows that directory's name: a note written from inside a member is filed apart from one
+written at the parent. Offer the parent directory's name and ask rather than pick, because the
+value is the user's.
 
 **Write and review per level, not in one block.** The repository file, shown and agreed;
 then the areas, shown and agreed. A tree delivered whole is a tree nobody reads.

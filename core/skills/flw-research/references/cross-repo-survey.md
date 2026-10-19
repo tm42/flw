@@ -34,7 +34,11 @@ grep -rhoE '"[^"]{6,60}"' repo-a repo-b --include=*.py --include=*.ts --include=
 
 Order what comes back by rarity and stop reading when it stops paying: a long odd string
 in exactly two repos is the strongest signal, and `id`, `error` and every HTTP verb sink to
-the bottom on their own. This is the same discovery as the framework greps above from the
+the bottom on their own. **Past two repositories, take each pairwise intersection and
+subtract the full one.** What every repository shares is HTTP header names and environ keys;
+what exactly two share is their contract. On three ASGI libraries that subtraction returned
+the ASGI protocol vocabulary and almost nothing else, and it is what found a seam no import
+edge crosses. This is the same discovery as the framework greps above from the
 other side — theirs is cleaner where the framework is known, this one covers table names,
 queue topics and image tags in languages nobody wrote a pattern for. Beyond HTTP and SQL,
 the literals that break silently are JWT claim names and scope strings, metric and log
