@@ -1,0 +1,243 @@
+name    = "schemas-separate-spec-and-release"
+base    = "say-what-the-survey-creates"
+summary = "Record the product's own release as an optional contract key the fold never touches, and drop the line from the spec version, so the number flw folds counts spec records and claims nothing about what shipped."
+
+approach = '''
+The contract holds one number and it has been doing two jobs. `spec_version` folds from
+`applied` — seed 0.0.0, a `-major` record gives <line>.<X+1>.0 and a `-minor` gives
+<line>.<X>.<Y+1>, with a record's `release_line` restarting the count — and the same number
+is read as how far along the product is. The second job is the one it cannot do, and
+open_questions already records the failure: a service shipping 2.4.0 can state 2.0.0 or
+0.2.5 and neither is true.
+
+Measured, not reasoned. On a scratch fixture for a service at 2.4.0: writing
+`spec_version = "2.4.0"` by hand exits 1 with "current.toml is at '2.4.0' but the applied
+records add up to '0.2.5'"; a legacy seed record named 2.4 folds to 0.2.5 and validates;
+`release_line = 2` folds to 2.0.0 and validates. Both validating options state a number the
+service does not ship, and the one stating the truth fails permanently, because
+flw-execute's step 5 stops on a red `flw validate` and so no run can record itself.
+
+The fix is to stop making one number answer both questions. `spec_version` keeps folding
+and describes the contract alone. A new optional `release` key holds whatever the product
+actually ships, declared by the team, free-form, folded by nothing and moved by nobody but
+them. A team can then land many spec majors and minors inside one product release, and
+decide the size of that release on product grounds rather than on how finely the work was
+cut up.
+
+That removes `release_line`'s reason to exist. Its documented trigger is "1 being whatever
+reached production" (core/skills/flw-spec/references/release-line.md:7), which is the
+meaning moving out to `release`; strip it and the field has no stated trigger at all. Two
+facts make the deletion cheap: no record in this repository has ever declared one — all
+five files matching `release_line` match it in prose — so `line` has been 0 in every fold
+ever computed, and the legacy-number branch at validate_spec.py:541-544 sets only major and
+minor, so it does not touch the line either. Dropping it turns every number flw has ever
+folded from 0.X.Y into X.Y, which is the shape spec-v3.schema.json already used.
+
+ORDERING, and it is the one thing that can go wrong. tests/test_direct_run.py:55-63,
+`test_flw_own_specs_validate`, validates this repository's own `specs/current.toml` against
+spec-v4.schema.json at :59. So from the moment
+the pattern becomes two-part, a contract reading "0.17.11" fails the suite — and step 5 does
+not run until every phase is done. Phase 1 therefore edits `specs/current.toml` to "17.11"
+as part of the work, which is normally step 5's business alone. Step 5 then moves it to
+"18.0" as the `-major` bump and applies the rest of the contract_edit. The number is 18.0
+whichever of the two records in this pair lands first, because a `-minor` moves only the
+minor and a `-major` zeroes it.
+
+flw-execute's step 5 instruction is itself one of the files this record edits, so the run
+that lands it is executed under the old wording. The contract_edit states the number
+outright for that reason, rather than leaving it to be folded from a rule the run has not
+yet rewritten.
+
+What this record is not. It is not a fold opt-out: the fold still runs, still checks, and a
+contract whose `spec_version` disagrees with its records is still refused. `release` is
+never checked against anything, never folded and never bumped by a run, which is the whole
+point — a number flw verifies is a number flw has to understand, and it cannot understand a
+product's release policy. It does not rename `spec_version`; the key stays, and only the
+line leaves it. It does not touch spec-v3.schema.json, which describes documents already
+written. It does not document the adoption path — that is
+`surface-say-how-a-team-adopts`, written in the same session, which covers adopting with no
+contract and says nothing about migrating one. Migration is this record's, and it is an
+assumption rather than a task: the two edits an existing adopter makes are stated in the
+contract and nothing automates them.
+'''
+
+contract_edit = '''
+Five edits in final_state.components, one assumption, one in open_questions, and the number.
+
+1. In the component named "validation and checks", in `provides`, replace:
+
+     "A version record whose filename does not say whether the change is major or minor is
+     refused at authoring time, and a contract whose release number disagrees with what its
+     applied records add up to is named — so the number is folded from the record set rather
+     than remembered."
+
+   with:
+
+     "A version record whose filename does not say whether the change is major or minor is
+     refused at authoring time, and a contract whose spec version disagrees with what its
+     applied records add up to is named — so the number is folded from the record set rather
+     than remembered."
+
+2. In the same `provides`, delete entirely:
+
+     "A release number carries a line its author declares — 0 until the work is real, 1 when
+     it is — and the folded major and minor restart from it, so the number a reader sees says
+     how far along the product is and not only how often the contract moved."
+
+   and replace:
+
+     "A project that has never carried a legacy version number folds its release from its
+     first record, so the check is live on the day flw is adopted rather than only in a
+     repository with history."
+
+   with:
+
+     "A project that has never carried a legacy version number folds its spec version from
+     its first record, so the check is live on the day flw is adopted rather than only in a
+     repository with history."
+
+3. In the same component, in `properties`, replace:
+
+     "The release fold is computed for any applied list, including one naming no legacy
+     numbered record, so a declared release number is checked from a project's first record
+     onward."
+
+   with:
+
+     "The spec-version fold is computed for any applied list, including one naming no legacy
+     numbered record, so a declared spec version is checked from a project's first record
+     onward. It counts the contract's own records and nothing else: a product's released
+     version is a separate declared key the fold never reads, moves or checks."
+
+4. In the component named "the schemas", append to `provides`:
+
+     "A project whose product has its own released version states it once in the contract's
+     `release` key, free-form and checked against no pattern, so a team can land many spec
+     majors and minors inside one release and size that release on product grounds. flw
+     records and prints it and never folds, moves or refuses it, which is why the spec
+     version is free to describe the contract alone."
+
+5. In the component named "the skills", in `provides`, replace:
+
+     "A user can spec two changes at once on separate branches without either having to be
+     renumbered when it lands, because a version record is addressed by a name it keeps, the
+     order they landed in is recorded by the contract rather than by the records, and the
+     release number moves by itself when a run finishes."
+
+   with the same sentence ending "and the spec version moves by itself when a run finishes."
+   Nothing else in it changes. Without this edit the finished contract says both that flw
+   never moves the release and that the release number moves by itself when a run finishes.
+
+6. In `assumptions`, append:
+
+     "A project that adopted flw before the spec version lost its leading component carries
+     a three-part number, and may carry an applied record declaring release_line. Both are
+     refused once the schemas change, and the repair is two edits an adopter makes by hand:
+     drop the leading component from spec_version, and put whatever the line meant into the
+     contract's release key. flw ships no migration for it, because a schema that accepted
+     both shapes to ease one edit would have to go on accepting both."
+
+7. In `open_questions`, delete entirely:
+
+     "Whether a project already in production can express the release number it actually
+     ships. Declaring a line restarts major and minor at zero, so a service at 2.4.0 becomes
+     either 2.0.0 or 0.2.5, and neither is true; the fold opt-out that would settle it is
+     deferred."
+
+8. Set `spec_version = "18.0"`. This is the `-major` bump computed under the fold this
+   record installs, in which the line is gone. Do not also move it by the old rule.
+'''
+
+[[decisions]]
+topic     = "how a project states the version it actually ships"
+options   = [
+  "widen release_line to carry a whole triple, so release_line = \"2.4.0\" seeds the fold",
+  "a fold opt-out key, so the project maintains spec_version by hand and validate stops checking it",
+  "a separate optional release key the fold never reads",
+]
+chosen    = "a separate optional release key the fold never reads"
+rationale = '''
+Seeding the fold and opting out of it both leave one number answering two questions. A
+seeded fold still moves the product's number every time a record lands, so a team that
+wants four spec changes inside one release cannot have it; an opt-out gives back the drift
+the deleted bump machinery in final_state.removed was about the first time. A separate key
+detaches the two completely: the product's release moves on product and engineering grounds
+and flw never touches it, and the folded number stays derived and stays checked.
+'''
+
+[[decisions]]
+topic     = "whether release_line survives"
+options   = [
+  "keep it, renamed, with a new trigger about contract restructuring",
+  "keep it unchanged beside the new release key",
+  "delete it, and the line with it, so spec_version is MAJOR.MINOR",
+]
+chosen    = "delete it, and the line with it, so spec_version is MAJOR.MINOR"
+rationale = '''
+Its only documented trigger — 1 being whatever reached production — is the meaning that
+moves to `release`, and a field with no stated trigger is worse than either keeping or
+deleting it. Keeping it unchanged leaves two keys both read as how real the product is,
+which is the ambiguity this record exists to remove. The deletion is mechanical: no record
+in this repository has declared one, so every fold computed here had line 0, and the
+legacy-number branch sets only major and minor.
+'''
+
+[[decisions]]
+topic     = "whether flw checks the release key's shape"
+options   = [
+  "a pattern, so a typo is caught",
+  "free-form with a minimum length of one",
+]
+chosen    = "free-form with a minimum length of one"
+rationale = '''
+A pattern would refuse a team whose versioning flw did not anticipate — a date, a tag, a
+release-candidate suffix — and that refusal is the failure the key exists to avoid. Nothing
+reads the value, so a typo costs a wrong line in two printed headers and nothing else.
+'''
+
+[[decisions]]
+topic     = "where the contract's own number moves from 0.17.11 to 17.11"
+options   = [
+  "in step 5, with the rest of the contract_edit",
+  "in phase 1, as a task, with step 5 then applying the -major bump",
+]
+chosen    = "in phase 1, as a task, with step 5 then applying the -major bump"
+rationale = '''
+tests/test_direct_run.py:55-63 validates this repository's own current.toml against
+spec-v4.schema.json at :59, so the two-part pattern and the two-part number have to land in the
+same commit or every later phase runs against a red suite. Step 5 runs after the last
+phase, which is too late.
+'''
+
+[[dag]]
+group = 1
+phase = "the fold and the shape"
+tasks = [
+  { id = "drop-the-line-key", desc = "core/schemas/version.schema.json: remove the release_line property entirely. No record declares one, so nothing in any specs/versions/ file changes." },
+  { id = "two-part-number", desc = "core/schemas/spec-v4.schema.json: change spec_version's pattern to ^[0-9]+\\.[0-9]+$ and rewrite its description as MAJOR.MINOR folding from the applied records' classification suffixes, saying it describes this contract and not the product. Add an optional `release` property: type string, minLength 1, no pattern, described as the version the product actually ships, declared by the team and never folded, moved or checked. additionalProperties is false, so the key has to be declared here before any contract may carry it." },
+  { id = "fold-without-a-line", desc = "core/scripts/validate_spec.py: rename expected_release to expected_spec_version and remove `line` from it — seed major and minor at 0, return f\"{major}.{minor}\". Drop release_line from the records mapping it reads (:533, :548-551), from the collection at :572 and :592, and from the per-record dict at :635. Delete the two-declaration check at :640-650 and its comment. In the mismatch message at :655-659, say spec version rather than release number. Rewrite the docstring: the fold counts the contract's own records, and the product's released version is a separate declared key it never reads.", depends_on = ["drop-the-line-key"] },
+  { id = "restate-our-own-number", desc = "specs/current.toml: drop the leading component from whatever spec_version reads — \"0.17.11\" becomes \"17.11\", or \"0.17.12\" becomes \"17.12\" if surface-say-how-a-team-adopts landed first. Do not assume the value; read it. This is the one task that edits the contract outside step 5, and the reason is tests/test_direct_run.py:55-63 — test_flw_own_specs_validate validates this file against spec-v4.schema.json at :59, so the number has to become two-part in the same commit as the pattern. Change nothing else in the file; step 5 makes every other edit.", depends_on = ["two-part-number"] },
+  { id = "pin-the-new-fold", desc = "tests/test_validate_spec.py: update the 12 release_line sites and the 5 three-part spec_version literals (:183, :575, :586, :686, :696). Six tests lose their subject and are deleted: :654, :662 and :670 (reach-production), :732 (go-live), :736 (the two-declaration test), and :689-698, test_a_release_number_disagreeing_with_the_folded_three_part_number_is_caught, whose docstring is \"must not regress to comparing two parts now that the fold returns three\" — the behaviour this record reverses. In their place add one test that a record declaring release_line is refused by the schema. Do NOT touch the assertion at :764: it reads `folded == contract[\"spec_version\"]` deliberately, and the docstring at :752-754 rejects a literal by name — \"a literal fails on every release, which trains a reader to edit the test rather than read it\". That test needs only `\"release_line\"` dropped from the dict it builds at :762. Keep every legacy-number assertion: 4.7 and 1.0 still set major and minor, and :634, :639, :647, :724 only lose a leading zero.", depends_on = ["fold-without-a-line"] },
+  { id = "pin-it-everywhere-else", desc = "The remaining 17 fixture contracts carrying a three-part spec_version, which stop validating: tests/test_stale.py:26,552 · tests/test_ledger.py:18,229,570,773,872 · tests/test_cli.py:2766,2810,2832,2964,3020,3170,3573,3783,4237 · and tests/test_cli.py:3611, where _project() interpolates a computed f\"0.0.{len(applied)}\" into a schema_version = 4 contract at :3614 and the two tests below it call flw.validate, which runs the schema. Drop the leading component from each, keeping whatever each test was distinguishing — 2.1.0 and 9.9.9 are chosen values and 2.1 and 9.9 preserve that. Update each fixture's paired assertion in the same edit or the suite stays red: tests/test_ledger.py:60, tests/test_cli.py:2823, :3027, :3178.", depends_on = ["two-part-number"] },
+  { id = "the-string-that-disappears", desc = "tests/test_ledger.py:521 asserts `\"no release number\" in report`, which is the ledger.py:735 fallback for a contract with no spec_version. ledger-prints-both reworks that line, so this string does not shift a digit — it goes away. Rewrite the assertion against whatever the new line prints for a contract carrying no number.", depends_on = ["ledger-prints-both"] },
+]
+
+[[dag]]
+group = 2
+phase = "say what the contract declares"
+tasks = [
+  { id = "ledger-drops-the-line", desc = "core/scripts/ledger.py:584-585: delete the two lines that print `moves to release line <n>` for a record declaring one. Once drop-the-line-key lands, version.schema.json sets additionalProperties false and no record can carry the key, so the branch is unreachable — and the phrase it prints is the one this record repoints at the product. This is the one release_line site outside validate_spec.py that is live code rather than prose." },
+  { id = "ledger-prints-both", desc = "core/scripts/ledger.py:735: read `release` alongside spec_version and print both in the \"what is true now\" line — `contract <spec_version> · release <release> · <n> components` — omitting the release clause when the key is absent, which is the normal case. The word release now names the product's number and nothing else." },
+  { id = "context-prints-both", desc = "cli/flw.py:3020: the same in the contract header, appending `· release <release>` only when the contract declares one." },
+  { id = "pin-the-printers", desc = "tests/: one test per printer for a contract declaring a release and one for a contract without, so the absent case cannot regress into printing an empty clause.", depends_on = ["ledger-prints-both", "context-prints-both"] },
+]
+
+[[dag]]
+group = 3
+phase = "the instructions"
+tasks = [
+  { id = "spec-says-release", desc = "core/skills/flw-spec/SKILL.md: replace the release_line bullet at :226-228 with the contract's `release` key — asked about when writing a first contract for a product that already ships, left alone when amending, and never moved by flw. Keep it to the bullet's size; the file has 585 B of headroom." },
+  { id = "delete-the-reference", desc = "Delete core/skills/flw-spec/references/release-line.md. Nothing else cites it once the bullet above is rewritten.", depends_on = ["spec-says-release"] },
+  { id = "execute-drops-the-line", desc = "core/skills/flw-execute/SKILL.md step 5 item 2 (:230-234): -major gives <X+1>.0 and -minor gives <X>.<Y+1>, with the release_line clause gone. Add one sentence: a contract's `release` key is the team's and a run never moves it." },
+  { id = "budget-and-validate", desc = "core/scripts/budget.py reports both skills under ceiling, then flw test --no-stream and flw validate.", depends_on = ["spec-says-release", "execute-drops-the-line", "delete-the-reference"] },
+]

@@ -1,0 +1,84 @@
+name    = "surface-say-how-a-team-adopts"
+base    = "say-what-the-survey-creates"
+summary = "Say in the documentation that flw's orientation and knowledge half works before any contract exists, and that a contract covers the directory it sits in rather than the repository."
+
+approach = """
+A team asked whether flw can be adopted on a service that already ships. Both halves of
+the answer are already true in the code and neither is written where that team would look.
+
+The first half: `project_chain` resolves a project on `specs/` or the flw directory
+(cli/flw.py:2341), so a repository holding only `.flw/` is a complete flw project. `flw
+scout`, `flw know`, `flw map`, `flw stale`, `flw kb`, plain `flw test`, flw-research and
+flw-review all work there. `flw validate` prints "no contract at … yet — nothing to check
+it against" and exits 0 (cli/flw.py:2849). Only `flw test -A` needs a contract
+(cli/flw.py:2370), because the full definition of done is a contract field.
+
+The second half: `nearest_project` takes the innermost root (cli/flw.py:2317), so a
+`specs/` inside one module of a large service wins over anything above it. That module
+carries its own contract and its own number, and `spec_version = "0.0.0"` is then a true
+statement about a contract three days old rather than a claim about the service.
+
+The second half is already written in both schema descriptions — spec-v4.schema.json says
+"a repository whose parts release independently is several contracts, one per part at the
+root nearest_project resolves each to" — and nowhere a team would look. In `README.md` and
+`docs/` the only statement of contract scope is README.md:15, "**The contract is the source
+of truth.** One per project", which never says a project can be one module of a repository.
+That sentence is where the second half goes: the README carries contract scope, and
+`docs/install.md` carries the no-contract half. The first half is written in exactly one
+live place today, `docs/install.md:75`, as the four words "Neither needs a contract" at the
+end of the First run section. The only fuller statement is `docs/index.html:691`, a page last touched
+on 3 September that still describes four skills, and no decision has been taken about that
+file.
+
+What this record is not. It changes no behaviour and adds no command — every sentence it
+writes describes code that already runs. It does not touch `docs/index.html`, which is a
+separate decision. It does not create a new document: the section that already ends with
+"Neither needs a contract" is where a reader looking for this is standing, and a new
+`docs/adopting.md` would be a second place for the same facts.
+"""
+
+contract_edit = """
+In final_state.components, the component named "the project surface", append to `provides`:
+
+  "A team can adopt flw on a repository that already ships without writing a contract
+  first, because the documentation says which commands need one and which do not: the
+  scout, the knowledge store, the note store, the staleness fold, a survey, a review and the
+  project's own checks all run in a repository that holds only the flw directory. Where a contract is
+  wanted, the documentation says it covers the directory it sits in rather than the
+  repository, so one module of a large service carries its own and the number folded for
+  it describes that module's contract."
+
+Nothing else changes.
+"""
+
+[[decisions]]
+topic     = "where the adoption path is written"
+options   = [
+  "a new docs/adopting.md",
+  "extend docs/install.md's First run section and add a paragraph to the README",
+  "the README alone",
+]
+chosen    = "extend docs/install.md's First run section and add a paragraph to the README"
+rationale = """
+docs/install.md already ends with a First run section whose last line is "Neither needs a
+contract", so a reader looking for this is already standing there and a new file would be a
+second place for the same facts. It takes the no-contract half. The README takes contract
+scope, because README.md:15 already says the contract is one per project and stopping there
+is what leaves a reader thinking a project means a repository. Both documents
+were rewritten yesterday against the commands that exist, which is why the gap is visible
+now.
+"""
+
+[[decisions]]
+topic     = "whether this ships with the release-number change"
+options   = [
+  "one record covering the documentation and the schema change together",
+  "two records, documentation first",
+]
+chosen    = "two records, documentation first"
+rationale = """
+The two are halves of one answer — scope a contract to a module so 0.0.0 is true, or record
+the product's own release in its own field — but they touch disjoint components and nothing
+in either depends on the other landing. Split, each diff is one reviewable thing. The other
+half is `schemas-separate-spec-and-release`, which carries the field and the fold.
+"""
