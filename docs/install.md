@@ -74,4 +74,6 @@ flw uninstall codex      # one
 
 `flw scout` in any repository gives a ranked orientation with nothing installed and nothing cached. `/flw-research` configures a repository flw did not set up. Neither needs a contract.
 
+A repository that holds only a `.flw/` directory is a complete flw project. `flw scout`, `flw know`, `flw map`, `flw stale`, `flw kb` and plain `flw test` all run there, and so do `/flw-research` and `/flw-review`. `flw validate` says there is no contract to check against and exits 0. Only `flw test -A` needs one, because the full definition of done is a contract field — so a repository that already ships can be adopted before anything is agreed.
+
 `-n` on `install`, `sync`, `update` and `style install` writes nothing and reports what the command would do.

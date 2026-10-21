@@ -12,7 +12,7 @@ Host-agnostic: flw installs as [Agent Skills](https://agentskills.io) into Claud
 
 An agent asked to build something will build something adjacent to it, and the gap becomes visible later. flw makes the agreement a file:
 
-- **The contract is the source of truth.** One per project, stating what exists when the work is done and how you will know it works.
+- **The contract is the source of truth.** One per project, stating what exists when the work is done and how you will know it works. A project is the directory the contract sits in, and flw resolves the innermost one — so a repository whose parts release independently carries one contract per part, each with its own version number.
 - **The contract is edited, not operated on.** Ordinary edits, so `git diff` is the review surface.
 - **Gaps surface as proposals.** When work hits something the contract does not cover, it stops and asks rather than inventing.
 - **Every version leaves a record.** One file per version under `specs/versions/`, carrying what changed, why, and the reasoning behind the plan. A record is addressed by a name chosen when it is specced and never changed, so two people can spec at once; the contract's `applied` list holds the order they landed in.

@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.17.11"
+spec_version = "0.17.12"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -52,6 +52,7 @@ applied = [
   "scout-says-what-resolved",
   "say-who-does-what",
   "say-what-the-survey-creates",
+  "surface-say-how-a-team-adopts",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -315,6 +316,7 @@ paths = ["docs/", "README.md", "LICENSE", "package.json", ".gitignore", "plans/"
 provides = [
   "A stranger can install flw, understand what it is for, and write their own skill for it without reading the author's mind.",
   "A reader can find why flw is shaped the way it is, including what was deliberately not built.",
+  "A team can adopt flw on a repository that already ships without writing a contract first, because the documentation says which commands need one and which do not: the scout, the knowledge store, the note store, the staleness fold, a survey, a review and the project's own checks all run in a repository that holds only the flw directory. Where a contract is wanted, the documentation says it covers the directory it sits in rather than the repository, so one module of a large service carries its own and the number folded for it describes that module's contract.",
 ]
 
 [[final_state.components]]
