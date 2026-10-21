@@ -2763,7 +2763,7 @@ def test_context_reports_an_extension_it_cannot_read_and_reads_the_rest(
     (inner / ".flw" / "extensions" / "flw-spec.md").write_text("INNER-SPEC\n")
     (inner / "specs").mkdir()
     (inner / "specs" / "current.toml").write_text(
-        'schema_version = 4\nspec_version = "1.0.0"\n'
+        'schema_version = 4\nspec_version = "1.0"\n'
         '[[final_state.components]]\nname = "the engine"\npaths = ["src/"]\n'
     )
 
@@ -2807,7 +2807,7 @@ def test_context_names_each_component_and_its_paths_and_no_more(
     (root / "specs").mkdir(parents=True)
     (root / "specs" / "current.toml").write_text(
         'schema_version = 4\n'
-        'spec_version = "2.1.0"\n'
+        'spec_version = "2.1"\n'
         '[[final_state.components]]\n'
         'name = "the engine"\n'
         'paths = ["src/", "lib/"]\n'
@@ -2820,7 +2820,7 @@ def test_context_names_each_component_and_its_paths_and_no_more(
 
     assert _context(tmp_path, monkeypatch, root=str(root)) == 0
     body = _body(capsys.readouterr().out)
-    assert "2.1.0" in body
+    assert "2.1" in body
     assert "the engine: src/, lib/" in body
     assert "the surface: web/" in body
     assert "render a page" not in body
@@ -2829,7 +2829,7 @@ def test_context_names_each_component_and_its_paths_and_no_more(
 
 SCOPED_CONTRACT = (
     'schema_version = 4\n'
-    'spec_version = "2.1.0"\n'
+    'spec_version = "2.1"\n'
     '[[final_state.components]]\n'
     'name = "the engine"\n'
     'paths = ["app/src/"]\n'
@@ -2961,7 +2961,7 @@ def test_context_scope_matches_a_component_whose_path_is_a_file_inside_it(
     (root / "specs").mkdir(parents=True)
     (root / "specs" / "current.toml").write_text(
         'schema_version = 4\n'
-        'spec_version = "1.0.0"\n'
+        'spec_version = "1.0"\n'
         '[[final_state.components]]\n'
         'name = "the engine notes"\n'
         'paths = ["app/src/notes.md"]\n'
@@ -3017,14 +3017,14 @@ def test_context_reads_the_contract_where_paths_specs_says_it_is(
     (root / ".flw" / "config.toml").write_text('[paths]\nspecs = "contracts"\n')
     (root / "contracts").mkdir()
     (root / "contracts" / "current.toml").write_text(
-        'schema_version = 4\nspec_version = "9.9.9"\n'
+        'schema_version = 4\nspec_version = "9.9"\n'
         '[[final_state.components]]\nname = "moved"\npaths = ["elsewhere/"]\n'
     )
 
     assert _context(tmp_path, monkeypatch, root=str(root)) == 0
     body = _body(capsys.readouterr().out)
     assert "moved: elsewhere/" in body
-    assert "9.9.9" in body
+    assert "9.9" in body
 
 
 def test_context_prints_the_shared_context_only_when_a_skill_is_named(
@@ -3167,7 +3167,7 @@ def test_context_names_a_contract_with_no_components_for_what_it_is(
     root = tmp_path / "work"
     (root / "specs").mkdir(parents=True)
     (root / "specs" / "current.toml").write_text(
-        'schema_version = 2\nspec_version = "1.4.0"\n'
+        'schema_version = 2\nspec_version = "1.4"\n'
         '[final_state]\ndescription = "an older shape"\n'
     )
 
@@ -3175,7 +3175,7 @@ def test_context_names_a_contract_with_no_components_for_what_it_is(
     body = _body(capsys.readouterr().out)
     assert "schema_version 2" in body
     assert "no final_state.components" in body
-    assert "1.4.0" not in body
+    assert "1.4" not in body
 
 
 def test_context_refuses_a_root_that_is_not_there(tmp_path, capsys, monkeypatch):
@@ -3570,7 +3570,7 @@ def test_validate_exempts_a_record_only_an_applied_record_retires(
     (root / ".flw" / "config.toml").write_text('[spec]\nareas = ["scripts"]\n')
     (root / "specs" / "current.toml").write_text(
         """schema_version = 4
-spec_version = "0.0.1"
+spec_version = "0.1"
 applied = ["scripts-retirer"]
 assumptions = ["one is enough"]
 
@@ -3608,10 +3608,10 @@ def _project(root, *, applied=(), reports=None):
     """A project with a contract and nothing else, for the two tests below."""
     (root / "specs" / "versions").mkdir(parents=True)
     names = ", ".join(f'"{n}"' for n in applied)
-    release = f"0.0.{len(applied)}" if applied else "0.0.0"
+    spec_version = f"0.{len(applied)}" if applied else "0.0"
     (root / "specs" / "current.toml").write_text(
         f"""schema_version = 4
-spec_version = "{release}"
+spec_version = "{spec_version}"
 applied = [{names}]
 assumptions = ["one is enough"]
 
@@ -3780,7 +3780,7 @@ def test_every_read_of_the_flw_directory_goes_through_the_resolved_name(
     )
     (root / "specs" / "versions").mkdir(parents=True)
     (root / "specs" / "current.toml").write_text(
-        'schema_version = 4\nspec_version = "0.0.1"\napplied = ["first"]\n'
+        'schema_version = 4\nspec_version = "0.1"\napplied = ["first"]\n'
         'assumptions = ["the fixture is enough contract to work against"]\n'
         '[[final_state.components]]\nname = "the engine"\npaths = ["src/"]\n'
         'provides = ["a user can engine"]\n'
@@ -4234,7 +4234,7 @@ def _spec_project(tmp_path, applied: str, records: dict[str, str]):
     (root / "specs" / "versions").mkdir(parents=True)
     (root / ".flw" / "extensions").mkdir(parents=True)
     (root / "specs" / "current.toml").write_text(
-        f'schema_version = 4\nspec_version = "0.1.0"\napplied = [{applied}]\n'
+        f'schema_version = 4\nspec_version = "0.1"\napplied = [{applied}]\n'
         '\n[[final_state.components]]\nname = "the thing"\npaths = ["src/"]\n'
         'provides = ["A user can do the thing."]\n'
     )

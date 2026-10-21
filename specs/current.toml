@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "0.17.12"
+spec_version = "17.12"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing

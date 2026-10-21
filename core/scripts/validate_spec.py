@@ -372,7 +372,7 @@ class Record:
 
     `name` and `classification` come off the filename, which is the record's
     identity. `document` is what parsed, and is empty when `error` says why it
-    did not — a caller that only folds a release number still wants the
+    did not — a caller that only folds a spec version still wants the
     classification of a file that does not parse.
     """
 
@@ -447,7 +447,7 @@ def check_version(
         errors.append(
             f"{name} does not say whether the change is major or minor; "
             "a record is stored as <name>-minor.toml or <name>-major.toml, and the "
-            "release number the contract carries moves by it"
+            "spec version the contract carries moves by it"
         )
 
     unsettled = stem not in (applied or []) and stem not in (retired or set())
@@ -515,26 +515,25 @@ def check_version(
     return errors
 
 
-def expected_release(applied: list, records: dict) -> str | None:
-    """The release number the applied records add up to, or None if it cannot be
+def expected_spec_version(applied: list, records: dict) -> str | None:
+    """The spec version the applied records add up to, or None if it cannot be
     computed.
 
     Folded rather than remembered: each applied record bumps the number by its own
-    filename — major gives <line>.<X+1>.0, minor gives <line>.<X>.<Y+1> — starting
-    from 0.0.0, or from the last legacy numbered record's own major.minor when the
-    applied list opens with one. A record can also declare `release_line`, which
-    restarts the fold: the line becomes that value and the major and minor both
-    restart at 0, so <release_line>.0.0 does not depend on what preceded it — a
-    project's very first record included, since the seed is 0.0.0 and not a value
-    that means "unknown". A release number a human has to remember to move is a
-    release number that drifts, which is what the deleted bump machinery in
-    final_state.removed was about the first time.
+    filename — major gives <X+1>.0, minor gives <X>.<Y+1> — starting from 0.0, or
+    from the last legacy numbered record's own major.minor when the applied list
+    opens with one. A number a human has to remember to move is a number that
+    drifts, which is what the deleted bump machinery in final_state.removed was
+    about the first time.
 
-    `records` maps an applied name to {"classification": ..., "release_line": ...}
-    — read in the same pass that classifies each record, so a file is never
-    opened twice for two different facts about it.
+    It counts this contract's own records and nothing else. The version the product
+    ships is the contract's `release` key, which the fold never reads, moves or
+    checks, so a team can land many spec majors and minors inside one release.
+
+    `records` maps an applied name to {"classification": ...} — read in the same
+    pass that classifies each record, so a file is never opened twice for two
+    different facts about it.
     """
-    line = 0
     major = 0
     minor = 0
     for entry in applied:
@@ -545,13 +544,9 @@ def expected_release(applied: list, records: dict) -> str | None:
         info = records.get(entry)
         if info is None:
             return None
-        release_line = info.get("release_line")
-        if release_line is not None:
-            line, major, minor = release_line, 0, 0
-            continue
         classification = info.get("classification")
         major, minor = (major + 1, 0) if classification == "major" else (major, minor + 1)
-    return f"{line}.{major}.{minor}"
+    return f"{major}.{minor}"
 
 
 def check_chain(versions_dir: Path) -> list[str]:
@@ -569,7 +564,6 @@ def check_chain(versions_dir: Path) -> list[str]:
 
     errors: list[str] = []
     names: dict[str, Path] = {}
-    release_lines: dict[str, int | None] = {}
     retires: dict[str, list[str]] = {}
 
     for record in files:
@@ -587,9 +581,6 @@ def check_chain(versions_dir: Path) -> list[str]:
                 "records cannot share one"
             )
         names[declared] = record.path
-        # Read alongside `name` rather than reopening the file later just to fold
-        # the release number.
-        release_lines[declared] = record.document.get("release_line")
         retires[declared] = [
             entry
             for entry in record.document.get("retires", [])
@@ -630,31 +621,16 @@ def check_chain(versions_dir: Path) -> list[str]:
                 )
 
         records = {
-            record.name: {
-                "classification": record.classification,
-                "release_line": release_lines.get(record.name),
-            }
+            record.name: {"classification": record.classification}
             for record in files
         }
 
-        # release_line restarts the fold, so the last declaration in applied order
-        # wins and an earlier one is silently overwritten rather than reported.
-        # One lineage reaches a new line once; a second declaration is a mistake,
-        # not a second real move.
-        lined = [entry for entry in applied if records.get(entry, {}).get("release_line") is not None]
-        if len(lined) > 1:
+        expected = expected_spec_version(applied, records)
+        declared_version = document.get("spec_version")
+        if expected and declared_version and declared_version != expected:
             errors.append(
-                f"{lined[0]!r} and {lined[1]!r} both declare release_line; a lineage "
-                "moves to a new line once, and the fold keeps only the last "
-                "declaration it sees, silently dropping the earlier one"
-            )
-
-        expected = expected_release(applied, records)
-        declared_release = document.get("spec_version")
-        if expected and declared_release and declared_release != expected:
-            errors.append(
-                f"current.toml is at {declared_release!r} but the applied records add up "
-                f"to {expected!r}; the release number moves by each record's filename, so "
+                f"current.toml is at {declared_version!r} but the applied records add up "
+                f"to {expected!r}; the spec version moves by each record's filename, so "
                 "one of them was not moved when its run finished"
             )
 

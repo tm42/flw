@@ -19,7 +19,7 @@ from core.scripts.validate_spec import (
     check_contract,
     check_review,
     check_version,
-    expected_release,
+    expected_spec_version,
     load_records,
     parse_record_filename,
     validate,
@@ -180,7 +180,7 @@ def test_a_v4_component_may_declare_properties_and_surfaces(specs):
     only where a test happens to validate that one file."""
     contract = tomllib.loads((specs / "current.toml").read_text())
     contract["schema_version"] = 4
-    contract["spec_version"] = "0.1.0"
+    contract["spec_version"] = "0.1"
     component = contract["final_state"]["components"][0]
     component["properties"] = ["A refusal that cannot fire is reported, not skipped."]
     component["surfaces"] = ["~/.flw/root — one line, the checkout path."]
@@ -570,10 +570,6 @@ def test_a_retires_entry_naming_a_real_record_validates(specs):
         'name = "the-new-way"\nsummary = "a change"\nretires = ["the-old-way"]\n'
     )
     applied(specs, "1.0")
-    text = (specs / "current.toml").read_text()
-    (specs / "current.toml").write_text(
-        text.replace('spec_version = "1.0"', 'spec_version = "0.1.0"')
-    )
     assert check_chain(specs / "versions") == []
 
 
@@ -582,8 +578,6 @@ def test_a_record_no_applied_list_names_is_a_version_in_flight(specs):
     this is the ordinary state of every version between its spec and its run."""
     record(specs, "in-flight.toml", "in-flight", base="1.0")
     applied(specs, "1.0")
-    text = (specs / "current.toml").read_text()
-    (specs / "current.toml").write_text(text.replace('spec_version = "1.0"', 'spec_version = "0.1.0"'))
     assert check_chain(specs / "versions") == []
 
 
@@ -603,7 +597,7 @@ def test_an_applied_name_with_no_record_is_reported_once_for_the_directory(
 
 
 def test_a_record_filename_without_a_classification_is_refused():
-    """The release number moves by this suffix, so a record that omits it is a
+    """The spec version moves by this suffix, so a record that omits it is a
     number nobody will remember to bump."""
     errors = check_version({"name": "add-thing", "summary": "s"}, "add-thing.toml")
     assert any("major or minor" in e for e in errors), errors
@@ -627,78 +621,53 @@ def test_a_legacy_numbered_record_needs_no_classification():
     assert check_version({"name": "4.6", "summary": "s"}, "v4.6.toml") == []
 
 
-def test_a_major_record_moves_the_release_number_to_the_next_whole(specs):
+def test_a_major_record_moves_the_spec_version_to_the_next_whole(specs):
     record(specs, "big-change-major.toml", "big-change")
     applied(specs, "1.0", "big-change")
     records = {"big-change": {"classification": "major"}}
-    assert expected_release(["1.0", "big-change"], records) == "0.2.0"
+    assert expected_spec_version(["1.0", "big-change"], records) == "2.0"
 
 
 def test_a_minor_record_moves_only_the_second_half(specs):
     records = {"small": {"classification": "minor"}}
-    assert expected_release(["1.0", "small"], records) == "0.1.1"
+    assert expected_spec_version(["1.0", "small"], records) == "1.1"
 
 
-def test_a_fold_with_no_line_declared_stays_on_the_zero_line(specs):
-    """No record has ever declared release_line, so the product is not real yet
-    and the fold's leading part stays 0 no matter how many major and minor
-    records land."""
+def test_a_major_and_the_minor_behind_it_both_land_in_the_one_number(specs):
+    """Two parts and no third: the major zeroes the minor, and the minor that
+    follows counts up from there."""
     records = {"big-change": {"classification": "major"}, "small": {"classification": "minor"}}
-    assert expected_release(["1.0", "big-change", "small"], records) == "0.2.1"
+    assert expected_spec_version(["1.0", "big-change", "small"], records) == "2.1"
 
 
-def test_a_declared_line_restarts_major_and_minor_at_zero(specs):
-    """1.0.0 regardless of what preceded it on line 0 — the record that declares
-    the line does not also get its own classification's bump."""
-    records = {"reach-production": {"classification": "major", "release_line": 1}}
-    assert expected_release(["4.7", "reach-production"], records) == "1.0.0"
-
-
-def test_a_minor_after_the_line_moves_only_the_last_part(specs):
-    records = {
-        "reach-production": {"classification": "major", "release_line": 1},
-        "small-fix": {"classification": "minor"},
-    }
-    assert expected_release(["4.7", "reach-production", "small-fix"], records) == "1.0.1"
-
-
-def test_a_major_after_the_line_moves_the_middle_part(specs):
-    records = {
-        "reach-production": {"classification": "major", "release_line": 1},
-        "big-change": {"classification": "major"},
-    }
-    assert expected_release(["4.7", "reach-production", "big-change"], records) == "1.1.0"
-
-
-def test_a_release_number_nobody_moved_is_caught(specs):
+def test_a_spec_version_nobody_moved_is_caught(specs):
     """The number is folded from the records rather than remembered, because a
     number a human has to remember to bump is a number that drifts."""
     record(specs, "big-change-major.toml", "big-change")
     applied(specs, "1.0", "big-change")
     errors = check_chain(specs / "versions")
-    assert any("add up to '0.2.0'" in e for e in errors), errors
+    assert any("add up to '2.0'" in e for e in errors), errors
 
 
-def test_a_release_number_that_matches_its_records_is_clean(specs):
+def test_a_spec_version_that_matches_its_records_is_clean(specs):
     record(specs, "big-change-major.toml", "big-change")
     applied(specs, "1.0", "big-change")
     text = (specs / "current.toml").read_text()
-    (specs / "current.toml").write_text(text.replace('spec_version = "1.0"', 'spec_version = "0.2.0"'))
+    (specs / "current.toml").write_text(text.replace('spec_version = "1.0"', 'spec_version = "2.0"'))
     assert check_chain(specs / "versions") == []
 
 
-def test_a_release_number_disagreeing_with_the_folded_three_part_number_is_caught(specs):
-    """The disagreement check must not regress to comparing two parts now that
-    the fold returns three."""
-    record(specs, "reach-production-major.toml", "reach-production", release_line=1)
-    applied(specs, "4.7", "reach-production")
-    text = (specs / "current.toml").read_text()
-    (specs / "current.toml").write_text(text.replace('spec_version = "1.0"', 'spec_version = "1.1.0"'))
-    errors = check_chain(specs / "versions")
-    assert any("add up to '1.0.0'" in e for e in errors), errors
+def test_a_record_declaring_release_line_is_refused_by_the_schema():
+    """The key is gone and the record schema sets additionalProperties false, so
+    a record carried over from before this change is refused rather than read
+    and ignored. The repair is in the contract's assumptions."""
+    document = {"name": "reach-production", "summary": "a change", "release_line": 1}
+    schema = record_shape()
+    errors = [str(e) for e in validate(document, schema, root=schema)]
+    assert any("release_line" in e for e in errors), errors
 
 
-def test_a_release_number_is_not_guessed_when_a_record_is_missing(specs):
+def test_a_spec_version_is_not_guessed_when_a_record_is_missing(specs):
     """An applied name with no file is already an error of its own. Reporting a
     second one about a number computed from a gap would send the reader at the
     wrong thing."""
@@ -712,42 +681,22 @@ def test_a_release_number_is_not_guessed_when_a_record_is_missing(specs):
 #
 # Every project flw-spec has ever written to has an applied list opening with a
 # legacy <major>.<minor> record, because that is the only project flw has run
-# against long enough to carry one. Nothing else does: expected_release returned
-# None for any applied list without one, including a first record declaring
-# release_line, so no newly-adopted project ever had its release number checked.
+# against long enough to carry one. Nothing else does: the fold returned None for
+# any applied list without one, so no newly-adopted project ever had its spec
+# version checked.
 
 
 def test_a_project_with_no_legacy_record_still_folds():
     """The case every project adopting flw today is in: flw-spec writes only
     named records, so nothing in `applied` will ever match LEGACY_NUMBER."""
     records = {"only-record": {"classification": "minor"}}
-    assert expected_release(["only-record"], records) == "0.0.1"
-
-
-def test_a_first_record_declaring_a_line_reaches_it_with_no_anchor():
-    """The documented way to start a product at 1.0.0. Before this fix the old
-    guard's `or major is None` returned None here instead, because major had
-    never been set by a preceding legacy entry."""
-    records = {"go-live": {"classification": "major", "release_line": 1}}
-    assert expected_release(["go-live"], records) == "1.0.0"
-
-
-def test_two_records_declaring_a_line_are_caught(specs):
-    """expected_release's fold keeps only the last release_line it sees, so a
-    second declaration silently won over the first with nothing reported."""
-    record(specs, "go-live-major.toml", "go-live", release_line=1)
-    record(specs, "go-live-again-major.toml", "go-live-again", release_line=2)
-    applied(specs, "go-live", "go-live-again")
-    errors = check_chain(specs / "versions")
-    assert any(
-        "go-live" in e and "go-live-again" in e and "both declare" in e for e in errors
-    ), errors
+    assert expected_spec_version(["only-record"], records) == "0.1"
 
 
 def test_flws_own_applied_list_still_folds_to_its_declared_release():
     """The real chain anchors on a legacy 4.0 entry, which the fold already
-    handled before this change. Guards that seeding major/minor at 0 instead of
-    None, and refusing a second release_line, left that path's result alone.
+    handled before this change. Guards that seeding major and minor at 0 instead
+    of None left that path's result alone.
 
     Against the declared number rather than a literal: a literal fails on every
     release, which trains a reader to edit the test rather than read it, and the
@@ -759,9 +708,8 @@ def test_flws_own_applied_list_still_folds_to_its_declared_release():
         record = tomllib.loads(path.read_text())
         records[record["name"]] = {
             "classification": "major" if path.stem.endswith("-major") else "minor",
-            "release_line": record.get("release_line"),
         }
-    folded = expected_release(contract["applied"], records)
+    folded = expected_spec_version(contract["applied"], records)
     assert folded is not None, "the real chain must fold, not return None"
     assert folded == contract["spec_version"]
 
@@ -793,7 +741,7 @@ def test_the_walk_names_a_legacy_record_by_its_bare_number(specs):
 
 def test_a_file_that_does_not_parse_keeps_its_name_and_says_why(specs):
     """The fold still needs its classification: an unreadable file is one the
-    release number must not silently skip over. So it comes back with the
+    spec version must not silently skip over. So it comes back with the
     filename half intact and the document empty."""
     (specs / "versions" / "broken-major.toml").write_text('name = "broken"\nsummary = ')
     broken = next(r for r in load_records(specs / "versions") if r.name == "broken")

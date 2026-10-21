@@ -23,7 +23,7 @@ import ledger
 import stale
 
 CONTRACT = """schema_version = 4
-spec_version = "0.1.0"
+spec_version = "0.1"
 applied = ["first"]
 
 [[final_state.components]]
@@ -549,7 +549,7 @@ else:
     _spec.loader.exec_module(flw)
 
 OWED_CONTRACT = """schema_version = 4
-spec_version = "0.1.0"
+spec_version = "0.1"
 applied = [{applied}]
 
 [[final_state.components]]

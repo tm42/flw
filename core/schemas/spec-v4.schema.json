@@ -19,8 +19,13 @@
     },
     "spec_version": {
       "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-      "description": "LINE.MAJOR.MINOR. The line is 0 until a record declares release_line, and 1 once it has, marking the point the product moved from not-real to real; the major and minor fold behind it, moving by each applied record's classification suffix — major when a behaviour someone relied on now works differently, minor when a capability arrives and nothing that worked before changed. Scoped to this one contract: a repository whose parts release independently is several contracts, one per part at the root nearest_project resolves each to, never a single number folded across all of them."
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "MAJOR.MINOR, folded from the applied records' classification suffixes — major when a behaviour someone relied on now works differently, minor when a capability arrives and nothing that worked before changed. It describes this contract and not the product: what the product ships is the separate `release` key, which the fold never reads. Scoped to this one contract: a repository whose parts release independently is several contracts, one per part at the root nearest_project resolves each to, never a single number folded across all of them."
+    },
+    "release": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The version the product actually ships, declared by the team. Free-form and checked against no pattern, so a number, a date, a tag or a release-candidate suffix all pass. flw records it and prints it beside the spec version, and never folds, moves or refuses it, so a team can land many spec majors and minors inside one release and size that release on product grounds. Optional; a project whose product has no released version of its own omits it."
     },
     "final_state": {
       "type": "object",

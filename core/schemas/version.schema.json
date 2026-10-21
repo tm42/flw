@@ -16,7 +16,7 @@
     },
     "spec_version": {
       "type": "string",
-      "description": "The contract's release number at the time this version was specced. Optional, and never an identity: `name` is the identity. Present on every record written before names."
+      "description": "The contract's spec version at the time this version was specced. Optional, and never an identity: `name` is the identity. Present on every record written before names."
     },
     "summary": {
       "type": "string",
@@ -72,11 +72,6 @@
       },
       "description": "Records this one retires, by name: the design turned and those will never land, so flw stale reports them as retired rather than as work the project still owes. Optional, and a retirement marker rather than an order — nothing derives a sequence from it, because two people speccing in parallel from the same contract have no sequence between them. An entry naming no record in versions/ is refused. It takes effect only from a record the contract has applied, so an unfinished draft cannot retire live work.",
       "examples": [["an-older-record"]]
-    },
-    "release_line": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "The line this record moves the product to — 0 while it is not real, 1 when it is — and the point the fold restarts from: the release after this record is <release_line>.0.0, with the major and minor counting behind it from there. Optional; a record that does not move the line omits it entirely. Moves the one contract this record belongs to, at the project root nearest_project resolves it to, and nothing else — a repository with several independently-released parts carries one contract per part, each with its own line."
     }
   },
   "$defs": {

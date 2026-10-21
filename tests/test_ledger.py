@@ -15,7 +15,7 @@ import ledger
 REPO = Path(__file__).resolve().parent.parent
 
 CONTRACT = """schema_version = 4
-spec_version = "0.1.0"
+spec_version = "0.1"
 applied = ["first"]
 
 [[final_state.components]]
@@ -57,7 +57,7 @@ def test_show_on_a_record_that_does_not_parse_reports_the_error(tmp_path):
 
 def test_the_corpus_reads_the_contract_and_the_records(tmp_path):
     found = ledger.corpus(project(tmp_path))
-    assert found.contract["spec_version"] == "0.1.0"
+    assert found.contract["spec_version"] == "0.1"
     assert [r.name for r in found.records] == ["first"]
 
 
@@ -226,7 +226,7 @@ def test_a_quoted_argument_is_a_phrase_that_survives_a_line_break():
 # preceded this declared `provides` alone, so five mutations that stopped
 # indexing the others left the suite green.
 RICHER = """schema_version = 4
-spec_version = "0.2.0"
+spec_version = "0.2"
 applied = ["1.0", "landed"]
 assumptions = ["a peculiarword is assumed to exist"]
 open_questions = ["whether the peculiarword is the right shape"]
@@ -567,7 +567,7 @@ def test_the_subcommand_with_no_argument_is_the_census(tmp_path, monkeypatch, ca
 # only the hit's body. A task id is its label and a removal check is its note.
 
 SILENT = """schema_version = 4
-spec_version = "0.1.0"
+spec_version = "0.1"
 applied = ["one"]
 assumptions = ["assumeword is taken for granted"]
 
@@ -770,7 +770,7 @@ def test_a_contract_component_with_no_name_does_not_stop_a_search(tmp_path):
     and the other two surfaces did not."""
     root = project(tmp_path)
     (root / "specs" / "current.toml").write_text(
-        'schema_version = 4\nspec_version = "0.1.0"\napplied = ["first"]\n'
+        'schema_version = 4\nspec_version = "0.1"\napplied = ["first"]\n'
         '[[final_state.components]]\npaths = ["src/"]\n'
         'provides = ["A user can peculiarword."]\n'
     )
@@ -869,7 +869,7 @@ def test_an_empty_show_name_is_refused_before_either_lookup(tmp_path):
     first fix existed to stop."""
     root = project(tmp_path)
     (root / "specs" / "current.toml").write_text(
-        'schema_version = 4\nspec_version = "0.1.0"\napplied = ["first"]\n'
+        'schema_version = 4\nspec_version = "0.1"\napplied = ["first"]\n'
         '[[final_state.components]]\npaths = ["src/"]\nprovides = ["it works"]\n'
     )
     text, code = ledger.show(ledger.corpus(root), "")
