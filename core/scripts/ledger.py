@@ -581,8 +581,6 @@ def render_record(record: Record) -> str:
         trail.append(f"after {document['base']}")
     if document.get("spec_version"):
         trail.append(f"specced against {document['spec_version']}")
-    if document.get("release_line") is not None:
-        trail.append(f"moves to release line {document['release_line']}")
     if trail:
         lines.append("  " + " · ".join(trail))
     if document.get("summary"):
@@ -732,9 +730,16 @@ def census(corpus_: Corpus) -> str:
     done = task_count([r for r in corpus_.records if built(r.name, applied)])
     planned = task_count([r for r in corpus_.records if not built(r.name, applied)])
 
-    release = contract.get("spec_version", "no release number")
+    # Two numbers, and only one of them is flw's: the spec version folds from the
+    # record set, and `release` is whatever the team says the product ships.
+    spec_version = contract.get("spec_version", "no spec version")
+    release = contract.get("release")
+    now = f"contract {spec_version}"
+    if release:
+        now += f" · release {release}"
+    now += f" · {len(components)} components"
     kinds = [
-        ("what is true now", f"release {release}, {len(components)} components"),
+        ("what is true now", now),
         (
             "how it got here",
             # Records that exist, not names in the list: a contract naming a

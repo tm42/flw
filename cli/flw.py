@@ -3017,7 +3017,12 @@ def _context_contract(root: Path | None) -> None:
             "  ·  no final_state.components"
         )
         return
-    print(f"\ncontract: {tilde(contract)}  ·  {document.get('spec_version', '?')}")
+    header = f"\ncontract: {tilde(contract)}  ·  {document.get('spec_version', '?')}"
+    # The spec version folds from the record set; `release` is the team's own and
+    # is absent in most projects, so the clause only appears where it is declared.
+    if document.get("release"):
+        header += f"  ·  release {document['release']}"
+    print(header)
     for component in components:
         paths = ", ".join(component.get("paths", [])) or "—"
         print(f"  {component.get('name', '?')}: {paths}")
@@ -3479,7 +3484,7 @@ def ledger(args: argparse.Namespace) -> int:
     """Search what the project wrote down about itself, or read one part whole.
 
     flw accumulates reasoning as a byproduct of being used and nothing read it
-    back: `check_chain` walks the record set to fold a release number and throws
+    back: `check_chain` walks the record set to fold a spec version and throws
     the content away. A settled decision that cannot be found is a decision that
     gets made again, differently.
     """

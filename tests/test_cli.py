@@ -2954,6 +2954,40 @@ def test_context_scope_selects_every_component_it_meets(
     assert "click a button" in body
 
 
+def test_context_prints_the_release_the_contract_declares(
+    tmp_path, capsys, monkeypatch
+):
+    """Two numbers in the header, and only the spec version folds from the record
+    set. A reader seeing one number cannot tell which of the two it is."""
+    root = tmp_path / "work"
+    (root / "specs").mkdir(parents=True)
+    (root / "specs" / "current.toml").write_text(
+        'schema_version = 4\nspec_version = "2.1"\nrelease = "2.4.0"\n'
+        '[[final_state.components]]\nname = "the engine"\npaths = ["src/"]\n'
+    )
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    body = _body(capsys.readouterr().out)
+    assert "2.1  ·  release 2.4.0" in body
+
+
+def test_context_omits_the_release_clause_when_no_contract_declares_one(
+    tmp_path, capsys, monkeypatch
+):
+    """The normal case. An empty clause reads as a product that ships nothing."""
+    root = tmp_path / "work"
+    (root / "specs").mkdir(parents=True)
+    (root / "specs" / "current.toml").write_text(
+        'schema_version = 4\nspec_version = "2.1"\n'
+        '[[final_state.components]]\nname = "the engine"\npaths = ["src/"]\n'
+    )
+
+    assert _context(tmp_path, monkeypatch, root=str(root)) == 0
+    body = _body(capsys.readouterr().out)
+    assert "2.1" in body
+    assert "release" not in body
+
+
 def test_context_scope_matches_a_component_whose_path_is_a_file_inside_it(
     tmp_path, capsys, monkeypatch
 ):

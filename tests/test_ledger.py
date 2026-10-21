@@ -518,8 +518,27 @@ def test_the_census_needs_no_contract(tmp_path):
     root = richer(tmp_path)
     (root / "specs" / "current.toml").unlink()
     report = ledger.census(ledger.corpus(root))
-    assert "no release number" in report
+    assert "no spec version" in report
     assert "3 version records" in report
+
+
+def test_the_census_prints_the_release_the_contract_declares(tmp_path):
+    """Two numbers on the line, and only the spec version folds. A reader seeing
+    one number cannot tell which of the two it is."""
+    root = project(tmp_path)
+    text = (root / "specs" / "current.toml").read_text()
+    (root / "specs" / "current.toml").write_text(
+        text.replace('applied = ["first"]', 'release = "2.4.0"\napplied = ["first"]')
+    )
+    report = ledger.census(ledger.corpus(root))
+    assert "contract 0.1 · release 2.4.0 · 1 components" in report
+
+
+def test_the_census_omits_the_release_clause_when_no_contract_declares_one(tmp_path):
+    """The normal case. An empty clause reads as a product that ships nothing."""
+    report = ledger.census(ledger.corpus(project(tmp_path)))
+    assert "contract 0.1 · 1 components" in report
+    assert "release" not in report.split("what is true now")[1].split("\n")[0]
 
 
 # --- the subcommand ---------------------------------------------------------- #
