@@ -227,11 +227,11 @@ On a run that completed every phase with `flw test` passing, three edits to
 
 1. **Append this version's `name`** to the end of `applied`. Appending is what records the
    order versions landed in, so it goes at the end and never in the middle.
-2. **Move `spec_version`** by this record's filename: `-major` gives `<line>.<X+1>.0`,
-   `-minor` gives `<line>.<X>.<Y+1>`; a record's own `release_line`, when it declares one,
-   restarts the count instead, to `<release_line>.0.0`. Say the new number in the report.
-   You do not have to get this right from memory: the validate run below folds the same
-   number out of `applied` and refuses a contract whose number disagrees.
+2. **Move `spec_version`** by this record's filename: `-major` gives `<X+1>.0`, `-minor`
+   gives `<X>.<Y+1>`. Say the new number in the report. You do not have to get this right
+   from memory: the validate run below folds the same number out of `applied` and refuses a
+   contract whose number disagrees. A contract's `release` key is the team's and a run never
+   moves it.
 3. **Apply the version file's `contract_edit`** if it has one.
 
 Skip all three when `applied` already carries that name; they have landed already, from an
@@ -254,7 +254,7 @@ is not.
 
 **Then run `flw validate`.** It is the only check that reads the contract against the record
 set, and the three edits above are exactly what it looks at: a name in `applied` that no
-record carries, a release number disagreeing with what the records fold to, a `contract_edit`
+record carries, a spec version disagreeing with what the records fold to, a `contract_edit`
 that produced a document the schema refuses, a duplicate component name making every later
 reference ambiguous. `flw test` does not cover this. A project runs the checks it declared,
 and validating flw's own documents is not among them — flw's own suite happens to validate

@@ -223,9 +223,9 @@ validation.
      versions by where `specs/` lives — `nearest_project()` resolves the nearest one, so a
      feature inside a larger service gets its own contract and its own numbering by
      holding its own `specs/` directory.
-   - **`release_line`, when this record moves the product to a new line** — the rules are
-     in `$FLW/core/skills/flw-spec/references/release-line.md`. A record that is not moving
-     the line omits the field entirely.
+   - **The contract's `release` key is the product's own version**, free-form and moved by
+     nobody but the team. Ask about it when writing a first contract for a product that
+     already ships; a record never moves it.
    - **Name it `<area>-<what it does>`**, in kebab-case, where the area is one of the words
      the project declares in `[spec] areas` in its flw config:
      `skills-add-umbrella-plan`, `scripts-refuse-badly-named-records`. `flw validate`
