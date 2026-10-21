@@ -341,6 +341,80 @@ def test_a_duplicate_task_id_is_caught():
     assert any("'a' is used more than once" in e for e in errors), errors
 
 
+def backwards() -> list[dict]:
+    """The dag `schemas-separate-spec-and-release-major.toml` landed with: a task
+    in group 1 waiting for one in group 2. It is acyclic and every id resolves, so
+    the three checks above all pass it."""
+    return [
+        {"group": 1, "tasks": [{"id": "early", "desc": "e", "depends_on": ["late"]}]},
+        {"group": 2, "tasks": [{"id": "late", "desc": "l"}]},
+    ]
+
+
+def test_a_dag_task_depending_on_a_later_group_is_caught():
+    errors = check_version(version(dag=backwards()), "scripts-a-minor.toml")
+    assert any(
+        "'early' is in group 1 and depends_on 'late', which is in group 2" in e
+        for e in errors
+    ), errors
+
+
+def test_an_applied_record_keeps_its_backwards_dependency():
+    """A landed record's dag has already been executed, so refusing it catches
+    nothing and halts every later run: flw-execute stops on a red flw validate."""
+    errors = check_version(
+        version(dag=backwards()), "scripts-a-minor.toml", applied=["scripts-a"]
+    )
+    assert not any("is in group" in e for e in errors), errors
+
+
+def test_a_dependency_inside_one_group_is_not_caught():
+    """flw-execute honours depends_on within a group as well as across them."""
+    errors = check_version(
+        version(
+            dag=[
+                {
+                    "group": 1,
+                    "tasks": [
+                        {"id": "a", "desc": "a"},
+                        {"id": "b", "desc": "b", "depends_on": ["a"]},
+                    ],
+                }
+            ]
+        ),
+        "scripts-a-minor.toml",
+    )
+    assert errors == []
+
+
+def test_a_backwards_dependency_reads_the_declared_group_numbers():
+    """Group numbers order the run, not the order the [[dag]] blocks are written
+    in: the schema asks only for an integer of at least 1, lowest first, so a dag
+    numbered 1, 3, 7 is legal and a block order of 3 then 1 says nothing."""
+    errors = check_version(
+        version(
+            dag=[
+                {"group": 7, "tasks": [{"id": "last", "desc": "l"}]},
+                {
+                    "group": 1,
+                    "tasks": [{"id": "first", "desc": "f", "depends_on": ["last"]}],
+                },
+                {
+                    "group": 3,
+                    "tasks": [{"id": "middle", "desc": "m", "depends_on": ["first"]}],
+                },
+            ]
+        ),
+        "scripts-a-minor.toml",
+    )
+    assert any(
+        "'first' is in group 1 and depends_on 'last', which is in group 7" in e
+        for e in errors
+    ), errors
+    # 'middle' is in group 3 and waits for group 1, which runs first. One finding.
+    assert len([e for e in errors if "is in group" in e]) == 1, errors
+
+
 def test_a_duplicate_component_name_is_caught():
     errors = check_contract(
         {

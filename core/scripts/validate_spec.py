@@ -424,9 +424,11 @@ def check_version(
 
     `applied` is what tells the record being written from one already landed: a
     record carries no date, so without it the sources rule below would refuse
-    every old record whose prose happens to name a report. `retired` says the same
-    about a record the design turned away from, which is never applied and so
-    would otherwise be refused forever with no repair. `areas` is the vocabulary
+    every old record whose prose happens to name a report. The backwards
+    dependency rule is guarded the same way, because an applied record's dag has
+    already run and refusing it now would stop every later run. `retired` says
+    the same about a record the design turned away from, which is never applied
+    and so would otherwise be refused forever with no repair. `areas` is the vocabulary
     the project declares for its own record names, and empty means the naming rule
     says nothing here.
 
@@ -466,13 +468,18 @@ def check_version(
                 '"Minimal is not partial." Name the record for what it does'
             )
 
-    tasks = [
-        task
-        for group in record.get("dag", [])
-        if isinstance(group, dict)
-        for task in group.get("tasks", [])
-        if isinstance(task, dict)
-    ]
+    tasks = []
+    group_of: dict[str, int] = {}
+    for group in record.get("dag", []):
+        if not isinstance(group, dict):
+            continue
+        number = group.get("group")
+        for task in group.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            tasks.append(task)
+            if isinstance(number, int) and "id" in task:
+                group_of[task["id"]] = number
     ids = {t["id"] for t in tasks if "id" in t}
 
     for task in tasks:
@@ -495,6 +502,23 @@ def check_version(
     cycle = _find_cycle({t["id"]: list(t.get("depends_on", [])) for t in tasks if "id" in t})
     if cycle:
         errors.append("dag: dependency cycle: " + " -> ".join(cycle))
+
+    if stem not in (applied or []):
+        for task in tasks:
+            task_group = group_of.get(task.get("id"))
+            if task_group is None:
+                continue
+            for dep in task.get("depends_on", []):
+                # A dangling dep has no group and is reported by the check above;
+                # looking it up here would raise instead of reporting.
+                dep_group = group_of.get(dep)
+                if dep_group is None or dep_group <= task_group:
+                    continue
+                errors.append(
+                    f"dag: task {task['id']!r} is in group {task_group} and "
+                    f"depends_on {dep!r}, which is in group {dep_group}, so the "
+                    "task waits for one that runs after it"
+                )
 
     if stem not in (applied or []):
         given = record.get("sources")

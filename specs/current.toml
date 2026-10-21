@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "18.0"
+spec_version = "18.1"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -54,6 +54,7 @@ applied = [
   "say-what-the-survey-creates",
   "surface-say-how-a-team-adopts",
   "schemas-separate-spec-and-release",
+  "scripts-refuse-a-backwards-dependency",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -266,6 +267,7 @@ provides = [
   "flw validate refuses a version record the contract has not applied when its summary, approach or contract_edit names a path under the reports directory and its sources field is empty. An applied record is never refused for this, so the rule binds the record being written and none already landed.",
   "A record the contract has not applied and a landed record has retired is reported as retired rather than as work owed, so the backlog flw stale prints is the work someone still intends to do.",
   "flw validate refuses a version record the contract has neither applied nor retired when its name does not open with one of the areas the project declares in its flw config, and refuses nothing on that ground in a project that declares no areas. A record already applied is never refused for this, because its landing commit is derived from the name in the contract's history and renaming it would discard that. Inside the same check it also refuses a name containing -is-not-, the construction the writing style bans by name, so a project that declares no areas is refused nothing on either ground.",
+  "flw validate refuses a version record the contract has not applied whose dag declares a dependency on a task in a later group, because a group is the phase a run stops at and a task cannot wait for one that runs after it. An applied record is never refused for this, so the rule binds the record being written and none already landed. A dependency inside one group is not refused, because flw-execute honours depends_on within a group as well as across them.",
 ]
 properties = [
   "A contract whose applied list names only records that exist validates clean; a record no applied list names is a version in flight rather than an error.",
