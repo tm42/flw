@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "17.12"
+spec_version = "18.0"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -53,6 +53,7 @@ applied = [
   "say-who-does-what",
   "say-what-the-survey-creates",
   "surface-say-how-a-team-adopts",
+  "schemas-separate-spec-and-release",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -74,11 +75,11 @@ assumptions = [
   "Some hosts write each session's transcript to disk as the session runs, and flw records the directory to read for each. flw style check depends on that source: it names the directory it read, and when there is nothing to read it names the directory it looked in, rather than reporting a session it never opened. What it names is the source and never the host, because nothing tells flw which host is running it. A host that stops writing a transcript, or moves it, takes the command with it. Where several sessions run against one project it cannot identify its own, so it names the path it read; a transcript whose replies are all a dispatched agent's is refused rather than skipped, because that prose never received the style.",
   "Two declared members whose directories share a basename have no store between them: system.md's revision table is keyed by member directory basename, so one entry would stand for both, and flw know refuses the pair naming both config keys and both paths rather than recording one and reporting it for the other.",
   "The areas a record's name may open with are a fact about one project, so they are declared in its flw config and never shipped by flw. flw's own six are its contract's components; another project's are its own, and a project that declares none is a project this check says nothing about.",
+  "A project that adopted flw before the spec version lost its leading component carries a three-part number, and may carry an applied record declaring release_line. Both are refused once the schemas change, and the repair is two edits an adopter makes by hand: drop the leading component from spec_version, and put whatever the line meant into the contract's release key. flw ships no migration for it, because a schema that accepted both shapes to ease one edit would have to go on accepting both.",
 ]
 
 open_questions = [
   "Whether a ranked structural scout escapes the published negative result that static prose repo overviews do not improve agent performance. The artifact type is untested rather than disproven, and no benchmark measures repo orientation independently of downstream task success.",
-  "Whether a project already in production can express the release number it actually ships. Declaring a line restarts major and minor at zero, so a service at 2.4.0 becomes either 2.0.0 or 0.2.5, and neither is true; the fold opt-out that would settle it is deferred.",
   "Whether `flw ledger`'s corpus should be bounded by directory or by what the VCS tracks. Bounding by directory reads whatever sits in plans/, committed or not, and it also excludes a tracked report in a project that keeps its reports. Neither direction is answerable without reading a VCS.",
   "What a committed knowledge store does to the staleness number. The repository file mirrors `.`, the default store sits inside the repository and the diff reaches the working tree, so a tracked store's own writes count as changes under the path that file describes. Every store so far is in a directory the repo ignores, which is why nothing has had to answer it.",
 ]
@@ -209,7 +210,7 @@ provides = [
   "A user reads a contract that records what shipped, not what was planned: it moves when the work lands rather than when the plan is agreed, so a version still in flight is a record the contract's applied list does not yet name and no landed record has retired. A design that turned leaves a record nobody will run, and retiring it is how flw stale --owed stops counting it as work owed.",
   "A user can install a build posture alongside the skills that requires one runnable check behind the non-trivial logic an agent writes, and requires saying what was not done rather than implying a completeness the work does not have.",
   "A user gets commits that are one part of the product each, complete with the check that proves them, because what a commit is and what its message says are written once in one file every skill cites rather than restates — so an agent proposing a commit and an agent working outside a flw run follow the same rule.",
-  "A user can spec two changes at once on separate branches without either having to be renumbered when it lands, because a version record is addressed by a name it keeps, the order they landed in is recorded by the contract rather than by the records, and the release number moves by itself when a run finishes.",
+  "A user can spec two changes at once on separate branches without either having to be renumbered when it lands, because a version record is addressed by a name it keeps, the order they landed in is recorded by the contract rather than by the records, and the spec version moves by itself when a run finishes.",
   "A user can run a version's work without waiting for its checks, and gets a report that says the version was built and not verified rather than one that reads as finished.",
   "An unattended run and a run stopped by a failing check each get a report that says which it is — the mode named in the header, the check named where one failed, and the contract stated as not moved — so neither can be read at a glance as an attended run that finished.",
   "A user gets a store that fills itself, because flw-execute, flw-research and every flw-review reviewer — the one that runs by default as much as each one a team dispatches — are offered a write at the point they have just finished learning something, and offered it, never blocked by it.",
@@ -242,11 +243,10 @@ provides = [
   "A user can run a narrow set while working and the full definition of done on demand, with the narrow set committed alongside the branch that needs it.",
   "A user can get a ranked orientation to a repository nobody has read — its packages, what depends on what, and the definitions the rest of the code leans on — in a few seconds at twenty thousand files, with no index to build and nothing to install.",
   "A user can declare once, for this machine, which of a project's checks cannot run here, instead of repeating that in every repository they work in.",
-  "A version record whose filename does not say whether the change is major or minor is refused at authoring time, and a contract whose release number disagrees with what its applied records add up to is named — so the number is folded from the record set rather than remembered.",
+  "A version record whose filename does not say whether the change is major or minor is refused at authoring time, and a contract whose spec version disagrees with what its applied records add up to is named — so the number is folded from the record set rather than remembered.",
   "A failing check's whole output is shown, and every failure is named again at the end of the run rather than only where it scrolled past.",
-  "A release number carries a line its author declares — 0 until the work is real, 1 when it is — and the folded major and minor restart from it, so the number a reader sees says how far along the product is and not only how often the contract moved.",
   "A contract a run has just written is validated before that run reports success, so an edit producing a document the schema or the record set refuses stops the run instead of being handed over as finished work.",
-  "A project that has never carried a legacy version number folds its release from its first record, so the check is live on the day flw is adopted rather than only in a repository with history.",
+  "A project that has never carried a legacy version number folds its spec version from its first record, so the check is live on the day flw is adopted rather than only in a repository with history.",
   "A run of the full definition of done in a directory with no contract to read says so rather than reporting success.",
   "A scout says what it did not read and what its ranking rests on: files in languages neither scout parses are counted and named, so a ranking of the minority language in a mixed repository is never mistaken for the repository; and the share of imports that reached a definition is printed with the denominator it is a share of, alongside how many reached every definer of a name rather than one.",
   "A user is told which project root a command resolved to before it runs, so one issued from the wrong directory is visible rather than silently answered by an ancestor.",
@@ -277,7 +277,7 @@ properties = [
   "An importer's rank divides evenly across what it imports, and an import that resolves to nothing in the repository does not divide it at all: a file importing one local name and twenty from elsewhere gives that name the same score as a file importing nothing else.",
   "The printed ranking is converged: running more iterations changes no score the scout prints.",
   "Both scouts rank the file that defines an imported name rather than the file a specifier names. Where more than one file defines that name, the edge goes to the definer in the module the import actually named, and to every definer whenever no definer sits in the module the import named — because that module resolves to no file here, or because it resolves and defines nothing of that name. A re-export barrel still takes none of the score, and a name the named module does define edges to that module's definer alone, whatever other packages define it too.",
-  "The release fold is computed for any applied list, including one naming no legacy numbered record, so a declared release number is checked from a project's first record onward.",
+  "The spec-version fold is computed for any applied list, including one naming no legacy numbered record, so a declared spec version is checked from a project's first record onward. It counts the contract's own records and nothing else: a product's released version is a separate declared key the fold never reads, moves or checks.",
   "The corpus `flw ledger` reads is exactly the contract, the version records, the review team configs, the flw directory's extensions and plans/*.md. Nothing else under the project is read. An extension is binding because a human wrote it rather than because a schema checks it, so it is grouped apart from the contract and the two are never merged into one authority.",
   "Matching is whole words with their plural and participle forms, so a query for one word never matches a longer word containing it.",
   "A group printing fewer matches than it found says how many it found.",
@@ -308,6 +308,7 @@ provides = [
   "A contract, a version record and a review team are each checked against a published shape by a stdlib-only validator, so a malformed one fails loudly at authoring time rather than quietly at execution time.",
   "A version record may name the review reports it came from in a sources field, which flw validate requires of a record the contract has not applied whose prose names a path under the reports directory, so the mapping from a report to the record that acted on it survives in the one artifact that is versioned, rather than in a directory most projects ignore.",
   "A version record may retire others by name in a retires field, so a record written and then abandoned is marked as such in the artifact that is versioned rather than left for someone to remember. A retires entry naming no record is refused, and the field takes effect only from a record the contract has applied, so an unfinished draft cannot retire live work.",
+  "A project whose product has its own released version states it once in the contract's `release` key, free-form and checked against no pattern, so a team can land many spec majors and minors inside one release and size that release on product grounds. flw records and prints it and never folds, moves or refuses it, which is why the spec version is free to describe the contract alone.",
 ]
 
 [[final_state.components]]
