@@ -1,0 +1,69 @@
+name    = "scripts-refuse-a-backwards-dependency"
+base    = "schemas-separate-spec-and-release"
+summary = "Refuse a dag task that depends on one in a later group, in the record being written, so a work order that cannot be executed in the order it states is caught at authoring time."
+
+approach = '''
+A dag group is the phase a run stops at, reviews and can revert to, and flw-execute works
+the groups in order. So a task depending on one in a later group states an order no run can
+follow. Nothing refuses it.
+
+It happened here, in `schemas-separate-spec-and-release-major.toml`: the task
+`the-string-that-disappears` sits in `group = 1` and declares
+`depends_on = ["ledger-prints-both"]`, which is in group 2. `flw validate` passed the
+record, because the three dag checks at core/scripts/validate_spec.py:478-499 look for a
+dangling id, a duplicate id and a cycle, and a backwards edge is none of the three — the
+graph is acyclic and every id resolves. The agent executing it noticed and ran the task in
+phase 2 instead. Had it followed the record, it would have rewritten an assertion against a
+line that did not exist yet, and phase 1 — the one commit in that record that had to be
+atomic — would have been red.
+
+The check is one comparison per edge. Build a map from task id to its group while
+flattening, then for each edge compare the two groups and refuse when the dependency's is
+higher. Equal groups are fine: flw-execute honours `depends_on` within a group as well as
+across them, so same-group ordering is already the normal case. Compare the declared
+`group` integers rather than the position of each `[[dag]]` block, because the schema says
+only that a group is an integer at least 1 and lowest runs first — a dag numbered 1, 3, 7
+is legal.
+
+Skip an edge whose dependency is dangling. That is already reported by the check above it,
+and looking the id up in the group map would raise instead.
+
+What this is not. It is not a check on how many groups a dag has or on what belongs in
+each; those are judgments, and this is an order the dag states and contradicts. It does not
+touch flw-execute, which already works the groups in order and needs no new instruction —
+the defect was that nothing refused the record, not that the run misread it. It does not
+edit `schemas-separate-spec-and-release-major.toml`: that record is left as written, and
+the decision below says why.
+'''
+
+contract_edit = '''
+One edit. In final_state.components, the component named "validation and checks", append to
+`provides`:
+
+  "flw validate refuses a version record the contract has not applied whose dag declares a
+  dependency on a task in a later group, because a group is the phase a run stops at and a
+  task cannot wait for one that runs after it. An applied record is never refused for this,
+  so the rule binds the record being written and none already landed. A dependency inside
+  one group is not refused, because flw-execute honours depends_on within a group as well
+  as across them."
+
+Nothing else changes.
+'''
+
+[[decisions]]
+topic     = "whether the refusal reaches records the contract has already applied"
+options   = [
+  "every record, and fix the landed one that carries a backwards edge",
+  "only a record the contract has not applied",
+]
+chosen    = "only a record the contract has not applied"
+rationale = '''
+An applied record's dag has already been executed, so refusing it retroactively catches
+nothing and stops every later run: flw-execute's step 5 halts on a red flw validate, so no
+run could record itself while the refusal stood. The two other checks in this function that
+could fire on history — the record-naming refusal and the sources requirement — both guard
+on `applied` for the same reason, and the naming one states it in the contract. The cost is
+that `schemas-separate-spec-and-release-major.toml` keeps the edge that prompted this, which
+is acceptable: a record is the plan as it was reviewed, and its approach already says what
+was planned.
+'''
