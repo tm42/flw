@@ -1,0 +1,127 @@
+name    = "skills-keep-the-flw-directory-local"
+base    = "scripts-refuse-a-backwards-dependency"
+summary = "Make the whole flw directory local by default rather than its two generated subdirectories, have a survey ask whether the team wants to share any of it, and untrack flw's own nine files so the default and the example agree."
+
+approach = '''
+Today a survey proposes two ignore lines. core/skills/flw-research/SKILL.md:201-204 shows
+`.flw/reports/` and `.flw/knowledge/` and nothing else, and the reason given at :195-198 is
+narrow: without them a review told to change nothing leaves ` M .flw/knowledge/…` and
+`?? .flw/reports/` in the tree. That reason is about noise in a diff.
+
+The reason the user gives is different and larger: more than one true picture of a system is
+possible, so a local store is correct rather than a limitation. Two engineers on the same
+service hold different pictures of it, each true for the work they do, and a store that has to
+be merged forces one of them to be wrong. That applies to the knowledge store first, and it
+applies to an extension and to a review team for the same reason — a convention one person
+holds binding is not automatically the team's, and making it shared is a thing humans have to
+agree to rather than a default a tool picks.
+
+So the default inverts. A survey proposes the flw directory itself and then asks whether the
+team wants any of config, extensions or review teams shared, saying that sharing them means
+the team agreeing on what is in them. The question is the point: it is the moment the humans
+align, and a default that shares silently removes it.
+
+What this costs flw's own repository, measured. Nine files are tracked under `.flw/`:
+config.toml, four extensions/*.md, four reviews/*.toml. Untracking them is not free and the
+cost is concentrated in one file. `.flw/config.toml` holds one key — a `setup` line that
+creates `.venv/` and installs pytest and ruff — and all four of the contract's
+success_criteria.tests invoke `.venv/bin/…`. The file's own comment records why it exists:
+"`flw test` on a new checkout failed on both until this file existed". Untracked, a fresh
+clone has no venv and no setup line, so all four declared checks fail on a missing
+interpreter rather than reporting that nothing ran.
+
+That is repaired by moving the line to where a clone reads it. README.md:118-122 already has a
+Requirements section, and its last sentence points at `.flw/config.toml` by name, so it
+becomes false on untracking anyway. It carries the setup line instead, as one command a clone
+copies into its own config if it wants to run flw's checks.
+
+The other eight cost little. The four extensions restate what the contract already binds —
+`flw ledger stdlib` shows "Stdlib only at runtime" in `validation and checks · implementation`
+and the same sentence in shared.md as a convention — and the four review teams are flw's own
+lenses, while the shipped `core/reviews/quick.toml` and `eng.toml` travel with the package and
+are what another project resolves.
+
+What this is not. It does not change how extensions are read, how a store is resolved, or
+where anything lives on disk — only what a survey proposes ignoring and what this repository
+tracks. It does not make flw refuse a shared flw directory: a team that aligns and commits one
+is doing the supported thing, which is why the survey asks instead of telling. It does not
+touch `.flw/reviews/publish*.toml`, already ignored for its own reason.
+'''
+
+contract_edit = '''
+Three edits.
+
+1. In final_state.components, the component named "the skills", provides, replace the
+   sentence reading:
+
+     "It proposes the ignore lines alongside the config it writes wherever there is a file to
+     put them in, and says where they go rather than assuming the store ends up ignored."
+
+   with:
+
+     "It proposes ignoring the flw directory itself alongside the config it writes, wherever
+     there is a file to put the line in, and says where it goes rather than assuming the
+     directory ends up ignored. It then asks whether the team wants any of the config, the
+     extensions or the review teams shared instead, saying that sharing them means the team
+     agreeing on what is in them — because more than one true picture of a system is possible,
+     so local is the default and shared is a thing humans align on."
+
+2. In the component named "the project surface", append to provides:
+
+     "A reader is told that flw's per-project directory is local by default and that flw's own
+     repository ignores all of it, so the Requirements section carries the setup line a clone
+     copies into its own config to run flw's declared checks rather than pointing at a file
+     the clone does not have."
+
+3. In open_questions, remove the entry beginning "What a committed knowledge store does to the
+   staleness number." It is answered by decision rather than by measurement: the store is not
+   committed, because more than one true picture of a system is possible.
+
+Nothing else changes.
+'''
+
+[[decisions]]
+topic     = "how much of the flw directory is local by default"
+options   = [
+  "the knowledge store and the reports directory, as today",
+  "the whole flw directory",
+]
+chosen    = "the whole flw directory"
+rationale = '''
+The user's reason is that more than one true picture of a system is possible. That is the
+knowledge store's case directly, and it reaches an extension and a review team too: a
+convention one engineer holds binding is not the team's until the team says so. The existing
+reason for ignoring two subdirectories was narrower — keeping a review's writes out of the
+user's diff — and it does not argue against ignoring the rest.
+'''
+
+[[decisions]]
+topic     = "whether flw's own nine tracked files under .flw/ stay tracked"
+options   = [
+  "keep them tracked, as the worked example of a team that opted into sharing",
+  "untrack them, so the default and this repository agree",
+]
+chosen    = "untrack them, so the default and this repository agree"
+rationale = '''
+The author chose this over keeping them with the consequence stated. A repository shipping a
+default it does not follow teaches the opposite of the default. The cost is real and bounded
+to one file: `.flw/config.toml` is the only one anything reads mechanically, and edit 2 of the
+contract_edit moves its one line into the README.
+'''
+
+[[decisions]]
+topic     = "where the venv setup line goes once .flw/config.toml is untracked"
+options   = [
+  "into the contract's success_criteria, beside the four commands that need it",
+  "into README.md's Requirements section, as a line a clone copies",
+  "make flw test create the venv when a declared check names one",
+]
+chosen    = "into README.md's Requirements section, as a line a clone copies"
+rationale = '''
+The contract records what is true when the work is done, and a venv bootstrap is a local
+convenience rather than part of flw's definition of done — success_criteria has no setup field
+and adding one would make every project's contract carry a machine detail. Having flw test
+build a venv is refused by the contract already: "Stdlib only at runtime, and nothing is
+installed to run a check". The README is where a clone is already told that this checkout
+creates `.venv/`, so the line lands in the paragraph a reader is standing in.
+'''
