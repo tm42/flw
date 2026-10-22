@@ -63,8 +63,8 @@ def test_the_corpus_reads_the_contract_and_the_records(tmp_path):
 
 def test_a_rendered_plan_is_not_read_beside_its_markdown(tmp_path):
     """plans/*.html is the same content in markup. Searching it means searching
-    CSS: plans/code-graph-report.html in this repository holds 73 whole-word
-    occurrences of `font`."""
+    CSS, so a query for a word like `font` answers from a stylesheet rather than
+    from prose."""
     root = project(tmp_path)
     (root / "plans").mkdir()
     (root / "plans" / "design.md").write_text("the markdown says peculiarword")

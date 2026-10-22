@@ -55,9 +55,9 @@ def corpus(root: Path, specs_dir: str = "specs") -> Corpus:
 
     Five tiers, and the exclusions matter as much as the inclusions.
 
-    `plans/` means `plans/*.md`. The rendered `.html` beside the markdown says
-    the same thing in markup: `plans/code-graph-report.html` alone holds 73
-    whole-word occurrences of `font`, so a query for `font` would print CSS.
+    `plans/` means `plans/*.md`. A rendered `.html` beside the markdown says the
+    same thing in markup, so a query for a word like `font` would answer from a
+    stylesheet rather than from prose.
 
     Nothing under `.flw/` is read except `reviews/` and `extensions/`. Review
     *reports* live in `.flw/reports/`, which this repository gitignores. A report's

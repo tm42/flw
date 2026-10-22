@@ -102,9 +102,8 @@ still tells the truth.
 
 Check these against the tree, by reading rather than trusting:
 
-- **The skill count.** `README.md`, `docs/index.html` (including its meta description,
-  its skill cards and its numbered workflow map), `.flw/extensions/shared.md`,
-  `cli/flw.py`, and the knowledge store under `.flw/knowledge/`. The decision taken was
+- **The skill count.** `README.md`, `.flw/extensions/shared.md`, `cli/flw.py`, and the
+  knowledge store under `.flw/knowledge/`. The decision taken was
   that the *workflow* stays four and `/flw-style` is a fifth skill outside it — so a
   place saying "four skills" may be right or wrong depending on which it means. Judge
   each on that basis and say which reading it takes.
