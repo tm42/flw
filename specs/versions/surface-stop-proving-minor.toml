@@ -1,0 +1,35 @@
+name    = "surface-stop-proving"
+base    = "scripts-refuse-a-backwards-dependency"
+summary = "Remove the status claims from README.md and the one evaluative word in docs/extending.md, keeping the navigation pointers the status block carried, because a reader can try flw rather than be told it works."
+
+approach = '''
+The author's instruction is that the documentation stops proving anything. Measured across
+README.md and docs/*.md, the surface is two places.
+
+README.md:9 is a blockquote headed "**Status.**" whose first two sentences are claims: "The
+schemas, the skills, the scout, the check runner and the CLI work and are tested" and "flw has
+been used on its own development and on one other project". Neither is checkable by a reader,
+the first is a quality claim, and the second is now false — the author reports using flw
+continuously at work across Claude Code, Codex and OpenCode. The instruction is to stop
+proving rather than to prove more, so the sentence goes and nothing replaces it.
+
+The same blockquote carries three pointers that are navigation rather than proof:
+`plans/backlog/index.md` for what is known and not yet built, `plans/design-v3.md` for the
+design, and `specs/current.toml` with its `applied` list for what "done" means and the order
+it was built in. Those survive. They belong beside the Layout section, which is already the
+part of the README that says where things are, so they move there as prose rather than staying
+in a status badge.
+
+docs/extending.md:111 reads "A bundle skill that shadows a core one is powerful and a
+debugging nightmare when implicit". "Powerful" is an evaluative word with no measurement
+behind it, and the sentence is about the shadowing being silent, so the word can go and the
+sentence keeps its point.
+
+What this is not. docs/measuring.md is a protocol with its own caveat that its baseline was
+taken at 0.11.5 and should be re-run before comparison, so it is a measurement document rather
+than a claim and is not touched. This record changes no contract sentence: `the project
+surface · provides[0]` is about a stranger being able to install flw and understand what it is
+for, and `provides[1]` is about finding why flw is shaped the way it is including what was
+deliberately not built — both are served by the pointers, which survive. Nothing in the
+contract claims a status.
+'''
