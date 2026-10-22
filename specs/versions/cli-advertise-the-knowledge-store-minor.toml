@@ -1,0 +1,134 @@
+name    = "cli-advertise-the-knowledge-store"
+base    = "scripts-refuse-a-backwards-dependency"
+summary = "Print one fixed line at every skill's opening saying whether a knowledge store exists and how to read it, so an agent meets the store without being told to go and look for it."
+
+approach = '''
+The store is under-used and the cause is mechanical, not a matter of how well it is written.
+Three facts, each verifiable at this revision:
+
+`flw know --help` says the store is "written once by a survey". Its flags are --check,
+--reindex, --stamp and --owed; there is no create flag, so core/skills/flw-research/SKILL.md
+step 4 is the only thing in flw that ever writes a file into it. A grep across all five
+SKILL.md for a write instruction returns nothing outside flw-research, so the carve-out every
+skill carries is correction-only: a file a diff has falsified may be rewritten, a file that is
+missing may not be written. The store's size is therefore fixed at whatever one survey
+produced.
+
+And it is invisible at an opening. `flw context` prints the note store listing on every call;
+core/shared/context.md:99 states that it prints nothing from the knowledge store,
+deliberately. The skills do instruct it — flw-spec step 3 opens "Start with `flw know`", and
+flw-execute step 2 says to run it for each path the record names — but an instruction is
+skippable in a way that text already in the context window is not. The note store has the
+sentence this store lacks: `validation and checks · provides[20]` reads "An agent that never
+thought to search still meets the store, because a skill reads its own project's category at
+its opening".
+
+The decision that put it outside the opening is in knowledge-store-minor.toml and its
+rationale is cost: "knowledge is addressed by path, never listed at opening … Merging forces
+either knowledge into every opening or kb out of it." That argument is about the listing,
+which scales with the store. A fixed line does not scale with anything, so the argument does
+not reach it. Measured at this revision: `flw context flw-spec` prints 11,585 bytes in 0.07s,
+and the line to be added is 74 bytes, which is 0.6% of it. core/shared/context.md is 8,615
+bytes against the 10,000 ceiling in core/scripts/budget.py, so the prose change fits.
+
+What the line says. With a store: how many files, and that `flw know <path>` reads it. With no
+store: that there is none, one clause on what it would hold, and that /flw-research writes it
+— which is the half that matters for adoption, because a project with no store currently gets
+silence and learns nothing about what it is missing. The exact wording is the run's to settle
+against the byte count; what the contract fixes is that it is one line, that it names the
+command, and that it prints nothing from any file.
+
+What this is not. It is not the repository file's head: the author was offered that and took
+presence only, so no file content reaches the opening and knowledge-store's decision stands
+unamended in substance. It is not a widening of the carve-out — a skill still may not write a
+knowledge file it finds missing, and the reason stands, which is that a run writing
+architecture documents nobody asked for is the drift flw exists to prevent. It adds no flag
+and no subcommand, so the CLI surface line is unchanged. It does not make a missing store an
+error; `provides[6]` of the knowledge store already says a root with no store exits 0.
+
+README.md:88 is corrected in the same record because it is the same defect on the
+documentation side: the section is headed "Two stores, and why they do not merge" and the two
+are `flw ledger` and `flw kb`, while core/shared/context.md calls them "Three stores, and one
+sorting question" and the knowledge store appears in the README only in the command table at
+:56.
+'''
+
+contract_edit = '''
+Three edits.
+
+1. In final_state.components, the component named "the flw CLI", provides, in the sentence
+   beginning "A user can print everything a skill reads at its opening", extend the list so
+   that the clause reading:
+
+     "the note store listing where that skill's own opening reads one, the records the
+     contract has not applied, and the contract's component names and paths"
+
+   reads:
+
+     "the note store listing where that skill's own opening reads one, one line saying whether
+     a knowledge store exists and how to read it, the records the contract has not applied,
+     and the contract's component names and paths"
+
+2. In the same component, provides, in the sentence beginning "A user can print the same
+   opening without the shared context", replace:
+
+     "the resolved root, the live extensions, the note store listing, the records the contract
+     has not applied, and the scoped components"
+
+   with:
+
+     "the resolved root, the live extensions, the note store listing, the knowledge store
+     line, the records the contract has not applied, and the scoped components"
+
+3. In the component named "the knowledge store", provides, replace the sentence reading:
+
+     "A user can have a repository's architecture — what its parts are, what each is for, what
+     crosses between them — written once by a survey and found again by every later session
+     from the path it is standing at, with nothing printed at any skill's opening."
+
+   with:
+
+     "A user can have a repository's architecture — what its parts are, what each is for, what
+     crosses between them — written once by a survey and found again by every later session
+     from the path it is standing at. An agent that never thought to look still meets the
+     store, because every skill's opening carries one fixed line saying whether there is one
+     and which command reads it, or, where there is none, what a store would hold and which
+     skill writes it. That line is the only thing an opening prints about the store: no file's
+     contents reach it, and its length does not grow with the store."
+
+Nothing else changes.
+'''
+
+[[decisions]]
+topic     = "how much of the knowledge store reaches a skill's opening"
+options   = [
+  "nothing, as knowledge-store-minor.toml decided",
+  "one fixed line: whether a store exists and the command that reads it",
+  "that line plus the repository file's head, so the opening carries real orientation",
+]
+chosen    = "one fixed line: whether a store exists and the command that reads it"
+rationale = '''
+knowledge-store-minor.toml put the store outside the opening because "merging forces either
+knowledge into every opening or kb out of it", an argument about a listing whose cost scales
+with the store. A fixed line costs the same at eight files and at eighty, so that argument
+does not reach it: measured here, 74 bytes against the 11,585 `flw context flw-spec` already
+prints. The head was offered and declined, which keeps every byte of file content out of the
+opening and leaves the original decision intact on its own terms — the opening gains a pointer
+and not an orientation.
+'''
+
+[[decisions]]
+topic     = "whether to also let a skill write a knowledge file it finds missing"
+options   = [
+  "widen the carve-out from correcting a falsified file to writing a missing one",
+  "advertisement only",
+]
+chosen    = "advertisement only"
+rationale = '''
+Offered to the author alongside the advertisement and declined. The reason the carve-out is
+correction-only still holds: a correction is triggered by a diff, which is evidence, while
+writing a missing file is triggered by judgment, and a run that writes architecture documents
+nobody asked for is the drift flw exists to prevent. Advertisement is also the cheaper
+experiment — if an opening that names the store does not change how often it is read, nothing
+was spent finding that out.
+'''
