@@ -40,12 +40,22 @@ wording is the run's to settle, so there is nothing to count — what the number
 ceiling the wording must come in under, which is 0.6% of 11,585. core/shared/context.md is
 8,615 bytes against the 10,000 ceiling in core/scripts/budget.py, so the prose change fits.
 
-What the line says. With a store: how many files, and that `flw know <path>` reads it. With no
-store: that there is none, one clause on what it would hold, and that /flw-research writes it
-— which is the half that matters for adoption, because a project with no store currently gets
-silence and learns nothing about what it is missing. The exact wording is the run's to settle
-against the byte count; what the contract fixes is that it is one line, that it names the
-command, and that it prints nothing from any file.
+What the line says, in three readings rather than two. With a store: the file count, which is
+required rather than decorative — eight files and one file are different answers to whether
+reading it is worth a call — and that `flw know <path>` reads it. With no store: that there is
+none, one clause on what it would hold, and that /flw-research writes it, which is the half
+that matters for adoption, because a project with no store currently gets silence and learns
+nothing about what it is missing. Outside any project there is no root to hold a store, and
+that case needs its own reading rather than falling into the second: `flw context flw-spec` in
+a directory with no project prints `root: none at or above <path>` and
+`notes: no project root — the store is not searched`, so the note store already distinguishes
+it, and the flw CLI properties[7] holds that call open at exit 0. Without the third reading
+the line would tell an agent that /flw-research writes a store, in a directory with no root to
+write one into.
+
+The exact wording is the run's to settle against the byte budget; what the contract fixes is
+that it is one line in every case, that it names the command where there is a store, and that
+it prints nothing from any file.
 
 What this is not. It is not the repository file's head: the author was offered that and took
 presence only, so no file content reaches the opening and knowledge-store's decision stands
@@ -115,10 +125,12 @@ Three edits.
      "A user can have a repository's architecture — what its parts are, what each is for, what
      crosses between them — written once by a survey and found again by every later session
      from the path it is standing at. An agent that never thought to look still meets the
-     store, because every skill's opening carries one fixed line saying whether there is one
-     and which command reads it, or, where there is none, what a store would hold and which
-     skill writes it. That line is the only thing an opening prints about the store: no file's
-     contents reach it, and its length does not grow with the store."
+     store, because every skill's opening carries one fixed line about it, in one of three
+     readings: how many files the store holds and which command reads it; that this project
+     has none, what a store would hold and which skill writes one; or, outside any project,
+     that there is no root to hold a store, the reading the note store's own line already
+     takes. That line is the only thing an opening prints about the store: no file's contents
+     reach it, and it is one line whatever the store holds."
 
 Nothing else changes.
 '''

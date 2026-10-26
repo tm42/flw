@@ -118,13 +118,16 @@ Five edits.
 5. In open_questions, replace the entry beginning "What a committed knowledge store does to
    the staleness number" with:
 
-     "What a committed knowledge store does to the staleness number, for a store a project
-     has deliberately moved out of the flw directory with [knowledge] dir and then tracked.
-     The default store is inside the flw directory and that directory is now ignored, so the
-     question does not arise there. Outside it the exclusion does not reach: knowledge.py
-     takes the flw directory's name and nothing else, so such a store's own writes still
-     count as changes under the path its repository file describes. flw proposes against this
-     and does not refuse it."
+     "What a committed knowledge store does to the staleness number, for a store that sits
+     outside the flw directory under [knowledge] dir and is tracked. The default store is
+     inside that directory and the directory is now ignored, so the question does not arise
+     there. Outside it the exclusion does not reach: it is keyed on the flw directory's name
+     alone, deliberately, because the store mirrors the code tree and no part of the flw
+     directory is code any file in it mirrors — so such a store's own writes count as
+     changes under the path its repository file describes. Nobody has to choose this for it
+     to happen. A survey leaves the ignore line unwritten where the ignore file belongs to
+     upstream, and a [knowledge] dir moved after a survey ran leaves the old line pointing
+     at the old place until someone re-runs the survey."
 
 Nothing else changes. In particular the clause about the flw directory in "the knowledge
 store" properties, under "Staleness is a git diff and never a judgment", is left exactly as
@@ -199,9 +202,17 @@ docs/knowledge/ that a project tracks still counts its own writes as changes und
 its repository file describes, which is the question verbatim. knowledge.py:355-360 says as
 much: the ignore-based approach "holds only while the project ignores its own store".
 
-Refusing a path outside the flw directory would close it, but it narrows a surface the
-contract already grants at properties[6] and breaks any project using it, for a case flw
-already advises against — core/skills/flw-research/SKILL.md:210 follows `[knowledge] dir`
-when proposing ignore lines. Narrowing the question costs nothing and keeps the contract
-honest about where the exclusion stops.
+Where the exclusion stops was itself a decision, in a-verdict-needs-a-measurement, whose
+`pathspec` task threaded the flw directory's name through numstat and whose decision "how
+much is excluded from a knowledge file's own diff" chose the whole flw directory because
+"the store mirrors the code tree, and no part of the flw directory is code any file in it
+mirrors". So the boundary is intentional and this record should not move it.
+
+Refusing a path outside the flw directory would close the question, but it narrows a surface
+the contract grants at properties[6] and breaks any project using it. And the case is not
+only a deliberate one: core/skills/flw-research/SKILL.md:207-209 records a member whose
+ignore file belongs to upstream, where the user cannot add the line and the survey writes
+nothing, and :210's rule that a survey follows `[knowledge] dir` binds only a survey, so a
+store moved between surveys is tracked with nobody deciding it. Narrowing the question costs
+nothing and keeps the contract honest about where the exclusion stops.
 '''
