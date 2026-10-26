@@ -108,7 +108,7 @@ where it had to guess.**
 ### Overrides are reported, never silent
 
 Resolution is core first, then bundles in registration order, later winning. A bundle skill
-that shadows a core one is powerful and a debugging nightmare when implicit, so `flw
+that shadows a core one is a debugging nightmare when implicit, so `flw
 install` and `flw doctor` both name it — in different words, because install has the
 shadowed path to hand and doctor is reporting a state:
 

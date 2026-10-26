@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "18.1"
+spec_version = "18.2"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -55,6 +55,7 @@ applied = [
   "surface-say-how-a-team-adopts",
   "schemas-separate-spec-and-release",
   "scripts-refuse-a-backwards-dependency",
+  "surface-stop-proving",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.

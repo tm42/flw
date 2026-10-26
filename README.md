@@ -6,8 +6,6 @@ It takes intent to a versioned contract, works against that contract, and stops 
 
 Host-agnostic: flw installs as [Agent Skills](https://agentskills.io) into Claude Code, Codex and OpenCode. Language-agnostic: it bakes in no toolchain, no test runner and no manifest — a project declares its own commands and flw runs them.
 
-> **Status.** The schemas, the skills, the scout, the check runner and the CLI work and are tested. flw has been used on its own development and on one other project. `plans/backlog/index.md` lists what is known and not yet built, each item with what it is blocked on. `plans/design-v3.md` is the design, `specs/current.toml` is what "done" means, and its `applied` list is the order it was built in.
-
 ## The idea
 
 An agent asked to build something will build something adjacent to it, and the gap becomes visible later. flw makes the agreement a file:
@@ -135,6 +133,8 @@ docs/                install, extending, measuring, layout
 plans/               design prose, and plans/backlog/ for what is not yet specced
 specs/               flw's own contract and version records
 ```
+
+`plans/design-v3.md` is the design and `plans/backlog/index.md` is what is not yet built, each item with what it is blocked on. `specs/current.toml` is what "done" means, and its `applied` list is the order it was built in.
 
 ## License
 
