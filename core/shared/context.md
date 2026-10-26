@@ -96,9 +96,10 @@ A file records the revision it was written at, and `flw know` reports what has m
 its path since — `3 files · +41 −12`, not a verdict. **Changed warns and never stops:** the
 agent in front of the number decides whether the claim survived.
 
-**`flw context` prints none of this, deliberately.** Orientation is a command a skill runs
-when it needs one, not a cost every opening pays. A root with no store prints `no store`
-and exits 0, so the call never needs a guard.
+**`flw context` prints one line about the store and nothing from it.** It says how many
+files there are and which command reads them, or that there is none and which skill writes
+one. Orientation stays a command a skill runs when it needs one, not a cost every opening
+pays. A root with no store prints `no store` and exits 0, so the call never needs a guard.
 
 ## Configuration
 

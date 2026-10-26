@@ -83,13 +83,15 @@ Nothing chains. You drive, and each skill stops and hands back.
 
 Read together, never instead of each other. A version record never restates what the contract says.
 
-## Two stores, and why they do not merge
+## Three stores, and why they do not merge
 
 `flw ledger` reads what was agreed: the contract, every version record, the review team configs and `plans/*.md`. `flw validate` enforces the schema of the two that have one.
 
 `flw kb` reads what an agent worked out and nobody checked — markdown under `~/.flw/kb/`, which follows the machine, and `<project>/plans/notes/`, which follows the repository. A note is a file: no schema, no registry, no index on disk. Every surface prints a note's age and size, because a note is a hint to verify rather than a fact to act on.
 
-The two corpora are disjoint by directory, so no file is reachable from both.
+`flw know` reads what a repository is built of: its parts, what each is for, and what crosses between them, written once by a survey into a store that mirrors the code, so reading it is a walk up from the path you are standing at. Each file records the revision it was true at and `flw know` says what has moved under it since. The store is sparse, and missing is the normal case.
+
+The three corpora are disjoint by directory, so no file is reachable from more than one.
 
 ```sh
 flw kb                              # what is in the store, per category and per root

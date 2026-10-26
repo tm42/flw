@@ -3072,6 +3072,45 @@ def _context_pending(root: Path | None) -> None:
             print(line)
 
 
+def _context_knowledge(root: Path | None) -> None:
+    """One line saying whether this project has a knowledge store, and nothing from it.
+
+    The store used to print nothing here, on the argument that orientation is a
+    command a skill runs rather than a cost every opening pays. That argument is
+    about the listing, whose cost grows with the store; it does not reach a fixed
+    line. What it was costing instead was use: the only thing that writes a file
+    into the store is a survey, every skill's carve-out may correct a file and not
+    create one, so a project that never ran `flw-research` met the store nowhere
+    and learned nothing about what it was missing.
+
+    Three readings, because `flw context` outside any project has no root to hold
+    a store and must not be told which skill writes one.
+    """
+    if root is None:
+        print("\nknowledge: no project root — no store to read")
+        return
+    try:
+        store = knowledge_dir(root)
+    except SystemExit as bad_dir:
+        # `[knowledge] dir` is refused by knowledge_dir with an exit, which is
+        # right for `flw know` and wrong here: an opening reports what it cannot
+        # read and carries on, so the skill still gets its contract and its
+        # extensions.
+        print(f"\nknowledge: unreadable — {bad_dir}")
+        return
+
+    scripts = checkout() / "core" / "scripts"
+    sys.path.insert(0, str(scripts))
+    import knowledge as engine
+
+    found = len(engine.concepts(store))
+    if not found:
+        print("\nknowledge: none · the system's parts and seams; /flw-research writes it")
+        return
+    plural = "s" if found != 1 else ""
+    print(f"\nknowledge: {found} file{plural} · flw know <path> to read it")
+
+
 def _context_scope(root: Path | None, scopes: list[str] | None) -> int:
     """The full text of every component whose declared paths meet a scope path.
 
@@ -3225,6 +3264,7 @@ def context(args: argparse.Namespace) -> int:
     _context_members(root)
     _context_extensions(project_chain(start), skill)
     _context_notes(root)
+    _context_knowledge(root)
     _context_pending(root)
     _context_contract(root)
     return _context_scope(root, args.scope)
@@ -3602,7 +3642,8 @@ def _knowledge_root(args: argparse.Namespace) -> Path | None:
 def know(args: argparse.Namespace) -> int:
     """The knowledge store: what this system is built of, found from a path.
 
-    Nothing is printed at any skill's opening — this is the command a skill
+    An opening prints one line saying whether there is a store and which
+    command reads it; every word of a file comes from here — this is the command a skill
     runs when it needs orientation, and a root with no store is a state rather
     than a fault, so every skill can run it without guarding the call.
     """
@@ -4430,7 +4471,8 @@ green is deleting notes.""",
         description="""What a system is built of and how its parts connect, written once by
 a survey and stored in the shape of the code it describes: a directory D at path P is
 <store>/P/D.md, a repository is <store>/<basename>.md, and the parent of a multi-repo
-system holds system.md. Nothing is indexed and nothing is printed at any skill's opening.
+system holds system.md. Nothing is indexed, and a skill's opening prints one line
+saying whether there is a store and which command reads it, never a file's contents.
 
 With no PATH this orients: the system file and one head per member, or this repository's
 own file. With a PATH it walks the mirror upward from there, outermost first, and checks
