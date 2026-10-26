@@ -192,22 +192,29 @@ that what was recorded is stale, and a re-run that writes the file fresh drops t
 path, the interview mode and the note-store category the user chose. Leave every key you
 did not measure exactly as you found it.
 
-**Say where the ignore lines go, in the same block.** Nothing creates them, and three places
-here read better when the reports directory and the knowledge store are ignored — so without
-them a review that was told to change nothing leaves ` M .flw/knowledge/…` and
-`?? .flw/reports/` in the user's tree. Show the lines beside the config and let the user take
-them:
+**Say where the ignore line goes, in the same block.** Nothing creates it. Show it beside the
+config and let the user take it:
 
 ```text
-.flw/reports/
-.flw/knowledge/
+.flw/
 ```
 
-Name the file for each place they belong, and do not assume the store ends up ignored. Two
-cases a field test hit: a parent that is not a repository at all, where there is no ignore
-file to propose into, and a member whose ignore file belongs to upstream. In both, say which
-lines go where and leave them. Where there is an ignore file of the user's, read it first and
-propose only what is missing, and follow `[knowledge] dir` when the store has moved.
+The whole directory, because more than one true picture of a system is possible: what one
+person records about a repository is theirs, and a store that has to be merged forces one of
+two true pictures to be wrong. It also keeps a review that was told to change nothing from
+leaving ` M .flw/knowledge/…` and `?? .flw/reports/` in the user's tree.
+
+**Then ask whether the team wants any of it shared** — the config, the extensions, the review
+teams. Say that sharing them means the team agreeing on what is in them, which is the work,
+and that a tool picking the default would skip it. Take their answer and propose the narrower
+lines instead if they want some of it tracked.
+
+Name the file the line belongs in, and do not assume the directory ends up ignored. Two cases
+a field test hit: a parent that is not a repository at all, where there is no ignore file to
+propose into, and a member whose ignore file belongs to upstream. In both, say where the line
+goes and leave it. Where there is an ignore file of the user's, read it first and propose only
+what is missing, and follow `[knowledge] dir` when the store sits outside the flw directory —
+there the ignore line does not cover it and nothing else will.
 
 **Then the extensions**, each holding only what its readers need. Do not restate across
 them: a fact every skill needs goes in `shared.md` once, not into three files.

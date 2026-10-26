@@ -50,11 +50,12 @@ specs/versions/<name>.toml          one per version — how that version came ab
 
 A file that is neither tracked nor ignored is an accident. `flw-execute` forbids `git add -A` for that reason: a blanket add sweeps such a file into a commit as though the run produced it.
 
-Two kinds of flw record are ignored here:
+flw's per-project directory is ignored whole:
 
 ```text
-.flw/reports/                       review reports
-.flw/reviews/publish*.toml          a reviewer team written for one round
+.flw/                               every part of it
 ```
 
-A review report is disposable because what survives it is the version record `flw-spec` drafts from it, which carries the coverage line and any measurement forward. A team config is normally tracked, so a project copy of a shipped team travels with the repo; the ignored pattern is for one written against a particular round.
+More than one true picture of a system is possible, so what one person records about a repository is theirs by default. Two engineers on the same service hold different pictures of it, each true for the work they do, and a store that has to be merged forces one of them to be wrong. The same holds for a convention and for a reviewer team: one person's is not the team's until the team says so.
+
+A team that wants any of it shared un-ignores that path deliberately — the config, the extensions, the review teams. `flw-research` asks when it writes a config, because agreeing on what goes in those files is the work, and a default that shared them silently would skip it.

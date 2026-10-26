@@ -119,7 +119,7 @@ The skills are symlinks, so an edit is live on every host at once. The style is 
 
 Python 3.11 or later, as a system interpreter. No runtime dependencies.
 
-Running flw's own checks is the one exception: `flw test` in this checkout creates `.venv/` and installs pytest and ruff, because that is what this project's `.flw/config.toml` declares as its `[tests] setup`. Nothing inherits it.
+Running flw's own checks is the one exception. flw's per-project directory is local by default and this checkout ignores all of it, so there is no `.flw/config.toml` to declare a setup line and the four checks call `.venv/bin/…`. Write your own to run them — `docs/install.md` has the line. Nothing inherits it.
 
 ## Layout
 

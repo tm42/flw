@@ -4,7 +4,15 @@
 
 Python 3.11 or later, as a system interpreter. flw has no runtime dependencies.
 
-Running flw's own checks is the exception: `flw test` inside this checkout creates `.venv/` and installs pytest and ruff, because that is what this project's `.flw/config.toml` declares as `[tests] setup`. It needs the network once. Every other project declares its own setup line or none.
+Running flw's own checks is the exception. flw's per-project directory is local, so this checkout ships no `.flw/config.toml` and `flw test` here declares no setup line of its own — its four checks call `.venv/bin/…` and fail until that exists. To run them, write your own:
+
+```toml
+# .flw/config.toml
+[tests]
+setup = "test -x .venv/bin/pytest || { python3 -m venv .venv && .venv/bin/pip install -q pytest ruff; }"
+```
+
+It needs the network once. Every other project declares its own setup line or none.
 
 ## Put `flw` on PATH
 
