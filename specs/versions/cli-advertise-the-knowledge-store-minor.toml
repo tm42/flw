@@ -27,9 +27,18 @@ The decision that put it outside the opening is in knowledge-store-minor.toml an
 rationale is cost: "knowledge is addressed by path, never listed at opening … Merging forces
 either knowledge into every opening or kb out of it." That argument is about the listing,
 which scales with the store. A fixed line does not scale with anything, so the argument does
-not reach it. Measured at this revision: `flw context flw-spec` prints 11,585 bytes in 0.07s,
-and the line to be added is 74 bytes, which is 0.6% of it. core/shared/context.md is 8,615
-bytes against the 10,000 ceiling in core/scripts/budget.py, so the prose change fits.
+not reach it.
+
+The cost, measured with `flw context flw-spec | wc -c` at aa5959c: 11,753 bytes, three runs
+at `real 0.07`. 168 of those bytes are the pending block cli/flw.py:3070 prints for the three
+records this round wrote and has not run — 44 for its header plus 45, 47 and 32 for the three
+names — so the figure with nothing in flight, which is the state after any run finishes, is
+11,585. Use that one: the pending figure moves as records land and clears when they run.
+
+74 bytes is a budget rather than a measurement. No file holds the line yet, because the
+wording is the run's to settle, so there is nothing to count — what the number states is the
+ceiling the wording must come in under, which is 0.6% of 11,585. core/shared/context.md is
+8,615 bytes against the 10,000 ceiling in core/scripts/budget.py, so the prose change fits.
 
 What the line says. With a store: how many files, and that `flw know <path>` reads it. With no
 store: that there is none, one clause on what it would hold, and that /flw-research writes it
@@ -46,11 +55,26 @@ architecture documents nobody asked for is the drift flw exists to prevent. It a
 and no subcommand, so the CLI surface line is unchanged. It does not make a missing store an
 error; `provides[6]` of the knowledge store already says a root with no store exits 0.
 
-README.md:88 is corrected in the same record because it is the same defect on the
-documentation side: the section is headed "Two stores, and why they do not merge" and the two
-are `flw ledger` and `flw kb`, while core/shared/context.md calls them "Three stores, and one
-sorting question" and the knowledge store appears in the README only in the command table at
-:56.
+Four prose sites say the opposite of the edited contract and all four are repaired here.
+`grep -rn "printed at any skill's opening" cli/ core/ docs/ README.md specs/current.toml` at
+aa5959c returns three: cli/flw.py:3605, the `know()` docstring; cli/flw.py:4433, the text
+`flw know --help` prints; and specs/current.toml:329, which contract edit 3 covers. The two
+under cli/ are inside the flw CLI component this record already edits, and this record quotes
+that same help text for a different sentence, so leaving them would ship a command whose own
+help contradicts the contract.
+
+The fourth is core/shared/context.md:99, which is the sharpest of them because that file is
+printed at every opening: "**`flw context` prints none of this, deliberately.** Orientation is
+a command a skill runs when it needs one, not a cost every opening pays." After this change it
+is false four lines above the line that falsifies it. It becomes a narrower statement — the
+opening says whether a store exists and which command reads it, and the store's contents stay
+a command a skill runs — and the reason it gives, that orientation is not a cost every opening
+pays, survives intact, because no file's contents reach the opening.
+
+README.md:88 is corrected too, as the same defect on the documentation side: the section is
+headed "Two stores, and why they do not merge" and the two are `flw ledger` and `flw kb`,
+while core/shared/context.md calls them "Three stores, and one sorting question" and the
+knowledge store appears in the README only in the command table at :56.
 '''
 
 contract_edit = '''
@@ -111,8 +135,8 @@ rationale = '''
 knowledge-store-minor.toml put the store outside the opening because "merging forces either
 knowledge into every opening or kb out of it", an argument about a listing whose cost scales
 with the store. A fixed line costs the same at eight files and at eighty, so that argument
-does not reach it: measured here, 74 bytes against the 11,585 `flw context flw-spec` already
-prints. The head was offered and declined, which keeps every byte of file content out of the
+does not reach it: a 74-byte budget against the 11,585 bytes `flw context flw-spec` prints
+with nothing in flight, taken at aa5959c. The head was offered and declined, which keeps every byte of file content out of the
 opening and leaves the original decision intact on its own terms — the opening gains a pointer
 and not an orientation.
 '''
