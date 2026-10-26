@@ -76,8 +76,9 @@ def test_a_rendered_plan_is_not_read_beside_its_markdown(tmp_path):
 
 def test_nothing_under_flw_reports_is_read(tmp_path):
     """.flw/reports/ is gitignored, so a corpus that read it would answer one way
-    on this machine and another way on a fresh clone. Team configs under
-    .flw/reviews/ are tracked and are read."""
+    on this machine and another way on a fresh clone. A team config under
+    .flw/reviews/ is read whether or not the project tracks it — the whole flw
+    directory is ignored by default now, and the corpus reads the filesystem."""
     root = project(tmp_path)
     (root / ".flw" / "reports").mkdir(parents=True)
     (root / ".flw" / "reviews").mkdir(parents=True)
@@ -161,11 +162,18 @@ def test_a_file_the_tier_cannot_open_is_skipped_and_named(tmp_path):
 
 
 def test_flws_own_corpus_assembles(tmp_path):
-    """The real thing, not a fixture: every tier present and non-empty."""
+    """The real thing, not a fixture: the tracked tiers present and non-empty.
+
+    The reviews tier is deliberately not asserted here. This repository ignores its
+    whole flw directory, so its own team configs are untracked and a clone's reviews
+    tier is empty — asserting on it would pass on the author's machine and fail on
+    every clone, which is the failure this test's own neighbour at
+    test_nothing_under_flw_reports_is_read exists to prevent. The tier is covered by
+    fixtures from both sides: populated, and empty."""
     found = ledger.corpus(REPO)
     assert found.contract["schema_version"] == 4
     assert len(found.records) > 20
-    assert found.plans and found.reviews
+    assert found.plans
     assert all(p.suffix == ".md" for p in found.plans)
 
 
