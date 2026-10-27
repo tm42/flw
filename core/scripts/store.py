@@ -69,6 +69,9 @@ class Note:
     # Built on first use and kept. lint compares every note against every other, so
     # rebuilding this per comparison joined the same strings 4,995,000 times over a
     # 1,000-note store — 16 of that run's 31 seconds, before any matching happened.
+    # Profiled before commit 1aa8775, against the implementation that did the
+    # rebuilding; docs/measuring.md has the protocol, and the run that produced
+    # these two figures cannot be re-taken because the code they measured is gone.
     _searchable: str | None = field(default=None, repr=False, compare=False)
 
     @property

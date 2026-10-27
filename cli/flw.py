@@ -2991,9 +2991,10 @@ def _context_members(root: Path | None) -> None:
 def _context_contract(root: Path | None) -> None:
     """The contract's component names and the paths each one covers, and no more.
 
-    Measured on flw's own: names and paths is ~650 bytes where the whole file is
-    ~31,000. This runs at every skill open and, through the ambient line, outside
-    one — the narrow reading is what makes that affordable. A skill that needs a
+    On flw's own at 0bb018d: names and paths is 663 bytes where the whole file is
+    67,458 — `flw context flw-spec | sed -n '/^contract: /,$p' | wc -c` against
+    `wc -c < specs/current.toml`. This runs at every skill open and, through the
+    ambient line, outside one — the narrow reading is what makes that affordable. A skill that needs a
     component's `provides` reads the contract itself.
     """
     if root is None:
@@ -3218,8 +3219,9 @@ def context(args: argparse.Namespace) -> int:
     says every skill reads it.
 
     --brief omits it for a named skill too, and keeps that skill's own extension —
-    which is what separates it from the bare call. Measured on this repository the
-    shared context is 8,423 of the 11,370 bytes a skill opening costs, 74%, and a
+    which is what separates it from the bare call. At 0bb018d the shared
+    context is 8,749 of the 11,769 bytes a skill opening costs, 74% —
+    `wc -c < core/shared/context.md` against `flw context flw-spec | wc -c` — and a
     second call in one session pays for it again having changed nothing. The full
     opening stays the default: it is the one a session reads on first contact.
     """

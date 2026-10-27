@@ -300,8 +300,8 @@ assumption relied on but never stated, a contract sentence contradicting a decis
 same record took.
 
 **Why the gate moved.** It used to read "for a large or intricate contract … skip it for
-small ones". Measured over flw's own 51 records, the critic ran four times and found
-something on all four: 8, then 5, then 4, then 5. The record it was skipped for —
+small ones". Over flw's own records — 76 of them at 0bb018d — the critic has run six
+times and found something every time: 8, then 5, 4, 5, 5, 5. The record it was skipped for —
 `a-rule-nothing-breaks`, judged not to warrant the ceremony — shipped a `provides` its own
 decision had already ruled out, and a review found it 71 minutes after the commit. A gate
 on size excludes by the wrong variable, because a one-sentence edit to a contract is read

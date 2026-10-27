@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "18.4"
+spec_version = "18.5"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -58,6 +58,7 @@ applied = [
   "surface-stop-proving",
   "cli-advertise-the-knowledge-store",
   "skills-keep-the-flw-directory-local",
+  "scripts-source-every-number",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -368,8 +369,10 @@ unrecorded: no document in this repository reports the result of running it.
 The files every run loads unconditionally have a size ceiling, checked by
 core/scripts/budget.py: 21,000 bytes for each core/skills/*/SKILL.md, 12,000 for
 core/styles/terse_prose.md, which is the one file installed into every host's system prompt
-and read on every turn, and 10,000 for the other files a run loads unconditionally. Bytes rather than tokens, because
-the ratio measured across these files is 4.10-4.33 bytes per token and a token count would
-mean a tokenizer dependency this project does not otherwise have.
+and read on every turn, and 10,000 for the other files a run loads unconditionally. Bytes rather than tokens, because a token count would mean a
+tokenizer dependency this project does not otherwise have. core/scripts/budget.py's own
+docstring carries the measurement that says a byte ceiling holds as a token ceiling, with the
+date and the proxy tokenizer it was taken with; this repository ships no tokenizer, so that
+figure cannot be re-taken here.
 """
 

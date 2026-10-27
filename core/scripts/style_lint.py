@@ -312,7 +312,9 @@ def session_transcripts(root: Path, base: Path) -> list[Path]:
     newest 40 files across every project on the machine, so a day spent in
     another repository pushed this project's transcripts out of the window and
     the command reported it as the host keeping none. Reading all of them to
-    find 40 costs about 0.1s over 477 files.
+    find 40 cost about 0.1s over 477 files on the machine this was written on; the
+    corpus is one machine's session store, so the figure cannot be re-taken anywhere
+    else and the shape of the cost is the part that travels.
     """
     matched: list[Path] = []
     if not base.is_dir():
