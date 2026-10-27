@@ -1,0 +1,105 @@
+name    = "scripts-source-every-number"
+base    = "skills-keep-the-flw-directory-local"
+summary = "Give every number flw ships about itself a source or a sentence saying it cannot be re-taken, and re-measure the five that have gone stale, because the rule requiring this binds version records only and nothing swept the rest."
+
+approach = '''
+The project already has the rule, at the "the skills" component's provides: "A measurement a
+record carries from a review report arrives with the command that produced it and the
+revision it was taken at, or with a sentence saying it cannot be re-run there." It binds a
+version record. It does not reach the contract, a SKILL.md, a help string or a module
+docstring, and nothing has ever swept those.
+
+Surveyed at 0bb018d across README.md, docs/*.md, every SKILL.md and reference, core/shared/,
+core/styles/, core/scripts/*.py, cli/flw.py and specs/current.toml. Two classes came back
+clean and are recorded here so nobody sweeps them again: every evaluative-word hit was the
+style file naming its own banned words, the review-lens table quoting a user, or a use the
+style permits — a clean tree, a clean cut; and 71 of 71 `path:line` citations in shipped prose
+resolve to a line that still exists. The contradiction a field test found between "five to
+thirty" and "perhaps forty" knowledge files is already gone.
+
+Six sites are wrong, and the shape of the defect differs between them.
+
+The contract states a number whose provenance exists only in a docstring.
+success_criteria.criteria says "the ratio measured across these files is 4.10-4.33 bytes per
+token", naming no tool and no date. core/scripts/budget.py:16 has both — "Measured 2026-09-02
+across these files with `cl100k_base` as a proxy for the real tokenizer" — so the measurement
+is sound and the contract is the copy that dropped its source. The contract is the document a
+reader reaches first, so it carries the source or points at the file that holds it.
+
+Three numbers are stale, and in each the conclusion survives because the stale figure
+understates it. cli/flw.py:3222 says the shared context is "8,423 of the 11,370 bytes a skill
+opening costs, 74%"; re-measured with `wc -c < core/shared/context.md` and
+`flw context flw-spec | wc -c` at 0bb018d it is 8,749 of 11,769, and the percentage the
+argument rests on is still 74. cli/flw.py:2994 says names-and-paths is "~650 bytes where the
+whole file is ~31,000"; the block is 663 and specs/current.toml is 67,458, so the contract has
+more than doubled and the narrow reading is twice as valuable as the docstring claims.
+core/skills/flw-spec/SKILL.md:303 says "Measured over flw's own 51 records, the critic ran four
+times and found something on all four: 8, then 5, then 4, then 5" — there are now 76 records
+and the critic has run six times, the two most recent finding five each on this round's own
+records.
+
+Two are measurements nobody else can reproduce and neither says so.
+core/scripts/style_lint.py:315 says reading every transcript "to find 40 costs about 0.1s over
+477 files", which counts one machine's session store at one moment; no other machine has that
+corpus. core/scripts/store.py:70 says rebuilding a searchable string per comparison "joined
+the same strings 4,995,000 times over a 1,000-note store — 16 of that run's 31 seconds", with
+no date, no revision and no command, describing an implementation that no longer exists.
+
+What this is not. It does not delete a number that carries its source, and budget.py:16 is the
+model rather than a defect. It does not add a check: a pattern that finds a number and looks
+for a nearby hash would fire on every line number, every byte ceiling and every version
+string, and core/scripts/style_lint.py's own docstring already records why the evaluative-word
+rules do not run against files — a checker that guesses produces noise that teaches people to
+ignore it. It does not extend the sourcing rule to cover all shipped prose; that is a wider
+change and the author has not asked for it.
+'''
+
+contract_edit = '''
+One edit. In success_criteria.criteria, replace:
+
+  "Bytes rather than tokens, because the ratio measured across these files is 4.10-4.33 bytes
+  per token and a token count would mean a tokenizer dependency this project does not
+  otherwise have."
+
+with:
+
+  "Bytes rather than tokens, because a token count would mean a tokenizer dependency this
+  project does not otherwise have. core/scripts/budget.py's own docstring carries the
+  measurement that says a byte ceiling holds as a token ceiling, with the date and the proxy
+  tokenizer it was taken with; this repository ships no tokenizer, so that figure cannot be
+  re-taken here."
+
+Nothing else changes.
+'''
+
+[[decisions]]
+topic     = "what to do with a number that cannot be reproduced in this repository"
+options   = [
+  "delete it, because an unverifiable number is worse than none",
+  "keep it and say in the same sentence that it cannot be re-taken here",
+]
+chosen    = "keep it and say in the same sentence that it cannot be re-taken here"
+rationale = '''
+This is the branch the project's own rule for records already names — "or with a sentence
+saying it cannot be re-run there" — so taking the other branch here would have the contract
+and the records disagreeing about the same class of claim. The numbers also still carry
+information: 4.10-4.33 bytes per token is why a byte ceiling is allowed to stand in for a
+token ceiling, and deleting it leaves the ceiling looking arbitrary. What was wrong was
+stating it as though a reader could check it.
+'''
+
+[[decisions]]
+topic     = "whether to re-measure the stale numbers or drop them"
+options   = [
+  "drop them: the conclusion holds without the figure",
+  "re-measure each with the command and the revision",
+]
+chosen    = "re-measure each with the command and the revision"
+rationale = '''
+In all three the stale figure understates the argument rather than contradicting it — the
+contract is 67,458 bytes where the docstring says ~31,000, so the narrow reading it defends is
+twice as valuable as claimed. Dropping the figures would leave three design decisions resting
+on assertion, and each is cheap to re-take: two are a `wc -c`, and the record count is a
+directory listing. A figure with the command beside it is one the next reader can re-take when
+it goes stale again, which is the difference between this round and the one that wrote them.
+'''
