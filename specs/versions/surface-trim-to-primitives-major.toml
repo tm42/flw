@@ -1,0 +1,287 @@
+name    = "surface-trim-to-primitives"
+base    = "scripts-source-every-number"
+summary = "Replace the hardcoded two-language scout with a declared scanner contract a project registers, and delete the two reporting commands nothing gates on — flw stale and flw style check — so what core ships is a primitive plus one instance rather than a shipped special case per case."
+
+approach = '''
+The criterion, which is the author's and which this record applies rather than argues: core
+ships a primitive — a declared contract plus one working instance — and a project adds the
+next instance into its own flw directory without editing the checkout. A part of flw that has
+to be edited inside flw to serve a repository its author never saw is a shipped special case.
+`plans/trim-the-fat.md` is the plan, and it carries the full edit lists, the items assessed
+and kept, and why three items from its first draft were withdrawn.
+
+The usage figures the plan opens with were taken on 2026-10-28 over 552 Claude Code session
+transcripts under `~/.claude/projects`, 1.42 GB, with:
+
+  grep -rhaoE '"command":"[^"]*' --include='*.jsonl' . \\
+    | grep -oE '\\bflw (install|uninstall|style|sync|update|doctor|context|add|remove|list\\
+|test|scout|validate|ledger|kb|know|map|stale|version)\\b' | sort | uniq -c | sort -rn
+
+Outside flw's own checkout seven subcommands have ever run: validate 153, context 142, test
+86, know 41, kb 14, ledger 4, scout 3. `flw stale` 21 and `flw style check` 25, both only
+inside this checkout. **The figure covers Claude Code only** — `~/.codex/sessions` holds 3
+files and `~/.local/share/opencode` holds 1, and flw is installed into all three hosts, so a
+command this corpus never saw may be in daily use from a Codex session. It cannot be re-taken
+for the other two hosts anywhere. Every cut below therefore rests on what consumes the thing's
+output, with usage as supporting evidence only.
+
+**Three groups, three different arguments.**
+
+Group 1, the scout. `cli/flw.py:2724-2769` runs the Python scanner and then a hardcoded
+TypeScript branch: four glob patterns, a `shutil.which("node")` check, a `node_modules`
+exclusion, a package-manager guess across four lock files, and two messages naming
+`typescript`. A repository in a third language gets `error: no Python or TypeScript found`.
+The contract already carries the shape of a second instance in its own vocabulary — `:256`
+says "files in languages neither scout parses" and `:285` "Both scouts rank the file that
+defines an imported name" — so the plural is there and the extension point is not.
+
+The contract a scanner satisfies exists already, unnamed: `scout.mjs` is a subprocess taking
+`<root> <budget>`, printing a finished ranking section to stdout, exiting 2 when the
+language's parser is absent and, at `scout.mjs:250`, 3 for a walk that could not read part of
+the tree. Exit 3 is currently silent, because `cli/flw.py` inspects only returncode 2. Naming
+the contract fixes that as a side effect.
+
+What this is not: it is not a data contract. Each scanner prints its own finished section and
+nothing is folded or re-ranked across languages, which is what happens today and what keeps
+this a naming change rather than a rewrite of `scout.py`'s output path. A cross-language
+ranking is a different and larger piece of work, and nothing here is a step toward it.
+
+Group 2, `flw stale`. The primitive is a stamped document and a diff, and `flw know --check`
+and `--owed` are it: 33 and 79 invocations. `core/scripts/stale.py` applies the same idea to
+four further stores with a bespoke reader each — review reports by filename stamp, extension
+claims by a regex for countables, notes by frontmatter, records by citation — and none is
+extensible. Run in this checkout it prints 57 unread review reports, 35 dead citations, 8
+knowledge files and 4 extensions with 6 undated claims, and exits 0.
+`plans/design-the-loop.md` §4.3 already recorded that `flw know --check`, `flw stale` and
+`flw validate` all exit 0 over files that disagree with the tree.
+
+One thing does consume its output, and the plan's first draft was wrong to say nothing does:
+`core/skills/flw-research/references/recheck.md:14` reads "`flw stale` is what produces such a
+list", and `:38` takes the paths "from the ask, or from `flw stale`, or — given neither — from
+`flw know --check`". The mode survives on that fallback, which covers the only case with a
+reader, so what changes is that the fallback becomes the path.
+
+Three contract statements name `flw stale --owed` while being about something else —
+`:215` on a contract recording what shipped, `:269` on commit attribution from git alone,
+`:272` on a retired record. Each keeps its subject and loses the clause naming the command.
+`retired` itself survives: `core/scripts/validate_spec.py:455` reads it to decide whether a
+record is unsettled, which gates the record-naming refusal, and `:614` validates the retires
+graph. So retirement keeps a reader after this and the model is not orphaned.
+
+What this is not: it is not a decision that staleness does not matter. It is a decision that a
+command which reports it and exits 0 was never the thing that would make it matter. If it is
+wanted with teeth the way back is a check in `[tests] checks` that exits non-zero, and that
+path is open to any project today without flw knowing what the check is.
+
+Group 3, `flw style check` and the transcript half of the linter. The plan's first draft
+proposed deleting `style_lint.py` whole on the premise that neither style command gates
+anything, and that was wrong twice. `[success_criteria] tests` declares
+`.venv/bin/python core/scripts/style_lint.py .`, and `.flw/config.toml` carries no `checks`
+key on purpose, so the linter runs on every `flw test` here. And the module's two halves are
+not alike. `FILE_RULES` is two geometry rules — a heading deeper than `###`, two trailing
+spaces that become a `<br>` in a file — which `style_lint.py:6-9` records as measured with
+every finding real; they need nothing installed and run in any clone. `REPLY_RULES` and the
+transcript reader at `:243-435` read one machine's session store, which no clone has, and
+`:316` says so in its own words: "the corpus is one machine's session store, so the figure
+cannot be re-taken anywhere else".
+
+So the file half stays and the declared check with it, which is why `[success_criteria]` is
+untouched by this record, and the transcript half goes.
+
+What this is not: it is not a judgment that the vocabulary rules were wrong. They were
+measured, they were right about the corpus they read, and that corpus is one machine.
+'''
+
+contract_edit = '''
+Fourteen edits, grouped by component.
+
+**In final_state.components, the component named "the flw CLI":**
+
+1. In `properties`, delete the whole statement beginning "Some hosts write each session's
+   transcript to disk as the session runs" and ending "that prose never received the style."
+   The command it describes is gone.
+
+2. In `properties`, delete the whole statement beginning "flw stale exits 0 whenever it ran"
+   and ending "at the other end of a run."
+
+3. In `surfaces`, delete the line `"flw style check [--last N]"`.
+
+4. In `surfaces`, delete the line `"flw stale [--root PATH] [--owed]"`.
+
+5. In `surfaces`, in the line beginning "~/.flw/config.toml and <project root>/<flw dir>/config.toml",
+   replace:
+
+     "[project] roots — a table of member name to path — [knowledge] dir — where that root's
+     knowledge store is, relative to the root — and [spec] areas — the words a record's name
+     may open with — are read from the project file only"
+
+   with:
+
+     "[project] roots — a table of member name to path — [knowledge] dir — where that root's
+     knowledge store is, relative to the root — [spec] areas — the words a record's name may
+     open with — and [scout] scanners — the language scanners this repository registers, in
+     the order they run — are read from the project file only"
+
+6. In `provides`, append:
+
+     "A user can have flw rank a repository in a language flw ships no scanner for, by
+     writing one and registering it in [scout] scanners, without editing the flw checkout. A
+     scanner is an executable invoked as <scanner> <root> <budget> that prints one ranking
+     section to stdout and exits 0 when it ranked something, 1 when it refused, 2 when the
+     language's own parser is absent from the target repository, and 3 when it ranked but
+     could not read part of the tree. Registered scanners run after the built-in Python
+     scanner in the order the key lists them, so the sections of a report do not move between
+     runs. A registered path that is missing, unreadable, not executable, absolute, or
+     holding a `..` component is named on stderr and not run, and the run continues with the
+     scanners that work and exits 1, because refusing is not a reason to abandon the rest.
+     An exit 3 prints its section and is reported as a ranking that read only part of the
+     tree."
+
+**In the component named "validation and checks":**
+
+7. In `paths`, remove `"core/scripts/scout.mjs"`.
+
+8. In `provides`, in the statement beginning "A scout says what it did not read", replace
+   "files in languages neither scout parses are counted and named" with "files in languages
+   no registered scanner parses are counted and named, alongside the path of the worked
+   example a project imitates to add one".
+
+9. In `provides`, in the statement beginning "Both scouts rank the file that defines an
+   imported name", replace "Both scouts rank" with "Every scanner flw ships ranks".
+
+10. In `implementation`, delete the two sentences reading:
+
+      "flw's own suite declares one test-time dependency it does not ship — the TypeScript
+      compiler, in package.json — because the TypeScript scout cannot be exercised without a
+      parser; those tests skip by name when it does not resolve. That scout needs the 5.x or
+      6.x compiler API: typescript 7 replaced it with an entry point its own package marks
+      unstable, and is refused by version rather than failed against."
+
+    and replace them with:
+
+      "flw's own suite declares no test-time dependency it does not ship, so a fresh clone
+      runs every test it has. The TypeScript scanner that needed the compiler is now a worked
+      example under core/skills/flw-research/references/, which is read rather than run."
+
+11. In `implementation`, delete the four sentences from "The style checker bans a narrower
+    word list than the style file names." through "the other fails if the style file stops
+    narrowing them." The word list they describe is removed by this record.
+
+**In the component named "the project surface":**
+
+12. In `paths`, remove `"package.json"`.
+
+**In the component named "the skills":**
+
+13. In `provides`, in the statement about a contract recording what shipped, replace
+    "and retiring it is how flw stale --owed stops counting it as work owed" with "and
+    retiring it is how flw validate stops treating it as a record still being written".
+
+14. In `provides`, in the statement beginning "A commit is attributable to a version record
+    from git alone", delete the final sentence reading "flw stale --owed names each commit
+    after the last landing that changes a component's paths outside plans/, and treats one as
+    owed only while no record is in flight."; and in the statement beginning "A record the
+    contract has not applied and a landed record has retired", replace "so the backlog flw
+    stale prints is the work someone still intends to do" with "so a reader can tell a design
+    that turned from work someone still intends to do".
+
+Nothing else changes. `[success_criteria]` is untouched: the declared check
+`.venv/bin/python core/scripts/style_lint.py .` keeps working, because the file half of the
+linter stays.
+'''
+
+[[decisions]]
+topic     = "whether the TypeScript scanner stays in core as a second shipped instance"
+options   = [
+  "keep core/scripts/scout.mjs as a shipped scanner the registry discovers by default, and drop only its tests and the devDependency",
+  "move it to core/skills/flw-research/references/scout-example/ as the worked example a project copies",
+  "delete it outright",
+]
+chosen    = "move it to core/skills/flw-research/references/scout-example/ as the worked example a project copies"
+rationale = '''
+Keeping it shipped keeps TypeScript working with no setup, at 531 lines in core and a default
+nobody can test in a clone: its 17 tests are the only skips in the 856-test suite and they
+skip wherever the `typescript` package is absent. Deleting it outright throws away a working
+second implementation of the contract this record declares, which is the one artifact that
+proves the contract is implementable by someone other than its author. Moving it keeps that
+proof as reference material beside knowledge-example/, which is already the pattern a survey
+reads before writing its own files, and costs a TypeScript repository one research run.
+'''
+
+[[decisions]]
+topic     = "whether a scanner is a printing subprocess or emits data flw folds"
+options   = [
+  "a printing subprocess, which is what scout.mjs already is",
+  "a scanner emits nodes and edges as JSON and flw ranks across every language at once",
+]
+chosen    = "a printing subprocess, which is what scout.mjs already is"
+rationale = '''
+The data contract is the better design and it is a different piece of work: it means
+rewriting scout.py's output path, deciding how two languages' import graphs join when nothing
+in either type system connects them, and owning the ranking for languages flw cannot read.
+The printing contract is what the two scouts do today, so declaring it changes no behaviour
+and leaves the cross-language ranking available later. Choosing it now is choosing not to
+design the harder thing under cover of a trim.
+'''
+
+[[decisions]]
+topic     = "whether to delete core/scripts/style_lint.py whole or only its transcript half"
+options   = [
+  "the whole module, and remove the declared check from success_criteria with it",
+  "only REPLY_RULES and the transcript reader, keeping FILE_RULES and the declared check",
+]
+chosen    = "only REPLY_RULES and the transcript reader, keeping FILE_RULES and the declared check"
+rationale = '''
+The plan's first draft proposed the whole module on the premise that it gates nothing, and the
+premise is false: [success_criteria] tests declares it and .flw/config.toml declares no checks
+key, so it runs on every flw test here. The two halves also differ on exactly the criterion
+this record applies. FILE_RULES is two geometry rules, measured at style_lint.py:6-9 with
+every finding real, needing nothing installed. The transcript half reads one machine's session
+store, which no clone has, and style_lint.py:316 says the figure cannot be re-taken anywhere
+else. Cutting the half that cannot run outside one machine is the cut; cutting the half that
+gates every run would be removing a working check to make a tidier deletion.
+'''
+
+[[decisions]]
+topic     = "one record for the sweep or one per item"
+options   = ["three records, one per item, each moving the contract", "one record with a three-group dag"]
+chosen    = "one record with a three-group dag"
+rationale = '''
+Each item removes a behaviour someone could have relied on, so three records would be three
+major versions for one agreed change, and the contract would read as three unrelated
+reversals rather than one criterion applied three times. One record also gives the criterion
+a single place to live, which matters because it is the part a later session needs and the
+deletions are the part it can read from the diff. The cost is a larger review surface, which
+the dag's groups bound: each group is a phase with its own commit and its own contract edits.
+'''
+
+[[dag]]
+group = 1
+phase = "the scout becomes a primitive with a registry"
+tasks = [
+  { id = "scanner-registry", desc = "cli/flw.py: read [scout] scanners from the project's config file only, resolve each against the project root, and run each after the built-in Python scanner in the order listed. Refuse a path that is absolute, holds a `..` component, is missing, is unreadable or is not executable: name it on stderr, skip it, continue with the rest, and exit 1. Treat a scanner's exit 2 as the language's parser being absent and 3 as a ranking that read only part of the tree, printing the section in both cases and saying which happened — 3 is silent today because only returncode 2 is inspected." },
+  { id = "drop-the-ts-branch", desc = "cli/flw.py:2724-2769: remove the hardcoded TypeScript branch — the four glob patterns, the shutil.which('node') check, the node_modules exclusion, the four-lock-file package-manager guess and the two messages naming typescript. The 'not read' line at :2771-2779 keeps unread_by_scouts and loses the sentence hardcoding two languages, gaining a count by extension and the path of the worked example.", depends_on = ["scanner-registry"] },
+  { id = "move-the-example", desc = "Move core/scripts/scout.mjs to core/skills/flw-research/references/scout-example/scout.mjs with a README beside it stating the scanner contract. Delete tests/test_scout_mjs.py and package.json. tests/test_scout.py:614-617 (test_scout_mjs_has_no_nul_byte) opens the old path and must be retargeted or deleted. Leave .gitignore's node_modules/ and package-lock.json lines alone.", depends_on = ["drop-the-ts-branch"] },
+  { id = "scout-help-and-prose", desc = "cli/flw.py:4315 ('Python and TypeScript only') and the TypeScript epilog at :4339 become a statement about registered scanners and the worked example. core/skills/flw-research/SKILL.md:115-118 loses 'the scout only reads two languages' and gains one sentence on writing and registering a scanner. core/scripts/ledger.py:343's comment stops naming the moved path. Retire or rewrite plans/backlog/typescript-scout-unmeasured.md and plans/backlog/index.md:22. Check flw-research/SKILL.md against core/scripts/budget.py before and after: it is the tightest file in the package.", depends_on = ["move-the-example"] },
+  { id = "scout-contract", desc = "Apply contract edits 5, 6, 7, 8, 9, 10 and 12. Print git diff specs/current.toml on its own.", depends_on = ["scout-help-and-prose"] },
+]
+
+[[dag]]
+group = 2
+phase = "flw stale and the rules that feed it"
+tasks = [
+  { id = "drop-stale", desc = "Delete core/scripts/stale.py and tests/test_stale.py. Delete stale() at cli/flw.py:4023 and its parser block at :4546. Delete tests/test_cli.py:4434, :4459 and the test at :4490-4495, which drive flw stale through main()." },
+  { id = "drop-the-sources-rule", desc = "core/scripts/validate_spec.py: delete the sources rule at :524-535, citation() at :309, DEFAULT_REPORTS at :306, and the reports_dir parameter on check_version (:413) and validate_file (:728) — once the rule is gone nothing in either function reads it. Delete cli/flw.py:2816-2820 and :2875, which resolve and pass [paths] reports only to feed the rule. Delete tests/test_validate_spec.py:493, :501, :524, :550 and the assertion on 'no sources field' at tests/test_cli.py:3755. Keep the sources key in core/schemas/version.schema.json:57: that schema sets additionalProperties false at :7 and ten applied records carry the key, so removing it refuses ten records — restate its description as a field the schema accepts and nothing reads.", depends_on = ["drop-stale"] },
+  { id = "stale-prose", desc = "core/skills/flw-spec/SKILL.md:255-262: delete the 'Specced as' marking rule, whose only reader was stale.py:46. core/skills/flw-research/references/recheck.md:11-14, :38, :69 and flw-research/SKILL.md:320: the re-check input list comes from the ask or from flw know --check, which is already the fallback at :38-39. Remove the flw stale lines from core/shared/context.md:92, README.md:55 and docs/install.md:85.", depends_on = ["drop-the-sources-rule"] },
+  { id = "stale-contract", desc = "Apply contract edits 2, 4, 13 and 14. Print git diff specs/current.toml on its own and check that the three statements at :215, :269 and :272 keep their subject and lose only the clause naming the command.", depends_on = ["stale-prose"] },
+]
+
+[[dag]]
+group = 3
+phase = "the transcript half of the linter"
+tasks = [
+  { id = "drop-reply-rules", desc = "core/scripts/style_lint.py: delete REPLY_RULES at :73 and the transcript reader at :243-435 — reply_findings, session_transcripts, read_replies, recent_replies and verdict. Keep FILE_RULES, findings(), walk(), report() and the module's exit-2-on-unreadable-target behaviour, which specs/current.toml:193 states and which stays. Rewrite the module docstring: it currently explains the two-corpus split, and only one corpus is left." },
+  { id = "drop-style-check", desc = "cli/flw.py: delete style_check() at :1254 and the style check parser entry. Keep style_lint() at :1230. Delete the eleven transcript tests in tests/test_style_lint.py and tests/test_cli.py:4532, :4546, :4561, :4573.", depends_on = ["drop-reply-rules"] },
+  { id = "style-prose-and-contract", desc = "core/skills/flw-style/SKILL.md: delete :12 and :51, the two sentences pointing at flw style check; :111's pointer at flw style lint stays because the command does. Apply contract edits 1, 3 and 11. Print git diff specs/current.toml on its own and confirm [success_criteria] is unchanged.", depends_on = ["drop-style-check"] },
+  { id = "run-the-declared-check", desc = "Run flw test --no-stream, which runs .venv/bin/python core/scripts/style_lint.py . as a declared check, and .venv/bin/pytest, which must report zero skips after group 1. Then flw validate over the contract and all 77 records, flw doctor, and flw know --check — correcting and re-stamping each knowledge file this sweep's commits falsified, after each commit rather than before it. The baseline is already 1 changed at 234c6ba (flw.md, +267 −0, this plan landing), so zero changed is not the target.", depends_on = ["style-prose-and-contract"] }
+]
