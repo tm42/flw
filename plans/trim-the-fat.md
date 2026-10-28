@@ -52,7 +52,7 @@ subtraction.
 ## 1. The scout becomes a primitive with a registry
 
 **Today it is two shipped special cases.** `core/scripts/scout.py` ranks Python,
-`core/scripts/scout.mjs` ranks TypeScript, and `cli/flw.py:2724-2769` runs them one after the
+`core/scripts/scout.mjs` ranks TypeScript, and `cli/flw.py:2727-2767` holds the second one after the
 other with the TypeScript branch hardcoded: four glob patterns, a `shutil.which("node")`
 check, a `node_modules` exclusion, a package-manager guess across four lock files, and two
 error messages naming `typescript`. A repository in a third language gets
@@ -92,24 +92,45 @@ shipped code, so its 17 tests go with it, and `package.json` and `node_modules/`
 TypeScript repository gets a scanner by having `/flw-research` copy and register that example
 — once, in that repository.
 
-### What the registry must specify, because an implementer would otherwise guess
+### The clause that is not satisfied today
 
-- **Resolution order.** Scanners run in the order `[scout] scanners` lists them, after the
-  built-in Python scanner. Deterministic order matters because the output is concatenated
-  sections and a report whose sections move between runs cannot be diffed.
-- **A registered path that is missing, unreadable or not executable** is reported by name on
-  stderr and the run continues with the scanners that work. It is a refusal, so the run exits
-  1 — the same shape `install` and `sync` already use, where refusing does not stop the rest.
-- **A path escaping the root** — any `..` component, or an absolute path — is refused before
-  execution, named on stderr, and never run. The config file is in the repository, so a
-  scanner path is a repository-relative path by construction.
-- **The "files I have no scanner for" line** keeps today's mechanism: `unread_by_scouts(root,
-  engine.SKIP | ...)` at `cli/flw.py:2771-2779`. What changes is the sentence, which today
-  hardcodes "parses Python and TypeScript only" — it becomes a count by extension plus the
-  path of the example to imitate.
-- **Exit 3 from a scanner** is a ranking that is incomplete, so the section prints and the run
-  reports it; today `cli/flw.py` only inspects returncode 2, and `scout.mjs:250` sets 3, so
-  that state is currently silent. Naming it in the contract is the fix.
+**Neither scanner refuses.** On an empty directory `core/scripts/scout.py <dir> 20` prints
+`no python found` and exits 0; `scout.mjs` prints `0 ts files (0 test), 0 exported definitions`
+and exits 0. Whether a language is present at all is decided in the CLI — `engine.sources(root)`
+at `cli/flw.py:2718` and an rglob over four extensions at `:2727-2732` — which cannot answer for
+a language the CLI has never heard of. So each scanner gains exit 1 for "this repository holds
+no file of my language", and both CLI gates go. That also removes a duplication the comment at
+`:2713-2717` already records: the rglob "cost most of the run and answered differently",
+because it descends into directories the engine prunes.
+
+### Six things an implementer would otherwise guess
+
+- **The built-in always runs, first, and is never listed.** This settles three questions at
+  once. It needs no path spelling inside the checkout, so "relative to the root, not absolute,
+  no `..`" can be the rule for every entry a project writes; the project's list adds scanners
+  rather than replacing them, so registering a Go scanner never silently stops Python being
+  ranked; and it stays in-process, so `unread_by_scouts` at `cli/flw.py:2661-2680` keeps
+  reading `scout.SKIP`. `[tests] checks` works the other way — the project's list is the whole
+  list — because a check list is the definition of done and wholly the project's, while a
+  scanner list is a capability set that a project gains nothing by subtracting from.
+- **An entry declares its suffixes**, as a table of a path and its extensions.
+  `unread_by_scouts` counts suffixes in the fixed `CODE_EXTENSIONS` allowlist at
+  `cli/flw.py:2653-2658`, which omits `.py` and `.ts` by construction. Once the CLI no longer
+  knows which languages ran, a bare path leaves a registered Go scanner's `.go` files in that
+  count and the line reads `16 .go not read` about files it just ranked.
+- **A registered path that is missing, unreadable, not executable, absolute or holding a `..`
+  component** is named on stderr and not run, and the run continues with the scanners that
+  work.
+- **`flw scout` exits** 0 when any scanner ranked something and 1 when none did. A scanner's 2
+  is named and does not by itself fail a run another scanner ranked, which is what the CLI does
+  today. Exit 3 prints its section and is reported; `scout.mjs:250` sets it and the CLI inspects
+  only returncode 2, so that state is silent today.
+- **A path argument reads no project config.** `cli/flw.py:2692-2694` resolves it with no
+  project lookup and `specs/current.toml:150` forbids walking upward, so only the built-in runs
+  there.
+- **The package-manager guess** across four lock files at `cli/flw.py:2745-2762` moves into the
+  worked example. Only a Node scanner needs it, and the CLI cannot guess for a language it does
+  not know.
 
 ### Edits beyond the obvious, found by review
 
@@ -184,9 +205,10 @@ Removed:
   `:550` asserts flw's own records are never refused by it — and `tests/test_cli.py:3755`
   asserts "no sources field" in stderr. `tests/test_cli.py:4434`, `:4459` and `:4490-4495`
   drive `flw stale` through `main()`.
-- the `Specced as` marking rule at `core/skills/flw-spec/SKILL.md:255-262`, which writes a
-  mark whose only reader is `stale.py:46`
-- the `flw stale` lines in `core/shared/context.md:92`, `README.md:55`, `docs/install.md:85`,
+- the `Specced as` marking rule at `core/skills/flw-spec/SKILL.md:259-265` — the mark,
+  whose only reader is `stale.py:46`, and the instruction at `:263-265` to name those report
+  paths in the record's `sources` field, which nothing reads after this
+- the `flw stale` lines in `core/shared/context.md:55`, `README.md:56`, `docs/install.md:85`,
   `recheck.md:11-14`, `:38`, `:69` and `flw-research/SKILL.md:320`
 
 **Stays, and this is a hard constraint.** The `sources` key in
@@ -258,7 +280,8 @@ report". Nothing in core needs to know what the rules are.
   `validate_spec.py:699`, so deleting it leaves one entry and nothing testing that dispatch
   works at all.
 - **`docs/measuring.md`** — proposed for deletion in the first draft and wrong. Four live
-  readers: `core/scripts/store.py:73` cites its protocol, `README.md:134` lists it, and
+  readers: `core/scripts/store.py:73` cites its protocol, `README.md:134` and `docs/layout.md:32` list it,
+  and
   `plans/backlog/store-holds-every-body-in-memory.md:14`,
   `plans/backlog/scout-at-monorepo-scale.md:14` and
   `plans/backlog/unwritten-note-offers.md:13` depend on it. It is itself a primitive — a fixed
@@ -314,18 +337,26 @@ Items 2 and 3 both touch `specs/current.toml`, so apply each contract edit on it
   command working, not merely leave the file present.
 - `flw doctor` reports no orphans and no stale links.
 - `flw know --check` reports changed only for files this sweep's own commits falsified, each
-  corrected and re-stamped under the correction carve-out at the commit that falsified it.
-  **Not zero:** the baseline at `234c6ba` is already 1 changed — `flw.md`, `+267 −0`, which is
-  this plan file landing. `core/scripts/scripts.md` and `tests/tests.md` will both read changed
-  once items 1 to 3 land.
+  corrected and re-stamped under the correction carve-out at the commit that falsified it, not
+  before it. Seven of the eight stamped files will read changed, not two: `cli/cli.md:19` and
+  `:50` name `style_lint` and `scout.mjs`, `tests/tests.md:23` lists `test_stale.py` and
+  `test_style_lint.py`, `core/scripts/scripts.md:73`, `:83` and `:95` name `scout.mjs`,
+  `stale.py` and `style_lint.py`, `core/skills/skills.md:47` names `flw style check`,
+  `core/shared/shared.md` covers `context.md`, `specs/specs.md` carries the record count, and
+  `flw.md:27` says `node_modules/` exists so `core/scripts/scout.mjs` can be exercised. Only
+  `core/schemas/schemas.md` is untouched, because its `:19` claim that `spec-v3.schema.json` is
+  kept stays true.
 - Byte budgets in `core/scripts/budget.py` all under ceiling. Item 1 adds a sentence to
-  `flw-research/SKILL.md`, which is the tightest file in the package, and removes two others
-  from it; check that file's budget before and after rather than assuming it nets out.
+  `flw-research/SKILL.md` at 19,401 / 21,000 and removes two others from it; item 2 removes
+  `:259-265` from `flw-spec/SKILL.md`, which at 20,430 / 21,000 is the tightest file in the
+  package, so that is where the tightest one gains room.
 
 ## Totals, if everything lands
 
 About 2,393 lines of code and tests deleted against roughly 60 added for the scanner registry,
-plus 531 relocated from shipped code to reference material. Around 86 tests gone from 856. Two
+plus 531 relocated from shipped code to reference material. Around 118 tests gone from 856 — 17 + 46 + 39 in the three
+dedicated files, plus about 16 scattered through `tests/test_cli.py`,
+`tests/test_validate_spec.py` and `tests/test_scout.py`. Two
 subcommands removed from 19 — `flw stale` and `flw style check`. One devDependency,
 `package.json` and `node_modules/` gone. Zero skips in a fresh clone's test run. One capability
 moves from shipped to extensible: ranking a language other than Python becomes something a
