@@ -139,7 +139,7 @@ measured, they were right about the corpus they read, and that corpus is one mac
 '''
 
 contract_edit = '''
-Fourteen edits, grouped by component.
+Twenty-three edits, grouped by component.
 
 **In final_state.components, the component named "the flw CLI":**
 
@@ -237,6 +237,73 @@ Fourteen edits, grouped by component.
     contract has not applied and a landed record has retired", replace "so the backlog flw
     stale prints is the work someone still intends to do" with "so a reader can tell a design
     that turned from work someone still intends to do".
+
+**Nine more, each a statement that survives the fourteen above and describes something this
+record deletes. A grep for `stale`, `sources`, `reports directory`, `transcript` and
+`style check` over the edited contract finds every one of them, and the tests that pinned the
+rule two of them state are deleted in the same group, so nothing would catch them.**
+
+15. In the component named "the flw CLI", `provides`, delete the whole statement beginning
+    "A user can ask which of the project's own documents are spent" and ending "an uncited one
+    is a backlog item rather than refuse." That is `flw stale`'s capability.
+
+16. In the same component, `provides`, delete the whole statement beginning "A user can ask
+    what the agent's own recent replies broke in that style" and ending "works whether or not
+    a transcript exists." That is `flw style check`'s capability. What its last clause says —
+    that the file-checking half works without a transcript — survives as the plain fact that
+    `flw style lint` is the only half left.
+
+17. In the component named "validation and checks", `paths`, remove
+    `"core/scripts/stale.py"`.
+
+18. In the same component, `provides`, delete the whole statement beginning "A review report a
+    version record has acted on is distinguishable from one nobody has read" and ending
+    "because a citation is not evidence a file exists." Both halves of that fold are deleted
+    by this record: the `sources` reader and the `Specced as` mark.
+
+19. In the same component, `provides`, delete the whole statement beginning "flw validate
+    refuses a version record the contract has not applied when its summary, approach or
+    contract_edit names a path under the reports directory" and ending "binds the record being
+    written and none already landed."
+
+20. In the same component, `provides`, in the statement beginning "A user can validate a
+    contract or a record in another project by naming its path", replace:
+
+      "the record set it is part of, that project's applied list and its own declared reports
+      directory"
+
+    with:
+
+      "the record set it is part of and that project's applied list"
+
+    because `flw validate` stops reading `[paths] reports` when the rule in edit 19 goes.
+
+21. In the component named "the schemas", `provides`, replace the whole statement beginning "A
+    version record may name the review reports it came from in a sources field" with:
+
+      "A version record may still carry a sources field naming the review reports it came
+      from, which the schema accepts so that every record written while the field was required
+      keeps validating. Nothing reads it: the fold from a report to the record that acted on it
+      is not maintained, and flw-spec no longer instructs a record to fill it."
+
+22. In the component named "the project surface", `provides`, in the statement beginning "A
+    team can adopt flw on a repository that already ships without writing a contract first",
+    remove `the staleness fold, ` from the list reading "the scout, the knowledge store, the
+    note store, the staleness fold, a survey, a review and the project's own checks".
+
+23. In the component named "the skills", `provides`, in the statement beginning "A user can
+    name a writing failure they have just seen", replace:
+
+      "and the transcript-reading command is a fallback for turns the context no longer holds
+      rather than the skill's entry point — so the skill works on a host that writes no session
+      record"
+
+    with:
+
+      "and the skill reads its own recent turns rather than any file a host wrote, so it works
+      on every host"
+
+    because the transcript-reading command is deleted while the skill is not.
 
 Nothing else changes. `[success_criteria]` is untouched: the declared check
 `.venv/bin/python core/scripts/style_lint.py .` keeps working, because the file half of the
@@ -364,10 +431,10 @@ the dag's groups bound: each group is a phase with its own commit and its own co
 group = 1
 phase = "the scout becomes a primitive with a registry"
 tasks = [
-  { id = "scanners-refuse", desc = "core/scripts/scout.py: exit 1 where it today prints 'no python found' and exits 0, so a scanner answers 'this repository holds no file of my language' by exit code. Keep the sentence it prints. Add a test asserting all four exit codes through scout.py's own command line at :691-693, which is what makes core's shipped scanner a working instance of the contract rather than a privileged special case. Do the same for the TypeScript script before it moves, so the worked example carries the behaviour it documents." },
+  { id = "scanners-refuse", desc = "core/scripts/scout.py: under __main__ at :691-693, exit 1 where it today prints 'no python found' (:483-485) and exits 0, so a scanner invoked as a subprocess answers 'this repository holds no file of my language' by exit code. Keep the sentence it prints and do not change what scout.scout() returns: in-process, the built-in's own answer to that question is scout.sources(root) at :152, which is the module walking for its own language rather than the CLI guessing at it. Add a test asserting all four exit codes through scout.py's command line, which is what makes core's shipped scanner a working instance of the contract rather than a privileged special case. Do the same for the TypeScript script before it moves, so the worked example carries the behaviour it documents." },
   { id = "scanner-registry", desc = "cli/flw.py: read [scout] scanners from the project's config file only — a list of tables, each a path and the file suffixes that scanner reads. Run the built-in Python scanner first, in-process as today, then each registered scanner as a subprocess invoked as <scanner> <root> <budget>, in the order listed. The built-in is never listed and the project's list adds to it. Name on stderr and do not run a path that is absolute, holds a `..` component, is missing, is unreadable or is not executable. Fold the exits: 0 when any scanner ranked something, 1 when none did; a scanner's 2 is named and does not by itself fail a run another scanner ranked; a 3 prints its section and is reported as a ranking that read only part of the tree, which is silent today because only returncode 2 is inspected. A path argument reads no project config, because cli/flw.py:2692-2694 resolves it without a project lookup and specs/current.toml:150 forbids walking upward, so only the built-in runs there.", depends_on = ["scanners-refuse"] },
-  { id = "drop-the-gates", desc = "cli/flw.py: remove the two places the CLI decides whether a language is present — the engine.sources(root) gate at :2718 and the rglob over four extensions at :2727-2732 — because neither can answer for a language the CLI has never heard of, and the comment at :2713-2717 already records that the rglob cost most of the run and answered differently. Then remove the rest of the hardcoded TypeScript branch at :2727-2767: the shutil.which('node') check, the node_modules exclusion, the four-lock-file package-manager guess at :2745-2762 and the two messages naming typescript. The package-manager hint moves into the worked example, since only a Node scanner needs it.", depends_on = ["scanner-registry"] },
-  { id = "unread-by-declared-suffix", desc = "cli/flw.py:2769-2788: the 'not read' message at :2769-2777 keeps unread_by_scouts at :2661-2680 and subtracts every suffix a scanner declares, instead of relying on CODE_EXTENSIONS at :2653-2658 omitting .py and .ts by construction — otherwise a registered Go scanner leaves .go in the list and the line reads '16 .go not read' about files it just ranked. The message loses the sentence hardcoding two languages and names the worked example's path. The no-language error at :2779-2788 becomes the exit-1 fold. unread_by_scouts keeps reading scout.SKIP, which is why the built-in stays in-process.", depends_on = ["drop-the-gates"] },
+  { id = "drop-the-gates", desc = "cli/flw.py: remove the rglob over four TypeScript extensions at :2727-2732, which is the CLI standing in for a scanner that should answer for itself, and which the comment at :2713-2717 already records as costing most of the run and answering differently because it descends into directories the engine prunes. Keep the engine.sources(root) gate at :2720: that is scout.py's own walk for its own language, and it is how the in-process built-in reports that it ranked nothing — a registered scanner reports the same thing by exiting 1. Then remove the rest of the hardcoded TypeScript branch at :2727-2767: the shutil.which('node') check, the node_modules exclusion, the four-lock-file package-manager guess at :2745-2762 and the two messages naming typescript. The package-manager hint moves into the worked example, since only a Node scanner needs it.", depends_on = ["scanner-registry"] },
+  { id = "unread-by-declared-suffix", desc = "cli/flw.py:2769-2788: the 'not read' message at :2769-2777 keeps unread_by_scouts at :2661-2680 and subtracts every suffix a scanner declares, instead of relying on CODE_EXTENSIONS at :2653-2658 omitting .py and .ts by construction — otherwise a registered Go scanner leaves .go in the list and the line reads '16 .go not read' about files it just ranked. Add .ts, .tsx, .mts and .cts to CODE_EXTENSIONS in the same edit: the set holds .js, .jsx, .mjs, .cjs, .vue and .svelte and no TypeScript suffix, because the TypeScript scout covered them, so without this a TypeScript repository with nothing registered gets neither a ranking section nor a not-read count — the silent miss the provides at specs/current.toml:256 exists to prevent. The message loses the sentence hardcoding two languages and names the worked example's path. The no-language error at :2779-2788 becomes the exit-1 fold. unread_by_scouts keeps reading scout.SKIP, which is why the built-in stays in-process.", depends_on = ["drop-the-gates"] },
   { id = "move-the-example", desc = "Move core/scripts/scout.mjs to core/skills/flw-research/references/scout-example/scout.mjs with a README beside it stating the scanner contract and carrying the package-manager hint. Delete tests/test_scout_mjs.py and package.json. tests/test_scout.py:614-617 (test_scout_mjs_has_no_nul_byte) opens the old path and must be retargeted or deleted. Leave .gitignore's node_modules/ and package-lock.json lines alone.", depends_on = ["unread-by-declared-suffix"] },
   { id = "scout-help-and-prose", desc = "cli/flw.py:4315 ('Python and TypeScript only') and the TypeScript epilog at :4339 become a statement about registered scanners and the worked example. core/skills/flw-research/SKILL.md:115-118 loses 'the scout only reads two languages' and gains one sentence on writing and registering a scanner. core/scripts/ledger.py:343's comment stops naming the moved path. Retire or rewrite plans/backlog/typescript-scout-unmeasured.md and plans/backlog/index.md:22. Check flw-research/SKILL.md against core/scripts/budget.py before and after — it stands at 19401/21000, so the sentence fits, but the file is one of the two tightest.", depends_on = ["move-the-example"] },
   { id = "scout-contract", desc = "Apply contract edits 5, 6, 7, 8, 9, 10 and 12. Print git diff specs/current.toml on its own.", depends_on = ["scout-help-and-prose"] },
@@ -378,7 +445,7 @@ group = 2
 phase = "flw stale and the rules that feed it"
 tasks = [
   { id = "drop-stale", desc = "Delete core/scripts/stale.py and tests/test_stale.py. Delete stale() at cli/flw.py:4023 and its parser block at :4546. Delete tests/test_cli.py:4434, :4459 and the test at :4490-4495, which drive flw stale through main()." },
-  { id = "drop-the-sources-rule", desc = "core/scripts/validate_spec.py: delete the sources rule at :524-535, citation() at :309, DEFAULT_REPORTS at :306, and the reports_dir parameter on check_version (:413) and validate_file (:728) — once the rule is gone nothing in either function reads it. Delete cli/flw.py:2816-2820 and :2875, which resolve and pass [paths] reports only to feed the rule. Delete tests/test_validate_spec.py:493, :501, :524, :550 and the assertion on 'no sources field' at tests/test_cli.py:3755. Keep the sources key in core/schemas/version.schema.json:57: that schema sets additionalProperties false at :7 and ten applied records carry the key, so removing it refuses ten records — restate its description as a field the schema accepts and nothing reads.", depends_on = ["drop-stale"] },
+  { id = "drop-the-sources-rule", desc = "core/scripts/validate_spec.py: delete the sources rule at :524-535, citation() at :309, DEFAULT_REPORTS at :306, and the reports_dir parameter on check_version (:413) and validate_file (:728) — once the rule is gone nothing in either function reads it. Delete cli/flw.py:2816-2820 and :2875, which resolve and pass [paths] reports only to feed the rule. Delete tests/test_validate_spec.py:493, :501, :524, :550 and the assertion on 'no sources field' at tests/test_cli.py:3755. Keep the sources key in core/schemas/version.schema.json:57: that schema sets additionalProperties false at :7 and ten applied records carry the key, so removing it refuses ten records — restate its description at :64, which today ends 'flw stale reads it, falling back to a regex over the record's prose for the records that carry none', as a field the schema accepts and nothing reads. Restate the retires description at :73 too: it says 'so flw stale reports them as retired rather than as work the project still owes', and retires keeps a reader after this at validate_spec.py:455, which uses it to decide whether a record is unsettled, and at :614, which validates the retires graph.", depends_on = ["drop-stale"] },
   { id = "stale-prose", desc = "core/skills/flw-spec/SKILL.md:259-265: delete the 'Specced as' marking rule, whose only reader was stale.py:46, and with it the instruction at :263-265 to name those report paths in the record's sources field — the key stays in the schema only so ten applied records keep validating, and instructing an agent to fill a field nothing reads is busywork the record would have to keep explaining. flw-spec/SKILL.md is the tightest file against core/scripts/budget.py at 20430/21000, so this is where group 2 gives it room. core/skills/flw-research/references/recheck.md:11-14, :38, :69 and flw-research/SKILL.md:320: the re-check input list comes from the ask or from flw know --check, which is already the fallback at :38-39. Remove the flw stale lines from core/shared/context.md:55, README.md:56 and docs/install.md:85.", depends_on = ["drop-the-sources-rule"] },
   { id = "stale-contract", desc = "Apply contract edits 2, 4, 13 and 14. Print git diff specs/current.toml on its own and check that the three statements at :215, :269 and :272 keep their subject and lose only the clause naming the command.", depends_on = ["stale-prose"] },
 ]
