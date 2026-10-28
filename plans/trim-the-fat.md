@@ -12,6 +12,12 @@ instance into the project's own `.flw/`, once, when that project needs it.
 
 This is not a rule against shipping code. It is a rule about where a second instance goes.
 
+**Revision history.** The first draft of this plan carried six items. A review at `a8b73ec`
+found that three of them were wrong: item 4 reversed a recorded decision whose rationale names
+the thing the draft missed, item 5 deleted a protocol four live readers depend on, and item 6's
+own go/no-go check fails. All three are now under "Assessed and kept", with the evidence, so a
+later round does not re-propose them. Item 3 was wrong in the other direction and got smaller.
+
 ## Why now, and what the evidence is worth
 
 Measured 2026-10-28 over 552 Claude Code session transcripts under `~/.claude/projects`
@@ -38,7 +44,7 @@ below is argued from what it costs and what consumes its output.
 ## What this sweep adds
 
 One mechanism, because the primitive question turns the scout from a cut into a contract:
-a `[scout] scanners` key and the lookup that reads it. Everything else in the sweep is
+a `[scout] scanners` key and the lookup that reads it, about 60 lines. Everything else is
 subtraction.
 
 ---
@@ -46,10 +52,10 @@ subtraction.
 ## 1. The scout becomes a primitive with a registry
 
 **Today it is two shipped special cases.** `core/scripts/scout.py` ranks Python,
-`core/scripts/scout.mjs` ranks TypeScript, and `cli/flw.py:2718-2790` runs them one after the
+`core/scripts/scout.mjs` ranks TypeScript, and `cli/flw.py:2724-2769` runs them one after the
 other with the TypeScript branch hardcoded: four glob patterns, a `shutil.which("node")`
 check, a `node_modules` exclusion, a package-manager guess across four lock files, and two
-error messages naming `typescript` by name. A repository in any third language gets
+error messages naming `typescript`. A repository in a third language gets
 `error: no Python or TypeScript found` and a pointer to `aider --show-repo-map`. Adding Go
 means editing flw.
 
@@ -59,9 +65,9 @@ every fresh clone — plus `package.json`, which exists for nothing else and say
 description, plus `node_modules/`.
 
 **The contract already exists, unnamed.** `scout.mjs` is a subprocess taking
-`<root> <budget>`, printing a finished ranking section to stdout, and exiting 0 for a
-ranking, 2 for "the parser this language needs is not installed here", 3 for a walk that hit
-an unreadable directory. Nothing is passed back as data: the two reports are concatenated.
+`<root> <budget>`, printing a finished ranking section to stdout, and exiting 0 for a ranking,
+2 for "the parser this language needs is not installed here", 3 for a walk that hit an
+unreadable directory. Nothing is passed back as data: the two reports are concatenated.
 Naming that contract is the whole change.
 
 **A scanner is:** an executable file, invoked as `<scanner> <root> <budget>`, printing one
@@ -86,17 +92,52 @@ shipped code, so its 17 tests go with it, and `package.json` and `node_modules/`
 TypeScript repository gets a scanner by having `/flw-research` copy and register that example
 — once, in that repository.
 
-`flw scout` with files it has no scanner for says how many and of what extension, and names
-the example to imitate. That replaces `cli/flw.py:2771-2790`, where the same sentence is
-hardcoded to two languages.
+### What the registry must specify, because an implementer would otherwise guess
+
+- **Resolution order.** Scanners run in the order `[scout] scanners` lists them, after the
+  built-in Python scanner. Deterministic order matters because the output is concatenated
+  sections and a report whose sections move between runs cannot be diffed.
+- **A registered path that is missing, unreadable or not executable** is reported by name on
+  stderr and the run continues with the scanners that work. It is a refusal, so the run exits
+  1 — the same shape `install` and `sync` already use, where refusing does not stop the rest.
+- **A path escaping the root** — any `..` component, or an absolute path — is refused before
+  execution, named on stderr, and never run. The config file is in the repository, so a
+  scanner path is a repository-relative path by construction.
+- **The "files I have no scanner for" line** keeps today's mechanism: `unread_by_scouts(root,
+  engine.SKIP | ...)` at `cli/flw.py:2771-2779`. What changes is the sentence, which today
+  hardcodes "parses Python and TypeScript only" — it becomes a count by extension plus the
+  path of the example to imitate.
+- **Exit 3 from a scanner** is a ranking that is incomplete, so the section prints and the run
+  reports it; today `cli/flw.py` only inspects returncode 2, and `scout.mjs:250` sets 3, so
+  that state is currently silent. Naming it in the contract is the fix.
+
+### Edits beyond the obvious, found by review
+
+- `tests/test_scout.py:614-617`, `test_scout_mjs_has_no_nul_byte`, opens
+  `core/scripts/scout.mjs` by path and fails once the file moves.
+- `specs/current.toml:239` lists `core/scripts/scout.mjs` in a component's `paths`, `:322`
+  lists `package.json` in another's. `flw validate` does not check that a declared path
+  exists, so both drift silently rather than fail — which is why they need naming here.
+- `specs/current.toml:308` describes the `typescript` devDependency, the skip-by-name and the
+  TypeScript-7 refusal. `:256` says "files in languages neither scout parses" and `:285`
+  "Both scouts rank the file that defines an imported name".
+- `cli/flw.py:4315` says "Python and TypeScript only" in `scout --help`, `:4339` opens the
+  TypeScript epilog, and `:2778` and `:2784` are the two sentences naming both languages.
+- `core/skills/flw-research/SKILL.md:115-118` — "The scout's external-dependency list for
+  TypeScript" and "the scout only reads two languages".
+- `plans/backlog/typescript-scout-unmeasured.md` and `plans/backlog/index.md:22` describe a
+  shipped file; retire or rewrite both.
+- `core/scripts/ledger.py:343` is a comment naming the path.
+- `.gitignore` keeps `node_modules/` and `package-lock.json`; harmless once gone, so leave
+  them or drop them, but say which.
 
 **Lost.** TypeScript stops working out of the box. A TS repository needs one research run
-before `flw scout` covers it. Accepted: the five projects that use flw hold 5 TypeScript
-files between them — 4 in `apps/mortgauge`, 1 in `punto`, 0 in the other three — and the cost
-today is 928 lines, a devDependency and every clone's test run reporting skips.
+before `flw scout` covers it. Accepted: the five projects that use flw hold 5 TypeScript files
+between them — 4 in `apps/mortgauge`, 1 in `punto`, 0 in the other three — and the cost today
+is 928 lines, a devDependency and every clone's test run reporting skips.
 
-**The alternative, for the review to weigh.** Keep `scout.mjs` in `core/scripts/` as a second
-shipped instance that the registry discovers by default, and drop only its tests and the
+**The alternative, for the second review to weigh.** Keep `scout.mjs` in `core/scripts/` as a
+second shipped instance the registry discovers by default, and drop only its tests and the
 devDependency. That keeps TypeScript working with no research run, at 531 lines in core and a
 default that cannot be reproduced in a clone's tests.
 
@@ -109,27 +150,44 @@ a file carries the revision it was true at, and a command says what moved since.
 `core/scripts/stale.py` applies the same idea to four more stores, and each needed its own
 bespoke reader: review reports by filename stamp, extension claims by a regex for countables,
 notes by frontmatter, records by citation. None of it is extensible — a project with its own
-kind of document cannot add a reader without editing flw — and nothing consumes the result.
-Run here today it prints 57 unread review reports, 35 dead citations, 8 knowledge files, 4
-extensions with 6 undated claims, and exits 0. Nothing branches on any of it.
-`plans/design-the-loop.md` §4.3 records the same finding from the other side: `flw know
---check`, `flw stale` and `flw validate` all exit 0 over files that disagree with the tree.
+kind of document cannot add a reader without editing flw. Run here today it prints 57 unread
+review reports, 35 dead citations, 8 knowledge files, 4 extensions with 6 undated claims, and
+exits 0. `plans/design-the-loop.md` §4.3 records the same finding from the other side:
+`flw know --check`, `flw stale` and `flw validate` all exit 0 over files that disagree with
+the tree.
+
+**Correction to the first draft.** "Nothing consumes the result" is wrong. `flw-research`'s
+re-check mode documents `flw stale`'s output as its input:
+`core/skills/flw-research/references/recheck.md:14` — "`flw stale` is what produces such a
+list"; `:38` — "Take the paths. From the ask, or from `flw stale`, or — given neither — from
+`flw know --check`"; `:69`; and `core/skills/flw-research/SKILL.md:320`. The mode survives
+because the `flw know --check` fallback at `:38-39` already covers the knowledge-file case,
+which is the only case with a reader. The three prose sites become two: the ask, or
+`flw know --check`.
 
 Removed:
 
 - `core/scripts/stale.py` — 565 lines
 - `tests/test_stale.py` — 852 lines, 46 tests
 - `stale()` at `cli/flw.py:4023` — 71 lines — and its parser block at `cli/flw.py:4546`
+- `cli/flw.py:2816-2820` and `:2875`, which resolve and pass `[paths] reports` only to feed
+  the validate rule below
 - the `flw stale [--root PATH] [--owed]` surface line in the contract
 - `flw validate`'s sources rule at `core/scripts/validate_spec.py:524-535`, which refuses an
   unapplied record whose prose cites a report path and carries no `sources` list. It refuses
   that only so `stale.py:103` can read the list.
-- `DEFAULT_REPORTS` at `validate_spec.py:306` and `citation()` at `:309`, once the rule above
-  and `stale.py` are gone. `validate_spec.py:339`, `:413` and `:728` also pass
-  `DEFAULT_REPORTS`, so trace each before deleting the constant.
+- `DEFAULT_REPORTS` at `validate_spec.py:306` and `citation()` at `:309`, plus the
+  `reports_dir` parameter on `check_version` (`:413`) and `validate_file` (`:728`). Traced:
+  `:339` and `:342` are inside `citation()` and go with it; once the rule at `:524-535` is
+  gone, nothing in either function reads `reports_dir`. No reader survives.
+- `tests/test_validate_spec.py:493`, `:501`, `:524`, `:550` test the sources rule directly —
+  `:550` asserts flw's own records are never refused by it — and `tests/test_cli.py:3755`
+  asserts "no sources field" in stderr. `tests/test_cli.py:4434`, `:4459` and `:4490-4495`
+  drive `flw stale` through `main()`.
 - the `Specced as` marking rule at `core/skills/flw-spec/SKILL.md:255-262`, which writes a
   mark whose only reader is `stale.py:46`
-- the `flw stale` lines in `core/shared/context.md:92`, `README.md:55` and `docs/install.md:85`
+- the `flw stale` lines in `core/shared/context.md:92`, `README.md:55`, `docs/install.md:85`,
+  `recheck.md:11-14`, `:38`, `:69` and `flw-research/SKILL.md:320`
 
 **Stays, and this is a hard constraint.** The `sources` key in
 `core/schemas/version.schema.json:57`. That schema sets `additionalProperties: false` at `:7`
@@ -140,76 +198,83 @@ reads, and its description says so.
 **Lost.** The one command that folds every store's staleness into one answer, and the
 report-to-record mapping. `plans/design-the-loop.md` §6.2 treats `flw stale --owed` as the
 answer to "is the loop closed", so this closes that design off rather than deferring it. That
-is the real cost of this cut, accepted rather than overlooked: if staleness is ever wanted
-with teeth, the way back is a check in `[tests] checks` that exits non-zero, not a reporting
-command that exits 0.
+is the real cost, accepted rather than overlooked: if staleness is ever wanted with teeth, the
+way back is a check in `[tests] checks` that exits non-zero, not a reporting command that
+exits 0.
 
-## 3. `flw style lint` and `flw style check` are a frozen partial copy of the style file
+## 3. `flw style check` and the transcript half of the linter
 
-**The primitive is the prose.** `core/styles/terse_prose.md` is read by every agent in every
-session and is the extension point already: a project installs its own style by name, under
-`~/.flw/styles/<name>.md`.
+**The first draft had this backwards.** It claimed neither style command gates anything.
+`specs/current.toml` declares `.venv/bin/python core/scripts/style_lint.py .` in
+`[success_criteria] tests`, and `.flw/config.toml` has no `checks` key on purpose — its comment
+says every contract check runs here — so `flw style lint` runs on every `flw test`. Reading
+the module, the two halves are not alike:
 
-`core/scripts/style_lint.py` is a fixed set of regex rules that reimplements part of that file
-and cannot be extended from a project. It is also partial on purpose: its evaluative-word
-rules deliberately never run against files, only against session transcripts, so that rule
-class is unenforced in every repository. `flw style check` reads one machine's session store,
-which no clone has. Neither gates anything — both print and exit.
+- **`FILE_RULES` stays.** Two geometry rules: a heading deeper than `###`, and trailing double
+  spaces that become a `<br>` in a file. `style_lint.py:6-9` records them as measured with
+  every finding real. They run anywhere, need nothing installed, and gate every `flw test`.
+  Keeping them keeps the declared check, so no edit to `success_criteria` is needed.
+- **`REPLY_RULES` and the transcript reader go.** `style_lint.py:243-435` —
+  `reply_findings`, `session_transcripts`, `read_replies`, `recent_replies`, `verdict`, about
+  255 lines — read one machine's session store, which no clone has. `style_lint.py:316` says
+  so itself: "the corpus is one machine's session store, so the figure cannot be re-taken
+  anywhere else". Nothing gates on it.
 
 Removed:
 
-- `core/scripts/style_lint.py` — 454 lines
-- `tests/test_style_lint.py` — 484 lines, 39 tests
-- `style_check()` in `cli/flw.py` — 111 lines — and the `style lint` and `style check` parser
-  entries
-- the two surface lines in the contract
-- `core/skills/flw-style/SKILL.md:51` and `:111`, the two sentences pointing at them
+- `style_lint.py:243-435` and `REPLY_RULES` at `:73`
+- `style_check()` at `cli/flw.py:1254` — 111 lines — and the `style check` parser entry
+- `tests/test_style_lint.py`: the 11 tests covering the transcript half, of 39
+- `tests/test_cli.py:4532`, `:4546`, `:4561`, `:4573` — four `style check` tests
+- `core/skills/flw-style/SKILL.md:12` and `:51`
+- `specs/current.toml:80`, the property that `flw style check` names the directory it read,
+  and `:308`'s sentence about the checker banning a narrower word list than the style file
+  names, with the two tests holding that gap open from both sides
 
-**Stays.** `core/styles/terse_prose.md`, `flw style install`, `flw style uninstall`, and the
-`flw-style` skill. The style is the part of flw that runs in every session. The skill finds
-its own instances of a failure the user just named by reading its own output; lines 51 and 111
-are pointers, not the mechanism.
+**Stays.** `core/styles/terse_prose.md`, `flw style install`, `flw style uninstall`,
+`flw style lint` with its handler at `cli/flw.py:1230`, `specs/current.toml:193` (the property
+that `flw style lint` exits 2 on a target it could not read), and the `flw-style` skill, whose
+`SKILL.md:111` pointer at `flw style lint` survives because the command does.
 
-**The extension point that replaces it.** A project that wants mechanical prose enforcement
+**Lost.** The vocabulary and shape rules, which were never enforced against files by design
+and could only ever run on the machine that wrote the prose.
+
+**The extension point that replaces it.** A project wanting more mechanical prose enforcement
 adds its own command to `[tests] checks`, which is already flw's primitive for "run this and
 report". Nothing in core needs to know what the rules are.
-
-## 4. `core/schemas/spec-v3.schema.json` — the primitive is fine, the instance is dead
-
-The dispatch table at `core/scripts/validate_spec.py:690` keyed on `schema_version` is the
-expandable primitive, one entry per schema, and it stays. The v3 instance has no live
-document: no contract anywhere declares `schema_version = 3` and flw's own declares 4.
-
-Removed: the file (125 lines), the dispatch entry, and `tests/test_validate_spec.py:205`,
-which exists to explain why the file stays. `expected_schema()` then names 4 as the only
-known version, and its error message for an unknown one must still read correctly with a
-one-element list.
-
-## 5. `docs/measuring.md` — 217 lines
-
-Prose about measuring flw, which is the material already removed from `README.md`. Remove the
-file and any pointer to it.
-
-## 6. `flw sync` as a subcommand
-
-4 invocations, all inside flw's own checkout. The 195-line `sync()` function stays, because
-`update()` is "pull, then sync" and calls it — what goes is the top-level entry point, its
-parser block and its contract surface line.
-
-**Check before cutting.** `update()`'s no-upstream branch prints a message pointing at
-`flw sync` as the local half without pulling. If that is the only way to repair an install
-whose remote is unreachable, the subcommand earns its place and this item is dropped.
 
 ---
 
 ## Assessed and kept, because each is already the primitive
 
+- **`core/schemas/spec-v3.schema.json`** — proposed for deletion in the first draft and wrong.
+  `tests/conftest.py:10` declares `schema_version = 3`, and the `specs` fixture built from it
+  is used by 20 tests in `tests/test_validate_spec.py`, 2 in `tests/test_direct_run.py` and 1
+  in `tests/test_cli.py`; `tests/test_direct_run.py:40` passes the schema by path. The
+  decision is already recorded in `specs/versions/v4.0.toml`, with the rationale "dropping 3
+  makes every contract flw did not write fail on a key it never heard of, and
+  tests/conftest.py declares schema_version = 3, so the whole fixture suite is a live v3
+  consumer". The criterion agrees: v3 is the only second instance of the dispatch primitive at
+  `validate_spec.py:699`, so deleting it leaves one entry and nothing testing that dispatch
+  works at all.
+- **`docs/measuring.md`** — proposed for deletion in the first draft and wrong. Four live
+  readers: `core/scripts/store.py:73` cites its protocol, `README.md:134` lists it, and
+  `plans/backlog/store-holds-every-body-in-memory.md:14`,
+  `plans/backlog/scout-at-monorepo-scale.md:14` and
+  `plans/backlog/unwritten-note-offers.md:13` depend on it. It is itself a primitive — a fixed
+  corpus plus a fixed command set, with two seeded generators deliberately kept out of
+  `core/scripts/` — and it is the method behind the sourcing rule the contract now binds.
+- **`flw sync`** — proposed for deletion in the first draft, and its own go/no-go check fails.
+  `doctor` points at it three times: `cli/flw.py:1625` (a stale link), `:1637` (not linked
+  here), `:1654` ("`flw sync` will adopt it"), with `tests/test_cli.py:371`, `:753`, `:870`
+  asserting that text. `update()` exits 1 without pulling when there is no upstream and names
+  `flw sync` as the local half. `specs/current.toml:130`, `:131`, `:143` are properties
+  describing it. It is the only link repair that does not pull.
 - **`flw add` / `flw remove` / `flw list` and `~/.flw/bundles.toml`** — 39 code sites in
   `cli/flw.py`, 28 tests, `docs/extending.md` (135 lines), an override branch in `discover()`
   at `cli/flw.py:220-250`, an orphan branch in `doctor` at `:1619`. No bundle is registered on
-  the author's machine and `~/.flw/bundles.toml` does not exist. It is the expandable
-  primitive for skills: core ships five, a user registers their own bundle without editing the
-  checkout. Unused is not the criterion.
+  the author's machine. It is the expandable primitive for skills: core ships five, a user
+  registers their own bundle without editing the checkout. Unused is not the criterion.
 - **`core/reviews/*.toml` and `core/schemas/review.schema.json`** — 201 lines. Core ships
   `quick.toml` and `eng.toml`, a project copies one into `.flw/reviews/` and edits it, and
   `flw validate <config>` checks it. Already a contract plus two instances.
@@ -233,35 +298,35 @@ whose remote is unreachable, the subcommand earns its place and this item is dro
 
 ## Order
 
-Item 2 and item 4 both touch `core/scripts/validate_spec.py`, so do 2 before 4 and re-read
-`expected_schema()` after.
-
 1. Item 1 — removes the only test skips, so every later run is unconditional.
 2. Item 2 — the largest, and the only one reaching into `flw validate`.
-3. Item 4.
-4. Item 3.
-5. Item 5.
-6. Item 6, if its check passes.
+3. Item 3.
+
+Items 2 and 3 both touch `specs/current.toml`, so apply each contract edit on its own and read
+`git diff specs/current.toml` by itself at each step.
 
 ## What must stay green at every step
 
 - `flw validate` exits 0 over the contract and all 77 records, the ten carrying `sources`
   included.
 - `.venv/bin/pytest` passes, and after item 1 reports no skips.
-- `flw test --no-stream` passes.
+- `flw test --no-stream` passes, which includes `style_lint.py .` — so item 3 must leave that
+  command working, not merely leave the file present.
 - `flw doctor` reports no orphans and no stale links.
-- `flw know --check` reports 0 changed. Every item deletes files the knowledge store
-  describes, so `core/scripts/scripts.md` and `tests/tests.md` need rewriting under the
-  correction carve-out, not a new survey.
-- Byte budgets in `core/scripts/budget.py` all under ceiling. Items 1, 2 and 3 remove prose
-  from `flw-research/SKILL.md`, `flw-spec/SKILL.md` and `flw-style/SKILL.md`, so all three
-  gain headroom — item 1 adds a sentence to `flw-research` about writing a scanner, and that
-  file is the tightest in the package.
+- `flw know --check` reports changed only for files this sweep's own commits falsified, each
+  corrected and re-stamped under the correction carve-out at the commit that falsified it.
+  **Not zero:** the baseline at `234c6ba` is already 1 changed — `flw.md`, `+267 −0`, which is
+  this plan file landing. `core/scripts/scripts.md` and `tests/tests.md` will both read changed
+  once items 1 to 3 land.
+- Byte budgets in `core/scripts/budget.py` all under ceiling. Item 1 adds a sentence to
+  `flw-research/SKILL.md`, which is the tightest file in the package, and removes two others
+  from it; check that file's budget before and after rather than assuming it nets out.
 
 ## Totals, if everything lands
 
-2,876 lines of code and tests deleted against roughly 60 added for the scanner registry; 102
-tests gone from 856; 4 subcommands and 1 subcommand entry point removed from 19; one
-devDependency and `node_modules/` gone; 0 skips in a fresh clone's test run. One capability
-moves from shipped to extensible: ranking a language other than Python is now something a
+About 2,393 lines of code and tests deleted against roughly 60 added for the scanner registry,
+plus 531 relocated from shipped code to reference material. Around 86 tests gone from 856. Two
+subcommands removed from 19 — `flw stale` and `flw style check`. One devDependency,
+`package.json` and `node_modules/` gone. Zero skips in a fresh clone's test run. One capability
+moves from shipped to extensible: ranking a language other than Python becomes something a
 project sets up once, in any language, instead of something only flw's author can add.
