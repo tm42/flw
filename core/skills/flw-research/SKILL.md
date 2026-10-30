@@ -82,9 +82,13 @@ section answers — read it there rather than reconstructing it here.
 **Read the output before reading any file.** It exists so that the files you then open are
 the ones that matter.
 
-For a repo in a language it does not cover, `aider --show-repo-map` prints a map and exits
-without an API key — say that rather than reading a hundred files, and record which you
-used.
+flw ships a scanner for Python, and the run ends by counting the files no scanner read. For
+a language nothing here covers, `aider --show-repo-map` prints a map and exits without an
+API key — say that rather than reading a hundred files, and record which you used. Where
+the same language will be scouted again, a scanner is worth writing once:
+`references/scout-example/` states the contract and is a working instance of it, and the
+project registers its own in `[scout] scanners`. That is a survey's output like any other
+file this skill writes, and it needs the user's yes before it is written.
 
 **Do not paste the scout output into an extension.** It regenerates in a second, and the
 one published A/B test of static repo overviews found they did not help. Record the
@@ -112,10 +116,10 @@ first and the one most likely to be believed.
   module and runs every `conftest.py` and module-scope fixture, so it is execution and takes
   the same judgement as running the suite.
 - **What is the setup line?** Activation, environment, whatever must come first.
-- **What is it built on?** The scout's external-dependency list for TypeScript; the
-  manifest for everything else — `pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`.
-  What a repo imports says what it is, and the scout only reads two languages: when it
-  says what it did not read, the manifest is where the rest of the answer is.
+- **What is it built on?** The manifest — `pyproject.toml`, `Cargo.toml`, `go.mod`,
+  `pom.xml`, `package.json`. What a repo imports says what it is, and a scanner reads one
+  language: when the run says what it did not read, the manifest is where the rest of the
+  answer is.
 - **What the ranking structurally cannot see.** A service that calls another over HTTP has
   no import edge, so the boundary between two services is invisible to the scout and it
   will report them as unrelated. Grep for it directly: route decorators and the paths they

@@ -149,7 +149,7 @@ def is_test(path: Path) -> bool:
     )
 
 
-def sources(root: Path) -> list[Path]:
+def sources(root: Path, skipped: list[str] | None = None) -> list[Path]:
     """Walk rather than rglob, for two reasons both learned the hard way.
 
     Pruning: rglob descends into node_modules and then discards it. Walking lets
@@ -158,9 +158,19 @@ def sources(root: Path) -> list[Path]:
     Survival: one unreadable directory kills an rglob outright. A network mount
     that times out mid-scan took down a whole run — os.walk's onerror lets the
     scan skip it and carry on, which is what a user with a cloud drive needs.
+
+    `skipped`, when given, collects the directories the walk could not read, so a
+    caller can say it ranked only part of the tree. Nothing is printed here: the
+    gate in cli/flw.py walks the tree a second time, and a warning raised in the
+    walk would be printed once per walk.
     """
     found: list[Path] = []
-    for parent, dirs, files in os.walk(root, onerror=lambda _: None):
+
+    def unreadable(err: OSError) -> None:
+        if skipped is not None:
+            skipped.append(err.filename or str(err))
+
+    for parent, dirs, files in os.walk(root, onerror=unreadable):
         here = Path(parent)
         rel_dir = here.relative_to(root).as_posix()
         dirs[:] = [
@@ -194,6 +204,9 @@ class Facts:
     entries: dict[Path, list[str]] = field(default_factory=dict)
     external: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     unparsed: int = 0
+    # directories the walk could not read, which is a partial ranking rather
+    # than a failed one — see main() for the exit code that says so.
+    unreadable: list[str] = field(default_factory=list)
 
 
 def _module_root(name: str) -> str:
@@ -295,7 +308,7 @@ def _statement_children(node: ast.AST) -> list[ast.stmt]:
 
 def parse(root: Path) -> Facts:
     facts = Facts()
-    files = sources(root)
+    files = sources(root, facts.unreadable)
     # A top-level import is local when the tree itself provides it — otherwise it
     # is stdlib or a real dependency, and telling those apart says what a project
     # is built on, which no amount of ranking conveys.
@@ -475,14 +488,22 @@ def allocate(
     return out
 
 
+def nothing_found(facts: Facts) -> str:
+    """The one line a scanner prints when the tree holds nothing it can rank."""
+    if facts.unparsed:
+        plural = "s" if facts.unparsed != 1 else ""
+        return f"no python found ({facts.unparsed} file{plural} failed to parse)"
+    return "no python found"
+
+
 def scout(root: Path, budget: int = 20) -> str:
-    facts = parse(root)
+    return render(root, parse(root), budget)
+
+
+def render(root: Path, facts: Facts, budget: int = 20) -> str:
     files = list(facts.defs)
     if not files:
-        if facts.unparsed:
-            plural = "s" if facts.unparsed != 1 else ""
-            return f"no python found ({facts.unparsed} file{plural} failed to parse)"
-        return "no python found"
+        return nothing_found(facts)
 
     definers: dict[str, list[Path]] = defaultdict(list)
     for path, here in facts.defs.items():
@@ -688,6 +709,36 @@ def scout(root: Path, budget: int = 20) -> str:
     return "\n".join(lines + allocate(sections, budget, first="MOST DEPENDED ON"))
 
 
+def main(argv: list[str]) -> int:
+    """The scanner contract, from the other side of a subprocess.
+
+    Invoked as `<scanner> <root> <budget>`, printing one ranking section to
+    stdout. The exit code answers what the caller cannot work out for a language
+    it has never heard of:
+
+      0  it ranked something
+      1  this repository holds no file of my language
+      2  the language's own parser is absent from the repository
+      3  it ranked, but could not read part of the tree
+
+    2 cannot arise here. Python's parser is `ast`, which ships with the
+    interpreter running this file, so there is no repository that holds Python and
+    not the thing that reads it. A scanner for a language whose parser is a
+    dependency — the worked example under core/skills/flw-research/references/ is
+    one — exits 2 when that dependency is missing.
+
+    A tree whose only Python failed to parse exits 1 and prints the count, because
+    it ranked nothing and the reason is in the sentence rather than in the code.
+    """
+    root = Path(argv[1] if len(argv) > 1 else ".").resolve()
+    budget = int(argv[2]) if len(argv) > 2 else 20
+    facts = parse(root)
+    if not facts.defs:
+        print(nothing_found(facts))
+        return 1
+    print(render(root, facts, budget))
+    return 3 if facts.unreadable else 0
+
+
 if __name__ == "__main__":
-    target = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-    print(scout(target, int(sys.argv[2]) if len(sys.argv) > 2 else 20))
+    sys.exit(main(sys.argv))

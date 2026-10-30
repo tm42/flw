@@ -340,7 +340,7 @@ def documents(corpus_: Corpus) -> list[Document]:
         where = f"current.toml · {component.get('name', '')}"
         for path in component.get("paths", []):
             # A path is the most concrete thing a component says. Without this
-            # `flw ledger core/scripts/scout.mjs` reaches nothing, because a path
+            # `flw ledger core/scripts/scout.py` reaches nothing, because a path
             # appears in no other tier.
             contract_hits.append(Hit("CONTRACT", where, "paths", path))
         for key in ("provides", "properties", "surfaces"):

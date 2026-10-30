@@ -175,8 +175,6 @@ it.
 - **`flw scout` has never been measured above 8,000 files, and never on real code.** Generated
   imports resolve cleanly and real ones do not, so a generated tree says nothing about the
   ranking's quality at any size. A real monorepo is the test that would settle it.
-- **The TypeScript scout has no numbers at all.** It runs on the target repository's own
-  `typescript`, so it needs a real TS monorepo to measure and none has been.
 - **Two concurrent `flw kb write` calls with the same title both succeed and the later wins.**
   The refusal is check-then-write with no lock.
 

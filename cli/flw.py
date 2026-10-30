@@ -2533,6 +2533,70 @@ def spec_areas(root: Path) -> list[str]:
     return [a for a in declared if a]
 
 
+def scout_scanners(root: Path) -> list[tuple[str, list[str]]]:
+    """`[scout] scanners` — the scanners this project adds, project file only.
+
+    The fourth exception to the merge, for the same reason as the other three: a
+    scanner is a file in this repository, so a list left in `~/.flw/config.toml`
+    would name paths that exist in at most one project on the machine.
+
+    Each entry is a table of `path`, relative to the project root, and
+    `extensions`, the file suffixes that scanner reads. The suffixes are declared
+    rather than inferred because the run has to be able to say what nothing
+    parsed, and flw cannot know what a scanner it has never seen reads.
+
+    The built-in Python scanner is never listed. The key adds scanners rather
+    than replacing them, so registering one never stops another language being
+    ranked.
+    """
+    config = flw_dir(root) / "config.toml"
+    if not config.is_file():
+        return []
+    try:
+        document = tomllib.loads(config.read_text())
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"error: {config} does not parse: {exc}") from None
+
+    section = document.get("scout", {})
+    if not isinstance(section, dict):
+        raise SystemExit(f"error: {config}: [scout] is not a table")
+    declared = section.get("scanners", [])
+    if not isinstance(declared, list):
+        raise SystemExit(
+            f"error: {config}: [scout] scanners is not an array of tables: {declared!r}"
+        )
+
+    entries: list[tuple[str, list[str]]] = []
+    for entry in declared:
+        if not isinstance(entry, dict):
+            raise SystemExit(
+                f"error: {config}: [scout] scanners holds {entry!r}, not a table of "
+                "path and extensions"
+            )
+        path = entry.get("path")
+        if not isinstance(path, str) or not path:
+            raise SystemExit(
+                f"error: {config}: [scout] scanners entry has no path: {entry!r}"
+            )
+        extensions = entry.get("extensions")
+        if (
+            not isinstance(extensions, list)
+            or not extensions
+            or not all(isinstance(e, str) and e for e in extensions)
+        ):
+            raise SystemExit(
+                f"error: {config}: [scout] scanners entry {path} does not declare "
+                f"extensions as an array of strings: {extensions!r}"
+            )
+        # A suffix written without its dot is the same suffix. Normalising here
+        # rather than refusing keeps a wrong count from being the price of it.
+        suffixes = [
+            e.lower() if e.startswith(".") else f".{e.lower()}" for e in extensions
+        ]
+        entries.append((path, suffixes))
+    return entries
+
+
 # Verbatim in `flw kb write --help`, and nowhere else at runtime. The gate that
 # decides *whether* a note happens is one sentence in each skill, because it is
 # paid on every run; these shape a write that is already happening.
@@ -2644,29 +2708,42 @@ def _schema_for(target: Path) -> str:
     return "version.schema.json"
 
 
-# Extensions that plausibly hold code, for saying what the scouts did not read.
-# An allowlist rather than a denylist because the failure directions are not
-# equal: a language missing from this list keeps today's silence, while one
-# unlisted binary extension would have the scout announce 1,200 unread icons.
-# It is a file count either way — no parser, and nothing to maintain per language
-# beyond a name.
+# Extensions that plausibly hold code, for saying what no scanner read. An
+# allowlist rather than a denylist because the failure directions are not equal:
+# a language missing from this list keeps today's silence, while one unlisted
+# binary extension would have the scout announce 1,200 unread icons. It is a file
+# count either way — no parser, and nothing to maintain per language beyond a
+# name.
+#
+# The TypeScript suffixes are in the list because no scanner ships for them any
+# more. While scout.mjs was built in, leaving them out was correct and leaving
+# them in would have had the run report files it had just ranked; a scanner a
+# project registers declares its own suffixes and they are subtracted below.
 CODE_EXTENSIONS = {
     ".rs", ".go", ".java", ".kt", ".kts", ".swift", ".c", ".h", ".cc", ".cpp",
     ".hpp", ".cs", ".rb", ".php", ".scala", ".ex", ".exs", ".erl", ".hs", ".ml",
     ".zig", ".dart", ".lua", ".pl", ".r", ".jl", ".sh", ".bash", ".sql", ".vue",
-    ".svelte", ".js", ".jsx", ".mjs", ".cjs",
+    ".svelte", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts",
 }
 
 
-def unread_by_scouts(root: Path, skip: set[str]) -> dict[str, int]:
-    """Code files under root in a language neither scout parses, by extension.
+def unread_by_scouts(
+    root: Path, skip: set[str], declared: set[str] | None = None
+) -> dict[str, int]:
+    """Code files under root whose suffix no scanner declares, by extension.
 
     A ranking of four Python deploy scripts is correct about those four and says
     nothing about the sixteen Rust files beside them — and exits 0, which is what
     covered looks like. Counting is the whole mechanism: it holds for every
     language that will ever exist because the work per language is zero.
+
+    `declared` is every suffix a scanner that ran said it reads. Without it a
+    registered Go scanner would leave `.go` in the count and the line would read
+    `16 .go not read` about files it had just ranked, which is a wrong number in
+    a report and the kind that goes unnoticed.
     """
     counts: dict[str, int] = {}
+    wanted = CODE_EXTENSIONS - (declared or set())
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -2675,15 +2752,22 @@ def unread_by_scouts(root: Path, skip: set[str]) -> dict[str, int]:
         if any(part in skip or part.startswith(".") for part in path.relative_to(root).parts):
             continue
         suffix = path.suffix.lower()
-        if suffix in CODE_EXTENSIONS:
+        if suffix in wanted:
             counts[suffix] = counts.get(suffix, 0) + 1
     return counts
 
 
+EXAMPLE_SCANNER = "core/skills/flw-research/references/scout-example/"
+
+
 def scout(args: argparse.Namespace) -> int:
-    """Dispatches on what the tree actually holds rather than on a flag: a repo is
-    Python, or TypeScript, or both, and asking the user to say so is asking them
-    to describe a directory they can see.
+    """Rank the tree with every scanner this project has, built-in first.
+
+    flw ships one scanner, for Python, and declares the contract a second one
+    satisfies: an executable invoked as `<scanner> <root> <budget>` that prints
+    one ranking section to stdout and says by exit code what the caller cannot
+    work out for a language it has never heard of. A project adds its own in
+    `[scout] scanners` without editing the flw checkout.
     """
     # An explicit path means that directory. Scouting is not project-scoped the
     # way test is — you scout a tree, and `flw scout ./` must not walk upward.
@@ -2710,86 +2794,128 @@ def scout(args: argparse.Namespace) -> int:
     if walked:
         print(f"  root: {tilde(root)}")
 
-    # The engine's own walk decides whether there is Python here. Asking rglob
-    # separately cost most of the run and answered differently: it descends into
-    # directories the engine prunes, so a tree whose only Python is under
-    # migrations/ passed this gate and then ranked nothing.
-    ran = False
-    found = False
+    # A path argument reads no project config: the scout never walks upward, so
+    # there is no project here whose scanners these would be, and only the
+    # built-in runs.
+    scanners = scout_scanners(root) if walked else []
 
+    ranked = False  # some scanner printed a section
+    partial = False  # ... and one of them read only part of the tree
+    # Suffixes something that ran says it reads, so the not-read count below can
+    # subtract them. `.py` is not in CODE_EXTENSIONS, and is here so that the set
+    # means what it says rather than happening to be right.
+    declared = {".py"}
+
+    # The built-in always runs, first, and is never listed. Its own walk decides
+    # whether there is Python here; asking rglob separately cost most of the run
+    # and answered differently, because it descends into directories the engine
+    # prunes, so a tree whose only Python is under migrations/ passed that gate
+    # and then ranked nothing. A registered scanner answers the same question for
+    # itself, by exiting 1.
     if engine.sources(root):
-        found = True
         print(engine.scout(root, args.budget))
-        ran = True
+        ranked = True
 
-    typescript = [
-        p
-        for ext in ("*.ts", "*.tsx", "*.mts", "*.cts")
-        for p in root.rglob(ext)
-        if "node_modules" not in p.parts and not p.name.endswith(".d.ts")
-    ]
-    if typescript:
-        found = True
-        if ran:
-            print()
-        node = shutil.which("node")
-        if node is None:
+    for relative, suffixes in scanners:
+        if Path(relative).is_absolute() or ".." in Path(relative).parts:
             print(
-                f"{len(typescript)} TypeScript files found, but node is not on PATH.",
+                f"error: [scout] scanners: {relative} is not a path relative to the "
+                "project root",
                 file=sys.stderr,
             )
-        else:
-            done = subprocess.run(
-                [node, str(scripts / "scout.mjs"), str(root), str(args.budget)],
-                check=False,
-                text=True,
-            )
-            if done.returncode == 2:
-                # Naming npm in a pnpm or yarn repo is not a cosmetic slip: it
-                # creates a competing node_modules and a second lock file.
-                manager = "npm install"
-                for lock, command in (
-                    ("pnpm-lock.yaml", "pnpm install"),
-                    ("yarn.lock", "yarn install"),
-                    ("bun.lockb", "bun install"),
-                ):
-                    if (root / lock).exists():
-                        manager = command
-                        break
-                rest = (
-                    " or scout the Python side alone"
-                    if engine.sources(root)
-                    else ""
-                )
-                print(
-                    "The TypeScript scout needs the repo's own `typescript` package. "
-                    f"Run `{manager}` there{rest}.",
-                    file=sys.stderr,
-                )
-            else:
-                ran = True
-
-    if found:
-        unread = unread_by_scouts(root, engine.SKIP | {"node_modules"})
-        if unread:
-            top = sorted(unread.items(), key=lambda kv: -kv[1])[:4]
-            listed = ", ".join(f"{n} {ext}" for ext, n in top)
+            continue
+        scanner = root / relative
+        if not scanner.is_file():
+            print(f"error: [scout] scanners: no such file: {relative}", file=sys.stderr)
+            continue
+        # A symlink passes every check above and lands anywhere: `tools/go-scout
+        # -> /tmp/x` is relative, holds no `..`, and is a file. A scanner is a
+        # file in this repository, so what the path means must not depend on the
+        # machine the config is read on.
+        try:
+            inside = scanner.resolve().is_relative_to(root.resolve())
+        except OSError as exc:
+            print(f"error: [scout] scanners: {relative} would not resolve: {exc}", file=sys.stderr)
+            continue
+        if not inside:
             print(
-                f"\n  not read: {listed}. The scout parses Python and TypeScript "
-                "only; for the rest, `aider --show-repo-map` prints a map."
+                f"error: [scout] scanners: {relative} resolves outside the project root",
+                file=sys.stderr,
+            )
+            continue
+        if not os.access(scanner, os.X_OK):
+            print(
+                f"error: [scout] scanners: {relative} is not executable. flw runs it "
+                "as a command, so it needs a shebang and the execute bit.",
+                file=sys.stderr,
+            )
+            continue
+
+        if ranked:
+            print()
+        # Python block-buffers stdout to a pipe while the subprocess writes to the
+        # same descriptor directly, so without this the sections come out in the
+        # wrong order under `flw scout | less` and in the right one on a terminal.
+        sys.stdout.flush()
+        try:
+            done = subprocess.run(
+                [str(scanner), str(root), str(args.budget)], check=False, text=True
+            )
+        except OSError as exc:
+            print(f"error: [scout] scanners: {relative} would not run: {exc}", file=sys.stderr)
+            continue
+
+        declared.update(suffixes)
+        if done.returncode == 0:
+            ranked = True
+        elif done.returncode == 1:
+            # The repository holds no file of its language. It said so itself, in
+            # whatever words its own language deserves.
+            pass
+        elif done.returncode == 2:
+            # Named, and not by itself a failed run: another scanner may have
+            # ranked, and a missing parser is a thing to install rather than a
+            # reason to call the whole scout unusable.
+            print(
+                f"  {relative} found no parser for its language in {tilde(root)}.",
+                file=sys.stderr,
+            )
+        elif done.returncode == 3:
+            ranked = True
+            partial = True
+        else:
+            print(
+                f"error: [scout] scanners: {relative} exited {done.returncode}, which "
+                "the scanner contract does not define.",
+                file=sys.stderr,
             )
 
-    if not found:
+    unread = unread_by_scouts(root, engine.SKIP | {"node_modules"}, declared)
+    if unread:
+        top = sorted(unread.items(), key=lambda kv: -kv[1])[:4]
+        listed = ", ".join(f"{n} {ext}" for ext, n in top)
         print(
-            f"error: no Python or TypeScript found under {root}. The scout covers "
-            "those two because their own parsers are already present in a repo of "
-            "that language; for anything else, `aider --show-repo-map` is the "
-            "documented fallback.",
+            f"\n  not read: {listed}. No scanner here declares those suffixes. Write "
+            f"one and register it in [scout] scanners — {EXAMPLE_SCANNER} is the "
+            "worked example — or `aider --show-repo-map` prints a map without one."
+        )
+
+    if partial:
+        print(
+            "\n  part of the tree could not be read, so a ranking above covers less "
+            "than the tree.",
+            file=sys.stderr,
+        )
+
+    if not ranked:
+        print(
+            f"error: no scanner ranked anything under {root}. flw ships a scanner for "
+            f"Python; for another language, write one and register it in [scout] "
+            f"scanners, imitating {EXAMPLE_SCANNER}.",
             file=sys.stderr,
         )
         return 1
-    # Sources were found and nothing was ranked: the reason was printed above.
-    return 0 if ran else 1
+    return 0
 
 
 def validate(args: argparse.Namespace) -> int:
@@ -4312,17 +4438,17 @@ Nothing is written and nothing is cached. Regenerating costs a fraction of a
 second on top of the parse, and an overview kept on disk rides in every request
 whether or not it is relevant.
 
-Python and TypeScript only, because a repository in either already carries the
-parser this uses. A third language is invisible rather than degraded: a Go
-service in a mixed monorepo produces no edges at all, and the header will
-confidently count the others. For those, `aider --show-repo-map` prints a map
-and exits without an API key.
+Python out of the box, because a Python repository already carries the parser
+this uses. Any other language is a scanner you write once and register in
+[scout] scanners, and the run ends by counting the files no scanner declares, so
+a language nothing reads is named rather than silently missing. Without one,
+`aider --show-repo-map` prints a map and exits without an API key.
 
 The second header line says what share of imports resolved, over the imports that
 name a module the repository holds — so an import of `typing` is in neither half
 of it. `sys.path` manipulation and dynamic imports do not resolve and never
 will.""",
-        epilog="""sections, as the Python scout prints them
+        epilog="""sections, as the built-in Python scanner prints them
 
   ENTRY POINTS       how do I run this: a __main__ guard, or a CLI framework
   BUILT ON           what it is built on, from product code only — counting
@@ -4336,9 +4462,12 @@ will.""",
   MOST DEPENDED ON   the files, ranked; under each, the names other files import
                      from it and how many files import each
 
-The TypeScript scout prints PACKAGES, EXTERNAL DEPENDENCIES — what BUILT ON names —
-DEPENDS ON, CYCLES and MOST IMPORTANT EXPORTS. It has no ENTRY POINTS, and its
-PACKAGES are ordered by file count with no rank shown.""",
+A registered scanner prints its own section and picks its own headings, so these
+names are the built-in's rather than the format. The worked example at
+core/skills/flw-research/references/scout-example/ states the contract: an
+executable run as <scanner> <root> <budget>, printing one ranking to stdout, with
+the exit code saying whether it ranked, found no file of its language, found no
+parser, or read only part of the tree.""",
     )
     p.add_argument("path", nargs="?", help="repo root (default: found from cwd)")
     p.add_argument(

@@ -140,7 +140,7 @@ measured, they were right about the corpus they read, and that corpus is one mac
 '''
 
 contract_edit = '''
-Twenty-three edits, grouped by component.
+Twenty-four edits, grouped by component.
 
 **In final_state.components, the component named "the flw CLI":**
 
@@ -310,6 +310,25 @@ rule two of them state are deleted in the same group, so nothing would catch the
 
     because the transcript-reading command is deleted while the skill is not.
 
+**One more, added while group 1 was being executed.** A security review of the registry
+read it and found that `root / relative` refuses an absolute path and a `..` component
+while following a symlink out of the tree, so `tools/go-scout -> /tmp/x` passes every
+check the sentence names. Refusing it is a refusal the sentence does not declare, so it is
+written here rather than added quietly.
+
+24. In the component named "the flw CLI", `provides`, in the statement edit 6 appended,
+    replace:
+
+      "A registered path that is missing, unreadable, not executable, absolute or holding
+      a `..` component is named on stderr and not run."
+
+    with:
+
+      "A registered path that is missing, unreadable, not executable, absolute, holding a
+      `..` component, or resolving outside the root through a symlink is named on stderr
+      and not run: a scanner is a file in this repository, and what a path means must not
+      depend on the machine it is read on."
+
 Nothing else changes. `[success_criteria]` is untouched: the declared check
 `.venv/bin/python core/scripts/style_lint.py .` keeps working, because the file half of the
 linter stays.
@@ -438,7 +457,7 @@ group = 1
 phase = "the scout becomes a primitive with a registry"
 tasks = [
   { id = "scanners-refuse", desc = "core/scripts/scout.py: under __main__ at :691-693, exit 1 where it today prints 'no python found' (:483-485) and exits 0, so a scanner invoked as a subprocess answers 'this repository holds no file of my language' by exit code. Keep the sentence it prints and do not change what scout.scout() returns: in-process, the built-in's own answer to that question is scout.sources(root) at :152, which is the module walking for its own language rather than the CLI guessing at it. Add a test asserting all four exit codes through scout.py's command line, which is what makes core's shipped scanner a working instance of the contract rather than a privileged special case. Do the same for the TypeScript script before it moves, so the worked example carries the behaviour it documents." },
-  { id = "scanner-registry", desc = "cli/flw.py: read [scout] scanners from the project's config file only — a list of tables, each a path and the file suffixes that scanner reads. Run the built-in Python scanner first, in-process as today, then each registered scanner as a subprocess invoked as <scanner> <root> <budget>, in the order listed. The built-in is never listed and the project's list adds to it. Name on stderr and do not run a path that is absolute, holds a `..` component, is missing, is unreadable or is not executable. Fold the exits: 0 when any scanner ranked something, 1 when none did; a scanner's 2 is named and does not by itself fail a run another scanner ranked; a 3 prints its section and is reported as a ranking that read only part of the tree, which is silent today because only returncode 2 is inspected. A path argument reads no project config, because cli/flw.py:2692-2694 resolves it without a project lookup and specs/current.toml:150 forbids walking upward, so only the built-in runs there.", depends_on = ["scanners-refuse"] },
+  { id = "scanner-registry", desc = "cli/flw.py: read [scout] scanners from the project's config file only — a list of tables, each a path and the file suffixes that scanner reads. Run the built-in Python scanner first, in-process as today, then each registered scanner as a subprocess invoked as <scanner> <root> <budget>, in the order listed. The built-in is never listed and the project's list adds to it. Name on stderr and do not run a path that is absolute, holds a `..` component, resolves outside the root through a symlink, is missing, is unreadable or is not executable. Fold the exits: 0 when any scanner ranked something, 1 when none did; a scanner's 2 is named and does not by itself fail a run another scanner ranked; a 3 prints its section and is reported as a ranking that read only part of the tree, which is silent today because only returncode 2 is inspected. A path argument reads no project config, because cli/flw.py:2692-2694 resolves it without a project lookup and specs/current.toml:150 forbids walking upward, so only the built-in runs there.", depends_on = ["scanners-refuse"] },
   { id = "drop-the-gates", desc = "cli/flw.py: remove the rglob over four TypeScript extensions at :2725-2730, which is the CLI standing in for a scanner that should answer for itself, and which the comment at :2713-2717 already records as costing most of the run and answering differently because it descends into directories the engine prunes. Keep the engine.sources(root) gate at :2720: that is scout.py's own walk for its own language, and it is how the in-process built-in reports that it ranked nothing — a registered scanner reports the same thing by exiting 1. Then remove the rest of the hardcoded TypeScript branch at :2727-2767: the shutil.which('node') check, the node_modules exclusion, the four-lock-file package-manager guess at :2750-2762 and the two messages naming typescript. The package-manager hint moves into the worked example, since only a Node scanner needs it.", depends_on = ["scanner-registry"] },
   { id = "unread-by-declared-suffix", desc = "cli/flw.py:2769-2788: the 'not read' message at :2769-2777 keeps unread_by_scouts at :2661-2680 and subtracts every suffix a scanner declares, instead of relying on CODE_EXTENSIONS at :2653-2658 omitting .py and .ts by construction — otherwise a registered Go scanner leaves .go in the list and the line reads '16 .go not read' about files it just ranked. Add .ts, .tsx, .mts and .cts to CODE_EXTENSIONS in the same edit: the set holds .js, .jsx, .mjs, .cjs, .vue and .svelte and no TypeScript suffix, because the TypeScript scout covered them, so without this a TypeScript repository with nothing registered gets neither a ranking section nor a not-read count — the silent miss the provides at specs/current.toml:256 exists to prevent. The message loses the sentence hardcoding two languages and names the worked example's path. The no-language error at :2779-2788 becomes the exit-1 fold. unread_by_scouts keeps reading scout.SKIP, which is why the built-in stays in-process.", depends_on = ["drop-the-gates"] },
   { id = "move-the-example", desc = "Move core/scripts/scout.mjs to core/skills/flw-research/references/scout-example/scout.mjs with a README beside it stating the scanner contract and carrying the package-manager hint. Delete tests/test_scout_mjs.py and package.json. tests/test_scout.py:614-617 (test_scout_mjs_has_no_nul_byte) opens the old path and must be retargeted or deleted. Leave .gitignore's node_modules/ and package-lock.json lines alone.", depends_on = ["unread-by-declared-suffix"] },

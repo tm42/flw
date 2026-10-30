@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -423,17 +424,22 @@ def test_a_missing_directory_refuses_with_one(tmp_path, capsys):
     assert "no such directory" in capsys.readouterr().err
 
 
-def test_neither_language_present_names_the_fallback(tmp_path, capsys):
-    """Refusing is fine; refusing without saying what to do instead is not. The
-    scout covers two languages because their parsers are already in a repo of
-    that language, and the user needs to be told where to go for a third."""
+def test_no_scanner_ranking_anything_names_the_way_to_add_one(tmp_path, capsys):
+    """Refusing is fine; refusing without saying what to do instead is not. flw
+    ships a scanner for Python because its parser is the interpreter, and a user
+    whose repository is Go needs to be told where the next one comes from."""
     write(tmp_path, {"main.go": "package main\n"})
     # 1, not 2: the contract scopes 2 to flw test and flw validate, where it
     # means the run proved nothing. A refusal is what 1 already means.
     assert run(tmp_path) == 1
-    err = capsys.readouterr().err
-    assert "no Python or TypeScript" in err
-    assert "aider --show-repo-map" in err
+    captured = capsys.readouterr()
+    assert "no scanner ranked anything" in captured.err
+    assert "[scout] scanners" in captured.err
+    assert "scout-example" in captured.err
+    # The count of what nothing read is the useful half, and it says what to do
+    # without writing a scanner at all.
+    assert "not read: 1 .go" in captured.out
+    assert "aider --show-repo-map" in captured.out
 
 
 def test_an_unreadable_directory_does_not_kill_the_scan(tmp_path, monkeypatch):
@@ -608,14 +614,30 @@ def test_a_single_flat_package_is_not_reported_as_a_finding(tmp_path):
     assert "PACKAGES" not in engine.scout(tmp_path)
 
 
-# --- scout.mjs is a text file ---------------------------------------------- #
+# --- the worked example is readable ---------------------------------------- #
+
+EXAMPLE = (
+    Path(__file__).resolve().parent.parent
+    / "core"
+    / "skills"
+    / "flw-research"
+    / "references"
+    / "scout-example"
+)
 
 
-def test_scout_mjs_has_no_nul_byte():
-    """A literal NUL makes the file binary to git and to grep, so the contract's
-    own removal check — a grep — cannot see anything in it."""
-    mjs = Path(__file__).resolve().parent.parent / "core" / "scripts" / "scout.mjs"
-    assert b"\x00" not in mjs.read_bytes()
+def test_the_worked_scanner_has_no_nul_byte():
+    """A literal NUL makes the file binary to git and to grep, and a worked
+    example nobody runs earns its place only by being read."""
+    assert b"\x00" not in (EXAMPLE / "scout.mjs").read_bytes()
+
+
+def test_the_worked_scanner_is_executable_with_a_shebang():
+    """The contract it documents is that flw runs a scanner as a command, so an
+    example without the execute bit demonstrates the wrong thing."""
+    scanner = EXAMPLE / "scout.mjs"
+    assert os.access(scanner, os.X_OK)
+    assert scanner.read_bytes().startswith(b"#!")
 
 
 def test_the_ranking_iterates_until_the_movement_falls_below_the_tolerance(tmp_path, monkeypatch):
@@ -869,3 +891,311 @@ def test_a_repository_with_no_in_repo_imports_says_so_rather_than_dividing(tmp_p
     assert out.split("\n")[1].startswith(
         "no imports name a module this repository holds"
     )
+
+
+# The scanner contract, asserted against core's own scanner. A project registers
+# a scanner for another language in `[scout] scanners` and flw runs it as
+# `<scanner> <root> <budget>`, reading the exit code to learn what it cannot work
+# out itself. core/scripts/scout.py answers through the same command line, so the
+# contract is exercised against the shipped instance and not only a registered one.
+#
+# Exit 2 — the language's own parser is absent from the repository — cannot arise
+# for this scanner. Python's parser is `ast`, which ships with the interpreter
+# running it, so no repository holds Python without the thing that reads it. The
+# worked example under core/skills/flw-research/references/ covers that code,
+# because the TypeScript compiler is a dependency of the repository being ranked.
+
+SCANNER = Path(__file__).resolve().parent.parent / "core" / "scripts" / "scout.py"
+
+
+def run_scanner(root: Path, budget: int = 20) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(SCANNER), str(root), str(budget)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_the_scanner_exits_0_when_it_ranked_something(tmp_path):
+    write(
+        tmp_path,
+        {
+            "pkg/core.py": "class Engine:\n    pass\n",
+            "pkg/app.py": "from pkg.core import Engine\n",
+        },
+    )
+    result = run_scanner(tmp_path)
+    assert result.returncode == 0
+    assert "pkg/core.py" in result.stdout
+
+
+def test_the_scanner_exits_1_on_a_repository_holding_no_python(tmp_path):
+    """The one question the caller cannot answer for a language it has never
+    heard of, so the scanner answers it by exit code rather than by a sentence
+    the caller would have to match."""
+    write(tmp_path, {"README.md": "# nothing to parse\n"})
+    result = run_scanner(tmp_path)
+    assert result.returncode == 1
+    assert result.stdout.strip() == "no python found"
+
+
+def test_the_scanner_exits_1_when_every_python_file_failed_to_parse(tmp_path):
+    """It ranked nothing, so the code says so; the count says why, because the
+    four codes have no room for 'the files are broken' and the sentence does."""
+    write(tmp_path, {"broken.py": "def (\n"})
+    result = run_scanner(tmp_path)
+    assert result.returncode == 1
+    assert result.stdout.strip() == "no python found (1 file failed to parse)"
+
+
+def test_the_scanner_exits_3_when_it_ranked_only_part_of_the_tree(tmp_path):
+    """A network mount that timed out mid-walk took down a whole run once. The
+    walk survives it, and exit 3 is how the caller learns the ranking it printed
+    is partial — distinct from exit 1, which says nothing was there to rank."""
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root ignores directory permissions")
+    write(
+        tmp_path,
+        {
+            "pkg/core.py": "class Engine:\n    pass\n",
+            "pkg/app.py": "from pkg.core import Engine\n",
+            "mnt/held.py": "class Mounted:\n    pass\n",
+        },
+    )
+    (tmp_path / "mnt").chmod(0o000)
+    try:
+        result = run_scanner(tmp_path)
+    finally:
+        (tmp_path / "mnt").chmod(0o755)
+    assert result.returncode == 3
+    assert "pkg/core.py" in result.stdout
+    assert "Mounted" not in result.stdout
+
+
+# --- the registry ---------------------------------------------------------- #
+
+
+def registered(root: Path, body: str, extensions: str = '[".go"]', path: str = "bin/go-scout") -> Path:
+    """A project whose config registers one scanner, and the scanner itself."""
+    (root / ".flw").mkdir(parents=True, exist_ok=True)
+    (root / ".flw" / "config.toml").write_text(
+        f'[scout]\nscanners = [{{ path = "{path}", extensions = {extensions} }}]\n'
+    )
+    scanner = root / path
+    scanner.parent.mkdir(parents=True, exist_ok=True)
+    scanner.write_text(body)
+    scanner.chmod(0o755)
+    return scanner
+
+
+def run_here(budget: int = 20) -> int:
+    """`flw scout` with no path, which is the only form that reads the config."""
+    return flw.scout(argparse.Namespace(path=None, budget=budget))
+
+
+def test_a_registered_scanner_ranks_a_language_flw_ships_no_scanner_for(
+    tmp_path, monkeypatch, capfd
+):
+    """The whole point of the key: a Go repository is ranked by a scanner the
+    project wrote, with nothing in the flw checkout edited."""
+    write(tmp_path, {"main.go": "package main\n"})
+    registered(
+        tmp_path,
+        '#!/bin/sh\necho "GO FILES"\necho "  main.go   1.0000"\n',
+    )
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 0
+    captured = capfd.readouterr()
+    assert "GO FILES" in captured.out
+    # The suffix the entry declares is subtracted, so the run does not report
+    # files it has just ranked.
+    assert "not read" not in captured.out
+
+
+def test_the_built_in_runs_first_and_a_registered_scanner_adds_to_it(
+    tmp_path, monkeypatch, capfd
+):
+    """The key adds scanners rather than replacing them, so registering a Go
+    scanner never silently stops this project's Python being ranked. Order is the
+    order listed, after the built-in, so the sections do not move between runs."""
+    write(
+        tmp_path,
+        {
+            "app/core.py": "class Engine:\n    pass\n",
+            "app/run.py": "from app.core import Engine\n",
+            "main.go": "package main\n",
+        },
+    )
+    registered(tmp_path, '#!/bin/sh\necho "GO FILES"\n')
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 0
+    out = capfd.readouterr().out
+    assert "Engine" in out
+    assert "GO FILES" in out
+    assert out.index("Engine") < out.index("GO FILES")
+
+
+def test_a_scanner_exiting_1_is_not_a_failed_run(tmp_path, monkeypatch, capfd):
+    """Exit 1 says this repository holds no file of my language, which is not an
+    error: the built-in ranked, so the run ranked."""
+    write(
+        tmp_path,
+        {
+            "app/core.py": "class Engine:\n    pass\n",
+            "app/run.py": "from app.core import Engine\n",
+        },
+    )
+    registered(tmp_path, '#!/bin/sh\necho "no go found"\nexit 1\n')
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 0
+
+
+def test_a_scanner_with_no_parser_is_named_and_does_not_fail_the_run(
+    tmp_path, monkeypatch, capfd
+):
+    """Exit 2 is a thing to install, not a reason to call the scout unusable —
+    which is what the CLI did for TypeScript, by failing the whole run."""
+    write(
+        tmp_path,
+        {
+            "app/core.py": "class Engine:\n    pass\n",
+            "app/run.py": "from app.core import Engine\n",
+        },
+    )
+    registered(tmp_path, '#!/bin/sh\nexit 2\n')
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 0
+    assert "found no parser" in capfd.readouterr().err
+
+
+def test_a_scanner_exiting_2_alone_refuses_the_run(tmp_path, monkeypatch, capfd):
+    """Nothing ranked, so the run refuses. Exit 2 not failing a run another
+    scanner ranked is not the same as exit 2 being free."""
+    write(tmp_path, {"main.go": "package main\n"})
+    registered(tmp_path, '#!/bin/sh\nexit 2\n')
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 1
+
+
+def test_a_scanner_exiting_3_reports_a_partial_ranking(tmp_path, monkeypatch, capfd):
+    """Exit 3 was already set by core/scripts/scout.mjs:250 and silent, because
+    the CLI inspected only returncode 2. A ranking that covers less than the tree
+    is worth less if nobody is told."""
+    write(tmp_path, {"main.go": "package main\n"})
+    registered(tmp_path, '#!/bin/sh\necho "GO FILES"\nexit 3\n')
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 0
+    captured = capfd.readouterr()
+    assert "GO FILES" in captured.out
+    assert "covers less than the tree" in captured.err
+
+
+def test_a_scanner_exiting_outside_the_contract_is_named(tmp_path, monkeypatch, capfd):
+    """A scanner that crashes exits 127 or 2 from its own interpreter, and
+    silence there reads as a language with nothing in it."""
+    write(
+        tmp_path,
+        {
+            "app/core.py": "class Engine:\n    pass\n",
+            "app/run.py": "from app.core import Engine\n",
+        },
+    )
+    registered(tmp_path, '#!/bin/sh\nexit 9\n')
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 0
+    assert "exited 9" in capfd.readouterr().err
+
+
+def test_an_absolute_or_dotted_scanner_path_is_refused(tmp_path, monkeypatch, capfd):
+    """A path out of the project is a path whose meaning depends on the machine,
+    and the config file is checked in."""
+    write(tmp_path, {"app/core.py": "class Engine:\n    pass\n"})
+    registered(tmp_path, "#!/bin/sh\n", path="../outside/scout")
+    monkeypatch.chdir(tmp_path)
+    run_here()
+    assert "not a path relative to the project root" in capfd.readouterr().err
+
+
+def test_a_scanner_that_is_missing_or_not_executable_is_named(
+    tmp_path, monkeypatch, capfd
+):
+    """flw runs it as a command, so a file without the execute bit is a config
+    error the user can fix, not an exception."""
+    write(tmp_path, {"app/core.py": "class Engine:\n    pass\n"})
+    registered(tmp_path, "#!/bin/sh\n")
+    (tmp_path / "bin" / "go-scout").chmod(0o644)
+    monkeypatch.chdir(tmp_path)
+    run_here()
+    assert "is not executable" in capfd.readouterr().err
+
+    (tmp_path / "bin" / "go-scout").unlink()
+    run_here()
+    assert "no such file" in capfd.readouterr().err
+
+
+def test_a_scanner_symlinked_out_of_the_tree_is_refused(tmp_path, monkeypatch, capfd):
+    """A symlink is relative, holds no `..` and is a file, so it passes every
+    other check. What a registered path means must not depend on the machine the
+    config is read on."""
+    project = tmp_path / "project"
+    project.mkdir()
+    write(project, {"app/core.py": "class Engine:\n    pass\n"})
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    real = outside / "scout"
+    real.write_text("#!/bin/sh\necho \"GO FILES\"\n")
+    real.chmod(0o755)
+    registered(project, "#!/bin/sh\n")
+    (project / "bin" / "go-scout").unlink()
+    (project / "bin" / "go-scout").symlink_to(real)
+
+    monkeypatch.chdir(project)
+    run_here()
+    captured = capfd.readouterr()
+    assert "resolves outside the project root" in captured.err
+    assert "GO FILES" not in captured.out
+
+
+def test_a_path_argument_reads_no_project_config(tmp_path, monkeypatch, capfd):
+    """specs/current.toml forbids the scout walking upward, so a named directory
+    has no project whose scanners these would be."""
+    write(tmp_path, {"app/core.py": "class Engine:\n    pass\n"})
+    registered(tmp_path, '#!/bin/sh\necho "GO FILES"\n')
+    monkeypatch.chdir(tmp_path)
+    assert run(tmp_path) == 0
+    assert "GO FILES" not in capfd.readouterr().out
+
+
+def test_an_undeclared_suffix_is_still_counted_as_unread(tmp_path, monkeypatch, capfd):
+    """The entry declares what it reads, so a scanner registered for Go leaves
+    the Rust beside it in the count rather than claiming it."""
+    write(tmp_path, {"main.go": "package main\n", "lib.rs": "fn main() {}\n"})
+    registered(tmp_path, '#!/bin/sh\necho "GO FILES"\n')
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 0
+    out = capfd.readouterr().out
+    assert "not read: 1 .rs" in out
+    assert ".go" not in out.split("not read:")[1]
+
+
+def test_a_malformed_scanners_key_refuses_rather_than_ranking_half(tmp_path, monkeypatch):
+    """A config that does not say what a scanner reads cannot be run, and
+    guessing the suffixes is how a wrong count gets into a report."""
+    (tmp_path / ".flw").mkdir(parents=True)
+    (tmp_path / ".flw" / "config.toml").write_text(
+        '[scout]\nscanners = [{ path = "bin/go-scout" }]\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit, match="does not declare extensions"):
+        run_here()
+
+
+def test_a_suffix_written_without_its_dot_still_subtracts(tmp_path, monkeypatch, capfd):
+    """Normalising rather than refusing, because a wrong count is a worse price
+    for a missing dot than an error message is."""
+    write(tmp_path, {"main.go": "package main\n"})
+    registered(tmp_path, '#!/bin/sh\necho "GO FILES"\n', extensions='["GO"]')
+    monkeypatch.chdir(tmp_path)
+    assert run_here() == 0
+    assert "not read" not in capfd.readouterr().out

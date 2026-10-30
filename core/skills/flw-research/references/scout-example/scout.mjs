@@ -1,4 +1,10 @@
+#!/usr/bin/env node
 /**
+ * A worked example of a flw scanner. Not shipped, not run by any check: read it
+ * and write your own, for your own language. README.md beside this file states
+ * the contract it satisfies. The execute bit and the shebang above are part of
+ * that contract — flw runs a registered scanner as a command.
+ *
  * Scout an unknown TypeScript repo. Same algorithm as the Python one: an import
  * edge runs to whatever file *defines* the imported name and never to the file
  * the specifier names — so a re-export barrel scores nothing and the file that
@@ -227,6 +233,18 @@ function allocate(sections, budget, first) {
 
 function main(root, budget) {
   root = path.resolve(root);
+
+  // The walk comes before the parser check, because the two exit codes are not
+  // equally useful when both hold. A Python repository that registered this
+  // scanner holds no TypeScript and no compiler; told to run `npm install` it
+  // would install one and still have nothing to rank. 1 is the true answer.
+  const { files, hadError } = sources(root);
+  if (files.length === 0) {
+    console.log("no typescript found");
+    process.exit(1);
+  }
+  if (hadError) process.exitCode = 3;
+
   const require = createRequire(path.join(root, "noop.js"));
   let ts;
   try {
@@ -234,10 +252,18 @@ function main(root, budget) {
   } catch (err) {
     // The message ends in a "Require stack:" naming root/noop.js, a file that
     // does not exist — createRequire only needs a path to resolve from, so
-    // printing it sends the reader looking for it. The remedy belongs to
-    // cli/flw.py, which reads the lock file and so knows whether this repo
-    // installs with npm, pnpm, yarn or bun.
-    console.error(`error: no typescript in ${root}/node_modules (${err.message.split("\nRequire stack:")[0]})`);
+    // printing it sends the reader looking for it.
+    //
+    // The remedy is named here rather than by flw, and that is the point of the
+    // example: flw cannot read a lock file for a language it has never heard of,
+    // so a scanner that exits 2 says what to install. Naming npm in a pnpm or
+    // yarn repo is not a cosmetic slip — it creates a competing node_modules and
+    // a second lock file.
+    let manager = "npm install";
+    for (const [lock, command] of [["pnpm-lock.yaml", "pnpm install"], ["yarn.lock", "yarn install"], ["bun.lockb", "bun install"]]) {
+      if (fs.existsSync(path.join(root, lock))) { manager = command; break; }
+    }
+    console.error(`error: no typescript in ${root}/node_modules (${err.message.split("\nRequire stack:")[0]}). Run \`${manager}\` there.`);
     process.exit(2);
   }
   const major = Number(ts.version.split(".")[0]);
@@ -246,7 +272,6 @@ function main(root, budget) {
     process.exit(2);
   }
 
-  const { files, hadError } = sources(root);
   if (hadError) process.exitCode = 3;
   const defs = new Map();       // file -> [{name, line, sig}]
   const importsOf = new Map();  // file -> Map<name, Set of modules imported from>
