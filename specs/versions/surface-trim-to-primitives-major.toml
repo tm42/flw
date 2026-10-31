@@ -140,7 +140,7 @@ measured, they were right about the corpus they read, and that corpus is one mac
 '''
 
 contract_edit = '''
-Twenty-four edits, grouped by component.
+Twenty-five edits, grouped by component.
 
 **In final_state.components, the component named "the flw CLI":**
 
@@ -329,6 +329,33 @@ written here rather than added quietly.
       and not run: a scanner is a file in this repository, and what a path means must not
       depend on the machine it is read on."
 
+**And one more, found while group 2 was being executed.** The nine edits above were
+grepped for `stale`, `sources`, `reports directory`, `transcript` and `style check`, and
+this statement names none of them: it describes the undated-claims row by what it reads.
+Its note half survives in `flw kb lint`. Its extension half was `ledger.extension_markers`
+called from `stale.py:46`, and with `stale.py` gone that function's only callers are its
+own two tests.
+
+25. In the component named "validation and checks", `provides`, in the statement beginning
+    "A claim a commit could falsify", replace:
+
+      "when it sits in a store that carries no revision, which is every extension and any
+      note whose frontmatter records only a date"
+
+    with:
+
+      "when it sits in a note whose frontmatter records only a date and no revision"
+
+    and delete `extension_markers` and the `Marker` dataclass from
+    `core/scripts/ledger.py` with the two tests that drive them. `SPELLED` and `MARKERS`
+    stay: `core/scripts/store.py:29` imports `MARKERS` for the note half, which is the
+    half that keeps a reader.
+
+    An extension carries no revision by design, so the scan was never wrong about what it
+    read. What it lacked was anywhere to be read from — `flw ledger` never exposed it —
+    and a function whose only callers are its own tests is the footprint this record is
+    about.
+
 Nothing else changes. `[success_criteria]` is untouched: the declared check
 `.venv/bin/python core/scripts/style_lint.py .` keeps working, because the file half of the
 linter stays.
@@ -462,7 +489,7 @@ tasks = [
   { id = "unread-by-declared-suffix", desc = "cli/flw.py:2769-2788: the 'not read' message at :2769-2777 keeps unread_by_scouts at :2661-2680 and subtracts every suffix a scanner declares, instead of relying on CODE_EXTENSIONS at :2653-2658 omitting .py and .ts by construction — otherwise a registered Go scanner leaves .go in the list and the line reads '16 .go not read' about files it just ranked. Add .ts, .tsx, .mts and .cts to CODE_EXTENSIONS in the same edit: the set holds .js, .jsx, .mjs, .cjs, .vue and .svelte and no TypeScript suffix, because the TypeScript scout covered them, so without this a TypeScript repository with nothing registered gets neither a ranking section nor a not-read count — the silent miss the provides at specs/current.toml:256 exists to prevent. The message loses the sentence hardcoding two languages and names the worked example's path. The no-language error at :2779-2788 becomes the exit-1 fold. unread_by_scouts keeps reading scout.SKIP, which is why the built-in stays in-process.", depends_on = ["drop-the-gates"] },
   { id = "move-the-example", desc = "Move core/scripts/scout.mjs to core/skills/flw-research/references/scout-example/scout.mjs with a README beside it stating the scanner contract and carrying the package-manager hint. Delete tests/test_scout_mjs.py and package.json. tests/test_scout.py:614-617 (test_scout_mjs_has_no_nul_byte) opens the old path and must be retargeted or deleted. Leave .gitignore's node_modules/ and package-lock.json lines alone.", depends_on = ["unread-by-declared-suffix"] },
   { id = "scout-help-and-prose", desc = "cli/flw.py:4315 ('Python and TypeScript only') and the TypeScript epilog at :4339 become a statement about registered scanners and the worked example. core/skills/flw-research/SKILL.md:115-118 loses 'the scout only reads two languages' and gains one sentence on writing and registering a scanner. core/scripts/ledger.py:343's comment stops naming the moved path. Retire or rewrite plans/backlog/typescript-scout-unmeasured.md and plans/backlog/index.md:22. Check flw-research/SKILL.md against core/scripts/budget.py before and after — it stands at 19401/21000, so the sentence fits, but the file is one of the two tightest.", depends_on = ["move-the-example"] },
-  { id = "scout-contract", desc = "Apply contract edits 5, 6, 7, 8, 9, 10 and 12. Print git diff specs/current.toml on its own.", depends_on = ["scout-help-and-prose"] },
+  { id = "scout-contract", desc = "Apply contract edits 5, 6, 7, 8, 9, 10, 12 and 24. Print git diff specs/current.toml on its own.", depends_on = ["scout-help-and-prose"] },
 ]
 
 [[dag]]
@@ -472,7 +499,7 @@ tasks = [
   { id = "drop-stale", desc = "Delete core/scripts/stale.py and tests/test_stale.py. Delete stale() at cli/flw.py:4023 and its parser block at :4546. Delete the four tests that drive flw stale through main(), by function name rather than by line, because test_cli.py:4490 is the last line of test_style_lint_through_the_subcommand_exits_2_on_a_path_it_cannot_read and a literal line delete cuts the wrong one: test_stale_exits_0_where_every_document_it_read_is_stale, test_stale_outside_any_project_exits_0, test_stale_reads_the_declared_reports_directory and test_stale_refuses_a_root_it_cannot_use." },
   { id = "drop-the-sources-rule", desc = "core/scripts/validate_spec.py: delete the sources rule at :524-535, citation() at :309, DEFAULT_REPORTS at :306, and the reports_dir parameter on check_version (:413) and validate_file (:728) — once the rule is gone nothing in either function reads it. Delete cli/flw.py:2816-2820 and :2875, which resolve and pass [paths] reports only to feed the rule. Delete tests/test_validate_spec.py:493, :501, :524, :550 and the assertion on 'no sources field' at tests/test_cli.py:3755. Keep the sources key in core/schemas/version.schema.json:57: that schema sets additionalProperties false at :7 and ten applied records carry the key, so removing it refuses ten records — restate its description at :64, which today ends 'flw stale reads it, falling back to a regex over the record's prose for the records that carry none', as a field the schema accepts and nothing reads. Restate the retires description at :73 too: it says 'so flw stale reports them as retired rather than as work the project still owes', and retires keeps a reader after this at validate_spec.py:455, which uses it to decide whether a record is unsettled, and at :614, which validates the retires graph.", depends_on = ["drop-stale"] },
   { id = "stale-prose", desc = "core/skills/flw-spec/SKILL.md:259-265: delete the 'Specced as' marking rule, whose only reader was stale.py:46, and with it the instruction at :263-265 to name those report paths in the record's sources field — the key stays in the schema only so ten applied records keep validating, and instructing an agent to fill a field nothing reads is busywork the record would have to keep explaining. flw-spec/SKILL.md is the tightest file against core/scripts/budget.py at 20430/21000, so this is where group 2 gives it room. core/skills/flw-research/references/recheck.md:11-14, :38, :69 and flw-research/SKILL.md:320: the re-check input list comes from the ask or from flw know --check, which is already the fallback at :38-39. Remove the flw stale lines from core/shared/context.md:55, README.md:56 and docs/install.md:85, and the comments naming flw stale or stale.py at cli/flw.py:78, :2554 and :2835 and core/scripts/ledger.py:90.", depends_on = ["drop-the-sources-rule"] },
-  { id = "stale-contract", desc = "Apply contract edits 2, 4, 13 and 14. Print git diff specs/current.toml on its own and check that the three statements at :215, :269 and :272 keep their subject and lose only the clause naming the command.", depends_on = ["stale-prose"] },
+  { id = "stale-contract", desc = "Apply contract edits 2, 4, 13, 14, 15, 17, 18, 19, 20, 21, 22 and 25. Print git diff specs/current.toml on its own and check that the three statements at :215, :269 and :272 keep their subject and lose only the clause naming the command.", depends_on = ["stale-prose"] },
 ]
 
 [[dag]]
@@ -481,6 +508,6 @@ phase = "the transcript half of the linter"
 tasks = [
   { id = "drop-reply-rules", desc = "core/scripts/style_lint.py: delete REPLY_RULES at :73 and the transcript reader at :243-435 — reply_findings, session_transcripts, read_replies, recent_replies and verdict. Keep FILE_RULES, findings(), walk(), report() and the module's exit-2-on-unreadable-target behaviour, which specs/current.toml:193 states and which stays. Rewrite the module docstring: it currently explains the two-corpus split, and only one corpus is left." },
   { id = "drop-style-check", desc = "cli/flw.py: delete style_check() at :1254 and the style check parser entry. Keep style_lint() at :1230, and cut the tail of the style lint parser description at :4171, which ends 'Ask about the words with `flw style check`'. Delete the eleven transcript tests in tests/test_style_lint.py and tests/test_cli.py:4532, :4546, :4561, :4573.", depends_on = ["drop-reply-rules"] },
-  { id = "style-prose-and-contract", desc = "core/skills/flw-style/SKILL.md: delete :12 and :51, the two sentences pointing at flw style check; :111's pointer at flw style lint stays because the command does. Apply contract edits 1, 3 and 11. Print git diff specs/current.toml on its own and confirm [success_criteria] is unchanged.", depends_on = ["drop-style-check"] },
+  { id = "style-prose-and-contract", desc = "core/skills/flw-style/SKILL.md: delete :12 and :51, the two sentences pointing at flw style check; :111's pointer at flw style lint stays because the command does. Apply contract edits 1, 3, 11, 16 and 23. Print git diff specs/current.toml on its own and confirm [success_criteria] is unchanged.", depends_on = ["drop-style-check"] },
   { id = "run-the-declared-check", desc = "Run flw test --no-stream, which runs .venv/bin/python core/scripts/style_lint.py . as a declared check, and .venv/bin/pytest, which must report zero skips after group 1. Then flw validate over the contract and every record, and flw doctor. Then flw know --check: all seven stamped files other than core/schemas/schemas.md will read changed, because each describes something this record edits — cli/cli.md:19 and :50 name style_lint and scout.mjs, tests/tests.md:23 lists test_stale.py and test_style_lint.py, core/scripts/scripts.md:73, :83 and :95 name scout.mjs, stale.py and style_lint.py, core/skills/skills.md:47 names flw style check, core/shared/shared.md covers context.md, and flw.md:27 says node_modules/ exists so core/scripts/scout.mjs can be exercised. Correct each and re-stamp it after the commit that falsified it, not before. schemas.md:19 and the two unstamped index lines at core/index.md:6 and core/schemas/index.md:6 say spec-v3.schema.json is kept, which stays true — this record does not touch it. Two more unstamped lines do change: core/index.md:7 and core/scripts/index.md:6 both read 'Ten engines' and become nine once stale.py goes. The stamped files carry more sites than the ones named above: cli/cli.md:21 and :33, core/scripts/scripts.md:3, :24-30 and :90, and tests/tests.md:24 and :34 — read each file whole rather than patching the cited line.", depends_on = ["style-prose-and-contract"] }
 ]

@@ -53,7 +53,6 @@ flw test               run the project's declared checks; -A for the full defini
 flw scout              rank a repo by what depends on what
 flw know [path]        the knowledge store: what this system is built of, found from a path
 flw map [node]         every seam the store declares, folded together
-flw stale              which documents are spent, and which nobody has read
 flw ledger <terms>     search the contract, the records, the review configs and plans/*.md
 flw kb                 the note store: what an agent worked out, kept for the next one
 flw version            which checkout flw is running from, and at what revision

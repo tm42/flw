@@ -300,51 +300,6 @@ def check_review(config: dict, name: str) -> list[str]:
 LEGACY_STEM = re.compile(r"^v\d+\.\d+$")
 LEGACY_NUMBER = re.compile(r"^\d+\.\d+$")
 
-# Where reports live when a project has not said otherwise. Kept as a second
-# alternation whatever the project declares, because a project that has moved its
-# reports directory still holds records citing the old one.
-DEFAULT_REPORTS = ".flw/reports"
-
-
-def citation(reports_dir: str = DEFAULT_REPORTS) -> re.Pattern[str]:
-    """A report path as a record writes it, in `sources` or in prose.
-
-    Built from the directory the fold was handed rather than hardcoded, because
-    `[paths] reports` is configurable and a matcher that is not saw every citation
-    in such a project as unread — the whole directory, counted as nobody having
-    read it.
-
-    The character class after the directory is what a report name is made of: an
-    ISO stamp, the lens name, and the `:14` a record sometimes appends to cite one
-    line of one. The directory itself reaches the pattern escaped, because a
-    project may name it anything and a `.` or `+` in it would otherwise match
-    something else.
-
-    A declared directory contributes a pattern only when it is relative and stays
-    inside the root. `[paths] reports` is taken raw at `cli/flw.py`, unlike
-    `[paths] flw`, which the contract refuses when absolute — so `root / reports_dir`
-    discards the root for an absolute value, and a pattern built from a
-    machine-specific absolute path matches nothing any record would ever spell.
-    Such a project folds on the default alone. Bounding the setting itself is a
-    separate change.
-
-    The lookbehind is what makes the directory a directory. The pattern used to
-    open with a prefix character class that absorbed whatever preceded the name,
-    so `citation("reviews")` matched `docs/previews/X.md` and `citation("notes")`
-    matched `plans/notes/X.md` — and the contract declares `notes/` as the project
-    note store, so a project setting `[paths] reports = "notes"` read every note
-    citation as a report citation. A record writes a report path from the project
-    root, so the directory begins the path or the path is not this directory's.
-    """
-    directories = [DEFAULT_REPORTS]
-    given = reports_dir.strip().rstrip("/")
-    inside = given and not Path(given).is_absolute() and ".." not in Path(given).parts
-    if inside and given != DEFAULT_REPORTS:
-        directories.append(given)
-    body = "|".join(re.escape(d) for d in directories)
-    return re.compile(rf"(?<![\w./-])(?:{body})/[A-Za-z0-9T:._-]+")
-
-
 def parse_record_filename(filename: str) -> tuple[str, str | None]:
     """A record's name and its classification, read off the filename alone.
 
@@ -410,7 +365,6 @@ def check_version(
     record: dict,
     name: str,
     *,
-    reports_dir: str = DEFAULT_REPORTS,
     applied: list[str] | None = None,
     areas: list[str] | None = None,
     retired: set[str] | None = None,
@@ -519,22 +473,6 @@ def check_version(
                     f"depends_on {dep!r}, which is in group {dep_group}, so the "
                     "task waits for one that runs after it"
                 )
-
-    if stem not in (applied or []):
-        given = record.get("sources")
-        has_sources = isinstance(given, list) and any(isinstance(s, str) for s in given)
-        if not has_sources:
-            matcher = citation(reports_dir)
-            for field in ("summary", "approach", "contract_edit"):
-                value = record.get(field)
-                match = matcher.search(value) if isinstance(value, str) else None
-                if match:
-                    errors.append(
-                        f"{stem or name} names {match.group(0)} in {field} but carries "
-                        "no sources field; a record the contract has not applied must "
-                        "list in sources any report path its prose points at"
-                    )
-                    break
 
     return errors
 
@@ -725,7 +663,6 @@ def validate_file(
     path: Path,
     schema_path: Path,
     *,
-    reports_dir: str = DEFAULT_REPORTS,
     applied: list[str] | None = None,
     areas: list[str] | None = None,
     retired: set[str] | None = None,
@@ -735,11 +672,11 @@ def validate_file(
     check_chain is about the versions directory, not about any one file in it,
     so it is not run here — the caller runs it once per directory it validates.
 
-    `reports_dir`, `applied`, `areas` and `retired` reach `check_version` alone: a
-    contract and a review team have no sources field and no name to check. The
-    caller resolves them from `[paths] reports`, `[spec] areas` and the contract it
-    already reads, or passes none of them for a directory with no contract, where
-    every record is unapplied, nothing is retired and no areas are declared.
+    `applied`, `areas` and `retired` reach `check_version` alone: a contract and a
+    review team have no name to check against a record set. The caller resolves
+    them from `[spec] areas` and the contract it already reads, or passes none of
+    them for a directory with no contract, where every record is unapplied,
+    nothing is retired and no areas are declared.
     """
     try:
         with path.open("rb") as handle:
@@ -769,7 +706,6 @@ def validate_file(
         meaning = check_version(
             document,
             path.name,
-            reports_dir=reports_dir,
             applied=applied,
             areas=areas,
             retired=retired,

@@ -1570,6 +1570,80 @@ def test_a_revision_that_is_not_a_revision_silences_nothing(tmp_path):
     assert "flw/counts — e.g. core/scripts/scout.py:478" in report
 
 
+# The shapes MARKERS matches, each still shipping through `unrevisioned`. They
+# were pinned against `ledger.extension_markers`, which read every extension line
+# by line; nothing calls that any more, so each one is re-pinned here, against the
+# caller that is left.
+
+
+def claimed(tmp_path: Path, body: str) -> str:
+    """What lint names as the claim in a note carrying no revision.
+
+    Read from after the row's own heading: the same note is listed under
+    `undescribed` and `undated` too, and those rows carry no claim.
+    """
+    report = linted(tmp_path, ("flw/claim.md", f"+++\ntitle = 'claim'\n+++\n{body}"))
+    if ROW not in report:
+        return ""
+    rest = report.split(ROW, 1)[1]
+    line = next(l for l in rest.splitlines() if l.strip().startswith("- flw/claim"))
+    return line.split(" — e.g. ", 1)[1]
+
+
+def test_a_number_spelled_as_a_word_is_reported(tmp_path):
+    """The rule used to exempt spelled cardinals, on the argument that "in about
+    eight seconds" is the register of a convention. Of the three claims this
+    repository had actually drifted, the exemption missed exactly one — "Three
+    checks" where there were four — and a person caught it by reading."""
+    assert claimed(tmp_path, "Three checks, in about eight seconds together.\n") == "Three"
+
+
+def test_one_is_not_a_spelled_cardinal(tmp_path):
+    """It is an article as often as it is a count, so reporting it would report
+    most sentences in most notes."""
+    assert claimed(tmp_path, "Rewrite one file, not the tree.\n") == ""
+
+
+def test_a_comma_grouped_number_is_reported_whole(tmp_path):
+    """Thousands groups come first in the count rule: without them
+    `1,049 lines and 21,000 bytes` named `1`, a digit that is not a number in the
+    sentence, with both real countables unnamed."""
+    assert claimed(tmp_path, "1,049 lines and 21,000 bytes.\n") == "1,049"
+
+
+def test_a_date_is_not_a_count(tmp_path):
+    """The exclusion the count rule's lookarounds exist for: a date's parts each
+    read as bare integers to a rule that does not look at what is beside them."""
+    assert claimed(tmp_path, "Written 2026-09-04, revised 2026-09-05.\n") == ""
+
+
+def test_a_version_string_that_is_currently_true_is_still_reported(tmp_path):
+    """`Python 3.11` is the floor today and a commit could raise it, and the note
+    carries no revision to date the claim. Exempting it would mean reasoning about
+    truth, which costs a run."""
+    assert claimed(tmp_path, "Python 3.11 is the floor, for `tomllib`.\n") == "3.11"
+
+
+def test_a_host_and_port_is_not_a_path_with_a_line_number(tmp_path):
+    """`api.example.com:8080` has the path:line shape exactly, and path:line is
+    first in MARKERS, so it claimed the span and no other rule got a look. The
+    guard is a lookbehind requiring the match to begin a path rather than continue
+    one."""
+    assert claimed(tmp_path, "See https://api.example.com:8080/v1 for the shape.\n") == ""
+
+
+def test_an_absolute_path_with_a_line_number_matches_whole(tmp_path):
+    """The shape that lookbehind must not cost: with the leading slash inside the
+    match, `/usr/lib/foo.py:12` is named whole rather than from the character
+    after it."""
+    assert claimed(tmp_path, "see /usr/lib/foo.py:12 there\n") == "/usr/lib/foo.py:12"
+
+
+def test_a_path_with_no_line_number_is_not_reported(tmp_path):
+    """A path is where to look; a line number is a claim about what is there."""
+    assert claimed(tmp_path, "Run `.venv/bin/pytest -q tests/test_cli.py`.\n") == ""
+
+
 def test_a_malformed_revision_reads_as_none_rather_than_as_an_error(tmp_path):
     """Every other frontmatter defect in this store degrades a surface rather than
     failing a read, and this one does the same."""

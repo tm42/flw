@@ -2456,7 +2456,7 @@ def test_project_roots_ignores_the_machine_wide_config(tmp_path, monkeypatch):
 
 def test_a_project_section_that_is_not_a_table_is_refused_by_name(tmp_path):
     """merged.update() on a string raised ValueError out of flw doctor, validate,
-    stale --owed, test and scout, with no path in the message."""
+    test and scout, with no path in the message."""
     project = tmp_path / "work"
     (project / ".flw").mkdir(parents=True)
     config = project / ".flw" / "config.toml"
@@ -3752,28 +3752,6 @@ def test_validate_by_path_reads_the_record_set_of_the_project_that_path_is_in(
     assert "ghost-record" in capsys.readouterr().err
 
 
-def test_validate_by_path_reads_the_reports_directory_that_project_declared(
-    home, tmp_path, monkeypatch, capsys
-):
-    """The second half of the same resolution: check_version's sources rule is
-    built from [paths] reports, which is the member's to declare. Read from the
-    parent, the member's own `reviews` directory is not the pattern, so a record
-    citing a report there carries no sources and is not refused."""
-    parent = tmp_path / "system"
-    member = parent / "ds"
-    _project(parent)
-    _project(member, reports="reviews")
-    (member / "specs" / "versions" / "alpha-fix-minor.toml").write_text(
-        'name    = "alpha-fix"\n'
-        'summary = "a record specced from reviews/2026-01-01T0000-eng-tests.md"\n'
-    )
-    monkeypatch.chdir(parent)
-
-    assert flw.validate(argparse.Namespace(path="ds/specs/versions/alpha-fix-minor.toml")) != 0
-    err = capsys.readouterr().err
-    assert "carries\n  no sources field" in err or "no sources field" in err
-
-
 # --- shape-independence: a run says which project it resolved to ---------- #
 
 
@@ -4425,54 +4403,7 @@ def test_a_legacy_numbered_record_is_not_pending(tmp_path, capsys, monkeypatch):
     assert "pending:" not in capsys.readouterr().out
 
 
-# --- flw stale reports and never fails --------------------------------------- #
-#
-# Nothing it prints is a failure, and a non-zero exit invites someone to wire this
-# into a check whose cheapest green is to delete the documents it names.
-
-
-def test_stale_exits_0_where_every_document_it_read_is_stale(tmp_path, capsys, monkeypatch):
-    root = _spec_project(
-        tmp_path, "", {"in-flight-minor.toml": 'name = "in-flight"\nsummary = "s"\n'}
-    )
-    reports = root / ".flw" / "reports"
-    reports.mkdir(parents=True)
-    (reports / "2026-09-01T2321-eng.md").write_text("# a review nobody has read\n")
-    (root / ".flw" / "extensions").mkdir(parents=True, exist_ok=True)
-    (root / ".flw" / "extensions" / "shared.md").write_text("**Python 3.11 is the floor.**\n")
-    monkeypatch.chdir(tmp_path)
-
-    assert flw.main(["flw", "stale", "--root", str(root)]) == 0
-    out = capsys.readouterr().out
-    assert "REPORTS  (1)" in out and "0 spent, 1 nobody has read" in out
-    assert "EXTENSIONS  (1)" in out
-
-
-def test_stale_outside_any_project_exits_0(tmp_path, capsys, monkeypatch):
-    """A directory with no contract and no configuration is a state rather than a
-    fault, which is the reading flw context already takes."""
-    monkeypatch.chdir(tmp_path)
-    assert flw.main(["flw", "stale"]) == 0
-    assert "Nothing here is a failure" in capsys.readouterr().out
-
-
-def test_stale_reads_the_declared_reports_directory(tmp_path, capsys, monkeypatch):
-    """The plumbing, from [paths] reports to the fold. Every other test of this
-    passes the directory to stale.reports directly, so hardcoding it in the
-    handler left the suite green and turned this fixture from 1 spent back to
-    0 spent, 1 nobody has read."""
-    root = _spec_project(
-        tmp_path,
-        "",
-        {"acted-minor.toml": 'name = "acted"\nsummary = "acted on reviews/2026-09-04T1200-eng.md"\n'},
-    )
-    (root / ".flw" / "config.toml").write_text('[paths]\nreports = "reviews"\n')
-    (root / "reviews").mkdir()
-    (root / "reviews" / "2026-09-04T1200-eng.md").write_text("# a review\n")
-    monkeypatch.chdir(tmp_path)
-
-    assert flw.main(["flw", "stale", "--root", str(root)]) == 0
-    assert "1 spent, 0 nobody has read" in capsys.readouterr().out
+# --- flw style lint through the subcommand ---------------------------------- #
 
 
 def test_style_lint_through_the_subcommand_exits_2_on_a_path_it_cannot_read(
@@ -4488,15 +4419,6 @@ def test_style_lint_through_the_subcommand_exits_2_on_a_path_it_cannot_read(
     captured = capsys.readouterr()
     assert "no such path: no-such-file.md" in captured.err
     assert "clean" not in captured.out
-
-
-def test_stale_refuses_a_root_it_cannot_use(tmp_path, capsys, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    assert flw.main(["flw", "stale", "--root", str(tmp_path / "nope")]) == 1
-    assert "no such path" in capsys.readouterr().err
-
-
-# --- flw style check names the directory it read ----------------------------- #
 
 
 def _style_check_project(tmp_path, monkeypatch) -> tuple[Path, Path]:

@@ -8,14 +8,14 @@ list of paths.
 
 ## What triggers it
 
-*"Is what we recorded still true?"*, *"re-check the store"*, *"flw stale says these three
-knowledge files have changed under them"*, or a list of paths with no other instruction.
+*"Is what we recorded still true?"*, *"re-check the store"*, *"these three knowledge files
+have changed under them"*, or a list of paths with no other instruction.
 
-`flw stale` is what produces such a list. It prints which knowledge files the code has
-moved under, which extensions and notes carry a claim a commit could falsify, and which
-review reports nobody has read. It reports shape and never truth: it cannot say whether
-`638 tests in 7.3 seconds` still holds, because finding out costs a run. That run is this
-mode, and it is the only place in flw where a claim is judged rather than measured.
+`flw know --check` is what produces such a list. It names every knowledge file the code
+has moved under, by diffing the tree against the revision each file was stamped at. It
+reports shape and never truth: it cannot say whether `638 tests in 7.3 seconds` still
+holds, because finding out costs a run. That run is this mode, and it is the only place in
+flw where a claim is judged rather than measured.
 
 ## What it skips, and why
 
@@ -35,8 +35,8 @@ files whose claims the diff falsified, one at a time, and stamps each with `flw 
 
 ## What it does
 
-1. **Take the paths.** From the ask, or from `flw stale`, or — given neither — from
-   `flw know --check`, which names every file the code has moved under.
+1. **Take the paths.** From the ask, or — given none — from `flw know --check`, which
+   names every file the code has moved under.
 2. **Read the recorded claim and the code beside it**, per path. `flw know <path> --full`
    gives the claim; the diff since that file's revision gives what moved.
 3. **Decide, per file, and say which.** The claim survived and only the revision is
@@ -66,8 +66,9 @@ was checked.
 
 ## What it is not
 
-**Not a sweep that deletes.** Nothing here removes a document. `flw stale` lists and the
-user acts, and this mode is the judgment between those two, not a third thing that tidies.
+**Not a sweep that deletes.** Nothing here removes a document. `flw know --check` lists and
+the user acts, and this mode is the judgment between those two, not a third thing that
+tidies.
 
 **Not a re-survey.** If the recorded store describes a repository the code no longer
 resembles — a rewrite, a directory tree that moved wholesale — say so and run the full

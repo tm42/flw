@@ -52,7 +52,6 @@ flw validate <file>     just one
 flw test               the project's declared checks — reports, does not judge
 flw test -A            the contract's full definition of done, not the branch set
 flw ledger <term>      search what the project decided
-flw stale              which documents are spent, and which nobody has read
 flw scout              rank the repo by what depends on what
 ```
 

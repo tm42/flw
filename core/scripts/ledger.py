@@ -87,10 +87,9 @@ def corpus(root: Path, specs_dir: str = "specs") -> Corpus:
     records = load_records(versions) if versions.is_dir() else []
 
     # A file inside a tier that cannot be read at all is skipped rather than
-    # raised. A broken symlink under .flw/extensions/ made `flw stale` exit 1 with
-    # no output whatever, against the property that says it exits 0 whenever it
-    # ran; the reviews tier already skipped a file it could not parse, and this is
-    # the same answer for a file it cannot open.
+    # raised. A broken symlink under .flw/extensions/ made a caller exit 1 with no
+    # output whatever; the reviews tier already skipped a file it could not parse,
+    # and this is the same answer for a file it cannot open.
     skipped: list[Path] = []
 
     def text(path: Path) -> str | None:
@@ -820,11 +819,10 @@ def census(corpus_: Corpus) -> str:
 
 # --- a claim in a store that carries no revision ------------------------------ #
 #
-# An extension carries no revision by design: `core/shared/context.md` sorts the
-# three stores by one question — does a commit make it wrong? — and an extension is
-# the store for what only a decision makes wrong. So an extension carrying a
-# countable is a knowledge fact filed in the wrong place, and that is checkable
-# without knowing whether the claim still holds.
+# The shapes a commit can falsify, matched by `core/scripts/store.py` against the
+# notes that record a date and no revision to date it against. They live here
+# because this module already holds the matching the ledger does, and store.py
+# imports MARKERS rather than keeping a second copy.
 #
 # The lint reads shape and never truth. Verifying a count costs a run, which is a
 # judgment `flw-research` makes and a command does not.
@@ -884,46 +882,3 @@ MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
-@dataclass(frozen=True)
-class Marker:
-    """One line carrying a claim a commit could falsify, and what shape it is."""
-
-    path: Path
-    line: int
-    kind: str
-    text: str
-
-
-def extension_markers(corpus_: Corpus) -> list[Marker]:
-    """Every line of every extension that carries a countable.
-
-    A number spelled as a word is reported, and used not to be. The exemption
-    argued that "in about eight seconds" is the register of a convention while
-    "638 tests in 7.3 seconds" is a measurement — which is a claim about what an
-    author meant, and the comment above MARKERS says these rules read shape and
-    never truth. It also has the one sample against it: of the three claims this
-    repository's extensions had actually drifted, the exemption missed exactly
-    one, "Three checks" where there were four, and that one was caught only
-    because a person read the file.
-
-    The price is `shared.md:16`, "the first fifteen lines", reported while true.
-    That is the same trade `mark-what-is-spent` took for `shared.md:11`, and it is
-    recorded so it is not re-opened as a defect.
-
-    One line yields at most one marker per shape, so a line carrying a count and a
-    version reports both and a line carrying two counts reports the first. The
-    reader is being pointed at a line to re-take, not given an inventory.
-    """
-    found: list[Marker] = []
-    for path in sorted(corpus_.extensions):
-        for number, text in enumerate(corpus_.extensions[path].splitlines(), start=1):
-            claimed: list[tuple[int, int]] = []
-            for kind, rule in MARKERS:
-                for match in rule.finditer(text):
-                    start, end = match.span()
-                    if any(start < b and a < end for a, b in claimed):
-                        continue
-                    claimed.append((start, end))
-                    found.append(Marker(path, number, kind, match.group()))
-                    break
-    return found

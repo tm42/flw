@@ -321,8 +321,8 @@ by nobody and looks fine forever.
 read `$FLW/core/skills/flw-research/references/recheck.md` and follow it.** It reads the
 files a survey already wrote, reports what moved under them, and skips step 1's scout and
 any step 2 probe whose answer is already in `.flw/config.toml`. It rewrites no tree and
-corrects only what a diff falsified. It takes a list of paths, which is what `flw stale`
-produces. Triggered by the ask, never by a flag.
+corrects only what a diff falsified. It takes a list of paths, which is what
+`flw know --check` produces. Triggered by the ask, never by a flag.
 
 ## Rules
 

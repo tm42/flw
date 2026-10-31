@@ -256,14 +256,6 @@ validation.
      carries `path:line`, and the field figure that could not be reproduced says so in its
      own sentence.
 
-     **Then write this record's name into the report you specced from**, one line above
-     its heading, opening `Specced as` with the name in backticks — the shape `flw stale`
-     matches to tell a mark from prose that merely mentions a record. This session is the
-     only one that knows the mapping, and the next round is told to read past reports
-     covering its scope first — so a figure a record has already overturned otherwise
-     reads as a live finding. **Name those same report paths in the
-     record's `sources` field**, so the mapping also lives in the artifact that is
-     versioned: a reports directory is usually gitignored, and the record outlives it.
    - **A version that adds a subcommand declares it in the contract now, not at the end.**
      Write the `flw <name> [flags...]` line into the CLI component's `surfaces` at spec
      time, exactly as the parser will accept it, and say in `approach` that you did.

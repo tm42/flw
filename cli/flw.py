@@ -2614,12 +2614,11 @@ RULES = """what to write
      raised" survives a library upgrade as evidence; "pydantic unions are broken"
      does not.
 
-     `--revision` records where the measurement was taken, and it is what gets a
-     note off `flw stale`'s unrevisioned row. `updated` cannot: a date is not
-     something a diff can be taken against, because two commits land on one day
-     and the second is what moved the line the note cites. A value that does not
-     look like a hash reads as no revision at all, so writing a sentence there
-     silences nothing.
+     `--revision` records where the measurement was taken, so a reader can diff
+     the tree against it. `updated` cannot: a date is not something a diff can be
+     taken against, because two commits land on one day and the second is what
+     moved the line the note cites. A value that does not look like a hash reads
+     as no revision at all, so writing a sentence there silences nothing.
 
   3. Contradiction is reconciled in the open, never overwritten. When a new finding
      disagrees with a note, quote both and say which was measured when — or write
@@ -2921,30 +2920,24 @@ def scout(args: argparse.Namespace) -> int:
 def validate(args: argparse.Namespace) -> int:
     """Validate a contract or a version file.
 
-    Resolves `[paths] reports`, the contract's own `applied` list, `[spec] areas`
-    and the set of retired names once, ahead of the loop, and hands them to every
-    target. None of the four comes from the file being validated: `applied` and
-    `retired` are what tell a record being written from one the contract has
-    already settled, and `areas` is a fact about the project rather than about any
-    record in it.
+    Resolves the contract's own `applied` list, `[spec] areas` and the set of
+    retired names once, ahead of the loop, and hands them to every target. None of
+    the three comes from the file being validated: `applied` and `retired` are
+    what tell a record being written from one the contract has already settled,
+    and `areas` is a fact about the project rather than about any record in it.
     """
     sys.path.insert(0, str(checkout() / "core" / "scripts"))
     import validate_spec
 
     schemas = checkout() / "core" / "schemas"
     # From the path given, the way flw test resolves it: a contract named from
-    # outside its own project has to be checked against that project's record set,
-    # applied list and reports directory rather than against the caller's.
+    # outside its own project has to be checked against that project's record set
+    # and applied list rather than against the caller's.
     root = project_root(Path(args.path) if args.path else None)
     specs = root / _specs_dir(root)
 
     contract = specs / "current.toml"
 
-    paths = _section_config(root, "paths")
-    declared = paths.get("reports")
-    reports_dir = declared if isinstance(declared, str) and declared.strip() else (
-        f"{flw_dir_name()}/reports"
-    )
     applied: list[str] = []
     if contract.exists():
         try:
@@ -2957,9 +2950,8 @@ def validate(args: argparse.Namespace) -> int:
 
     # Only an applied record retires anything, which is the record that introduced
     # `retires` saying so: a draft nobody has run cannot abandon live work. The
-    # union is built here because validate_spec sits at the bottom of the import
-    # chain — stale.py imports from it — and check_version receives one record at a
-    # time and never the set, so neither module can see another record's retires.
+    # union is built here because check_version receives one record at a time and
+    # never the set, so the module itself cannot see another record's retires.
     retired: set[str] = set()
     for record in validate_spec.load_records(specs / "versions"):
         if record.name not in applied:
@@ -2998,7 +2990,6 @@ def validate(args: argparse.Namespace) -> int:
         code, messages = validate_spec.validate_file(
             target,
             schemas / default,
-            reports_dir=reports_dir,
             applied=applied,
             areas=areas,
             retired=retired,
@@ -4146,77 +4137,6 @@ def know_map(args: argparse.Namespace) -> int:
     return 0
 
 
-def stale(args: argparse.Namespace) -> int:
-    """Which of this project's own documents are spent, and which nobody has read.
-
-    The four stores read once and folded into one block. Every path and setting
-    the engine needs is resolved here, because each comes from a configuration
-    merge the engine deliberately knows nothing about: `[paths] reports` and
-    `specs`, `[knowledge] dir`, `[project] roots` and `[kb] category`.
-
-    Exit 0 whenever it ran, including when every document it read is stale.
-    Nothing it reports is a failure, and a non-zero exit invites someone to wire
-    this into a check whose cheapest green is to delete the documents.
-
-    `--owed` is the one exception, and it is narrow for the same reason: it is red
-    only on what is never true in the middle of a normal flw-execute run, so a
-    project can declare it as a check without the run that clears it going red.
-    """
-    refused = _refuse_a_bad_root(args.root)
-    if refused is not None:
-        return refused
-
-    scripts = checkout() / "core" / "scripts"
-    sys.path.insert(0, str(scripts))
-    import stale as engine
-    import store as notes
-
-    start = Path(args.root).resolve() if args.root else None
-    # A directory that is no project is a state rather than a fault, the reading
-    # flw context already takes: the machine-wide note store is still readable
-    # from it, so there is something to print.
-    root = nearest_project(start) or (start or Path.cwd())
-    os.environ["FLW_DIR"] = flw_dir_name()
-
-    members = project_roots(root)
-    paths = _section_config(root, "paths")
-    declared = paths.get("reports")
-    reports_dir = declared if isinstance(declared, str) and declared.strip() else (
-        f"{flw_dir_name()}/reports"
-    )
-
-    if args.owed:
-        text, red = engine.owed(
-            root,
-            specs_dir=_specs_dir(root),
-            knowledge_stores=_knowledge_stores(root, members),
-            members=members,
-            exclude=flw_dir_name(),
-        )
-        print(text, end="")
-        return 1 if red else 0
-
-    skipped: list = []
-    found = notes.walk(
-        FLW_HOME, root, project_category=_kb_category(root), skipped=skipped
-    )
-    _kb_skipped(skipped)
-
-    print(
-        engine.fold(
-            root,
-            specs_dir=_specs_dir(root),
-            reports_dir=reports_dir,
-            knowledge_stores=_knowledge_stores(root, members),
-            members=members,
-            notes=found,
-            exclude=flw_dir_name(),
-        ),
-        end="",
-    )
-    return 0
-
-
 def tilde(path: Path) -> str:
     try:
         return f"~/{path.relative_to(Path.home())}"
@@ -4670,40 +4590,6 @@ edges touching it in either direction; a target no file describes is counted, no
         help="default: text",
     )
     p.set_defaults(handler=know_map)
-
-    p = sub.add_parser(
-        "stale",
-        help="which of the project's own documents are spent, and which nobody read",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="""flw writes four kinds of document and could close none of them. This
-folds all four into one block: which review reports a version record has already acted on
-and which are still open, which knowledge files the code has moved under, and which
-extensions and notes carry a claim a commit could falsify while carrying no revision to
-date it against.
-
-It reports the shape of a claim and never its truth — verifying one costs a run, which is
-flw-research's lane. It deletes nothing: a reports directory is gitignored in most
-projects, so a wrong deletion is unrecoverable, and an uncited report is a backlog item
-with a decision attached rather than refuse.
-
-Exit 0 whenever it ran, including when every document it read is stale. Under --owed it
-prints one line per owed item, naming the lane that owes it, and exits 1 when any is red:
-an orphaned or malformed knowledge file, or a commit changing a component's paths outside
-plans/ after the last applied record landed while no record is in flight. An unapplied
-record and an unstamped knowledge file are listed and never red.""",
-        epilog="""examples
-
-  flw stale                          every store, folded
-  flw stale --owed                   what the project owes, exit 1 when any is red
-  flw stale --root ../other          the same, for another checkout""",
-    )
-    p.add_argument(
-        "--root", metavar="PATH", help="the project to read, instead of $PWD's"
-    )
-    p.add_argument(
-        "--owed", action="store_true", help="what is owed; exit 1 when any of it is red"
-    )
-    p.set_defaults(handler=stale)
 
     p = sub.add_parser("version", help="git describe")
     p.set_defaults(handler=version)
