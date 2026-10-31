@@ -1,27 +1,24 @@
-"""Check prose against the mechanical half of flw's writing style.
+"""Check prose files against the mechanical half of flw's writing style.
 
-Two rule sets, because two corpora break differently and mixing them produced a
-checker with a 52% false-positive rate.
-
-FILE_RULES is document geometry: a fence with no language, a heading past the
+Document geometry and nothing else: a fence with no language, a heading past the
 depth the style allows, the trailing spaces that become a `<br>` in a file.
 Measured across 107 markdown files an agent wrote, untagged fences ran at 19.6%
 and every finding was real.
 
-REPLY_RULES is vocabulary and shape, checked against what the agent said rather
-than what it wrote to disk. Measured across 109,344 words of agent prose against
-88,618 words from subagents that never load the style, five words carry 92% of the
-vocabulary violations. There was an emoji rule here on the strength of a tenfold
-difference between those two corpora; re-measured over 276,281 words it was counting
-`\u2713` and `\u2717`, which flw itself prints, and neither corpus held a single
-pictographic emoji. The style file still says "No emoji." and no pattern enforces it.
+A vocabulary half stood here too, checked against the agent's own replies rather
+than against a file, and it is gone. Not because it was wrong — five words carried
+92% of the violations across 109,344 words of agent prose — but because the corpus
+it read was one machine's session store, which no clone has, so the figure could
+not be re-taken anywhere else. The vocabulary rules live in the style file and in
+`flw-style`, which reads the agent's own recent turns out of context rather than
+off disk, and so works on every host.
 
-The same words in a hand-written document are almost always right — "partial and
+The word rules never ran against a file and that half of the split survives it:
+the same words in a hand-written document are almost always right. "Partial and
 honest beats complete and late" uses `honest` precisely, and a table row reading
 `break it, security, robustness, what if` is quoting a user, not making an
-evaluative claim. So the word rules never run against a file. Six of six
-`honest`/`genuinely` hits in flw's own docs were legitimate, which is the whole
-reason for the split.
+evaluative claim. Six of six `honest`/`genuinely` hits in flw's own docs were
+legitimate.
 
 Nothing here judges the prose rules. A checker that guesses at "one idea per
 sentence" produces noise that teaches people to ignore it.
@@ -30,7 +27,6 @@ sentence" produces noise that teaches people to ignore it.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -42,15 +38,8 @@ SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".flw"}
 # fires on it. It is the one file that cannot be checked against itself.
 SKIP_FILES = {"terse_prose.md"}
 
-# How many of this project's transcripts to collect, and how far into each to
-# look for the cwd record that identifies it.
-MATCH_CAP = 40
-CWD_SCAN_LINES = 200
-
 FENCE = re.compile(r"^\s*```(.*)$")
-_CODE_SPAN = re.compile(r"`[^`\n]*`")
-# Both rule sets measure the trailing pair, so they share the pattern rather than
-# each carrying its own. Only the message differs, and each set states its own.
+# The trailing pair that becomes a `<br>` where nobody asked for one.
 TRAILING_PAIR = re.compile(r"\S  +$")
 
 Rule = tuple[str, re.Pattern[str], str]
@@ -67,74 +56,6 @@ FILE_RULES: tuple[Rule, ...] = (
         "two trailing spaces, which become a <br> in a file",
     ),
 )
-
-# --- replies: vocabulary and shape ----------------------------------------- #
-
-REPLY_RULES: tuple[Rule, ...] = (
-    # "Cut every qualifier that changes nothing when removed."
-    # `honest` only where it modifies a noun. The predicate use is a claim the
-    # style permits -- "the staleness numbers stay honest" -- and 3 of 12 sampled
-    # hits were that, against 9 of the attributive tic the rule is aimed at.
-    (
-        "qualifier",
-        re.compile(
-            r"\b(inherently|genuinely|honestly|really|quite)\b"
-            r"|\b(?:the|a|an|this|that|one|its|their|our|my|more|most|only|same"
-            r"|another|no)\s+honest\b(?=\s+\w)",
-            re.IGNORECASE,
-        ),
-        "a qualifier that changes nothing when removed",
-    ),
-    # "No evaluative words without a measurement behind them."
-    (
-        "evaluative",
-        re.compile(
-            r"\b(robust|elegant|elegantly|dramatically|significantly|seamlessly|properly)\b",
-            re.IGNORECASE,
-        ),
-        "an evaluative word with no measurement behind it",
-    ),
-    # "Use the plain word when there is one."
-    (
-        "plain-word",
-        re.compile(r"\b(utilis|utiliz)e?[sd]?\b|\bsufficient(ly)?\b|\bregarding\b",
-                   re.IGNORECASE),
-        'a longer word where a plain one exists — use, enough, about',
-    ),
-    # "No balanced aphorisms."
-    (
-        "aphorism",
-        re.compile(r"\bis not [^.,;:]{1,40}, it(?:'s| is)\b", re.IGNORECASE),
-        'a balanced aphorism — "X is not Y, it is Z"',
-    ),
-    # "Do not connect them with a participle tail."
-    (
-        "participle-tail",
-        re.compile(r", (ensuring|allowing|enabling|leveraging) ", re.IGNORECASE),
-        "a participle tail; give the clause a verb that commits",
-    ),
-    # "Reaction openers." / "Closing offers." / "Announcements."
-    (
-        "reaction-opener",
-        re.compile(
-            r"(?im)^\s*(great question|good catch|you'?re absolutely right)\b"
-        ),
-        "a reaction opener",
-    ),
-    ("closing-offer", re.compile(r"(?i)\blet me know if\b"), "a closing offer"),
-    (
-        "announcement",
-        re.compile(r"(?im)^\s*(let me |i'?ll start by |i'?m going to )"),
-        "an announcement of what you are about to do",
-    ),
-    # "Writing about your own writing."
-    (
-        "signpost",
-        re.compile(r"(?im)^\s*(two|three|four|five) things:"),
-        "a signpost; say the things",
-    ),
-)
-
 
 def findings(path: Path, text: str) -> list[tuple[int, str, str]]:
     """(line, rule, what is wrong) for one file, in file order.
@@ -238,171 +159,6 @@ def report(paths: list[Path], root: Path) -> tuple[list[str], int, int]:
             lines.append(f"{shown}:{number}: {name}: {message}")
             total += 1
     return lines, total, unread
-
-
-def reply_findings(text: str) -> dict[str, list[str]]:
-    """{rule: examples} for one reply. The count is len() of each list.
-
-    Two geometry rules are measured here and no others: the trailing double space,
-    and a fence with no language tag. There is no width rule, because the style
-    states that the width is the reader's — so do not add one back, and do not take
-    the trailing pair out with it. Both sets refuse the pair under the same name and
-    the same pattern, TRAILING_PAIR, and say why differently: in a file the pair
-    becomes a <br>, and in a reply it is what hard wrapping leaves behind.
-
-    The vocabulary rules read the line with its inline code spans removed. A word
-    inside backticks is being quoted rather than used, and 25 of 44 measured false
-    positives were exactly that — a reply reporting this checker's own output.
-    trailing-spaces reads the raw line instead, because substituting a span leaves
-    whitespace the author never wrote.
-
-    fence-untagged is the one rule both sets run. The style asks for a language tag
-    wherever a fence is written, and a reply is written.
-    """
-    # Every rule gets a key whether it fired or not, so a caller can ask about
-    # one without knowing whether it hit. style_check skips the empty ones.
-    out: dict[str, list[str]] = {name: [] for name, _, _ in REPLY_RULES}
-    out.update({"fence-untagged": [], "trailing-spaces": []})
-    in_fence = False
-
-    for line in text.split("\n"):
-        fence = FENCE.match(line)
-        if fence:
-            if not in_fence and not fence.group(1).strip():
-                out["fence-untagged"].append(line.strip()[:52] or "```")
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        probe = _CODE_SPAN.sub(" ", line)
-        for name, pattern, _ in REPLY_RULES:
-            # group(0), not findall: a pattern with alternated groups returns a
-            # tuple of mostly empty strings and the label comes out as the rule
-            # name instead of the word that tripped it.
-            for hit in pattern.finditer(probe):
-                out[name].append(
-                    f"{hit.group(0).strip()}: {line.strip()[:52]}"
-                )
-        # On the raw line, not on `probe`: substituting a code span leaves a space
-        # the author never typed, which would read as a pair they never wrote.
-        if TRAILING_PAIR.search(line):
-            out["trailing-spaces"].append(line.strip()[:60])
-    return out
-
-
-def session_transcripts(root: Path, base: Path) -> list[Path]:
-    """Every transcript under `base` whose own records say it ran in `root`, newest
-    first.
-
-    `base` is handed in rather than derived from HOME, because which directory a
-    host writes transcripts to is a fact about the host and the CLI is the only
-    part of flw that holds those. This engine reads whatever directory it is
-    given.
-
-    Found by reading each candidate's `cwd` rather than by reconstructing the
-    host's directory-naming scheme, which is undocumented and not ours. Empty
-    when nothing matches, which is the answer for a directory that is absent,
-    unreadable, or holds no session that ran here.
-
-    A list rather than one path because several sessions run against one project
-    and the newest is often one that has not said anything yet. The caller takes
-    the first that actually holds prose.
-
-    The cap counts matches rather than candidates. Capping candidates meant the
-    newest 40 files across every project on the machine, so a day spent in
-    another repository pushed this project's transcripts out of the window and
-    the command reported it as the host keeping none. Reading all of them to
-    find 40 cost about 0.1s over 477 files on the machine this was written on; the
-    corpus is one machine's session store, so the figure cannot be re-taken anywhere
-    else and the shape of the cost is the part that travels.
-    """
-    matched: list[Path] = []
-    if not base.is_dir():
-        return matched
-    candidates = sorted(
-        base.glob("*/*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True
-    )
-    wanted = str(root.resolve())
-    for path in candidates:
-        try:
-            with path.open(encoding="utf-8", errors="replace") as handle:
-                for _ in range(CWD_SCAN_LINES):
-                    line = handle.readline()
-                    if not line:
-                        break
-                    if '"cwd"' not in line:
-                        continue
-                    try:
-                        cwd = json.loads(line).get("cwd")
-                    except json.JSONDecodeError:
-                        continue
-                    # Not `break` on any cwd record: a session that started in a
-                    # parent directory names it first and this project later, and
-                    # 31 of 476 transcripts hold more than one distinct cwd.
-                    if cwd and str(Path(cwd).resolve()) == wanted:
-                        matched.append(path)
-                        break
-        except OSError:
-            continue
-        if len(matched) >= MATCH_CAP:
-            break
-    return matched
-
-
-def read_replies(path: Path, last: int) -> tuple[list[str], int]:
-    """The last `last` main-agent replies, oldest first, and how many were skipped
-    for being a dispatched agent's.
-
-    A dispatched agent does not receive the host's output style: measured over
-    this project's transcripts, its prose breaks `announcement` at 6.18 per 10,000
-    words against the main agent's 2.29. So counting it here would measure
-    something the style never reached. `isSidechain` is checked too and fires in
-    none of 298 transcripts, so the name is doing all the work.
-
-    The skipped count is the second return value because a transcript holding
-    nothing but dispatched replies and one holding nothing at all are different
-    answers. The first means flw is reading someone else's session and must say
-    so; the second means a session that has not spoken yet, and moving on is
-    right.
-    """
-    replies: list[str] = []
-    dispatched = 0
-    if last <= 0:
-        # replies[-0:] is every reply, so asking for none used to return all.
-        return replies, dispatched
-    try:
-        handle = path.open(encoding="utf-8", errors="replace")
-    except OSError:
-        return replies, dispatched
-    with handle:
-        for line in handle:
-            if '"assistant"' not in line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if record.get("type") != "assistant":
-                continue
-            if record.get("isSidechain") or record.get("agentName"):
-                dispatched += 1
-                continue
-            content = (record.get("message") or {}).get("content")
-            if not isinstance(content, list):
-                continue
-            text = "\n".join(
-                block.get("text", "")
-                for block in content
-                if isinstance(block, dict) and block.get("type") == "text"
-            ).strip()
-            if text:
-                replies.append(text)
-    return replies[-last:], dispatched
-
-
-def recent_replies(path: Path, last: int) -> list[str]:
-    """The replies alone, for a caller that does not need to know what was skipped."""
-    return read_replies(path, last)[0]
 
 
 def verdict(findings: int, unread: int) -> int:

@@ -8,9 +8,7 @@ argument-hint: "[--vocab|--verbose|--format|--shape|--coherence] [critique] [--l
 
 ## `-h` or `--help`
 
-Print the block below verbatim and stop. Do no correction, read no transcript, run nothing.
-These are this skill's flags. `flw style check --help` is a different surface and lists only
-`--last`.
+Print the block below verbatim and stop. Do no correction, run nothing.
 
 ```text
 /flw-style [flags] [free-form critique]
@@ -48,12 +46,10 @@ the user to check your work against. They are not a reading list.
 Default 5, or `--last N`. They are in your context already, so this costs nothing — look at
 what you actually wrote, not at what you remember writing.
 
-**Past a compaction, or further back than your context holds**, run `flw style check` for
-the countable rules. It reads this project's transcript and works on Claude Code only; Codex
-and OpenCode write no session record it parses. It cannot read a session whose newest
-transcript belongs to a dispatched agent, so a session that spawned subagents gets nothing
-from it — say so and work from context instead of reporting the command's refusal as a
-finding.
+**Past a compaction, or further back than your context holds**, work from what the context
+does hold and say how far back that reaches. Nothing reads a host's session record: the
+turns to correct are the ones in front of you, which is what makes this skill work on every
+host.
 
 ## 2. Find instances of what was flagged
 

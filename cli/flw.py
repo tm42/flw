@@ -73,11 +73,6 @@ class Host:
     # Only Claude Code has the slot; the others can only take the text in the
     # always-on instructions file, which is why `flw style` has two paths.
     styles: str = ""
-    # Where this host writes each session's transcript, empty when it writes none
-    # flw can read. Only Claude Code does; Codex and OpenCode keep no session
-    # record on disk in a form flw reads, which is why `flw style check` works on
-    # one host and `flw style lint`, which reads files, works on all three.
-    transcripts: str = ""
 
 
 # `roots` is every directory this host scans for global skills, preferred first.
@@ -93,7 +88,6 @@ HOSTS: tuple[Host, ...] = (
         "than one location.",
         "claude",
         "~/.claude/output-styles",
-        "~/.claude/projects",
     ),
     Host(
         "codex",
@@ -1249,117 +1243,6 @@ def style_lint(args: argparse.Namespace) -> int:
     for line in lines:
         print(line)
     return engine.verdict(total, len(missing) + unread)
-
-
-def style_check(args: argparse.Namespace) -> int:
-    """What the agent's own recent replies broke, named rather than restated.
-
-    Naming the specific violation is the one reinforcement with a measured
-    effect; restating a rule the model can already recite has almost none. So
-    this prints counts and examples and never the rules themselves.
-    """
-    if args.last < 1:
-        print("style check: --last takes 1 or more", file=sys.stderr)
-        return 1
-    scripts = checkout() / "core" / "scripts"
-    sys.path.insert(0, str(scripts))
-    import style_lint as engine
-
-    root = nearest_project() or Path.cwd()
-    # The directories the hosts declare, de-duplicated and in HOSTS order. Never
-    # narrowed to the host running this session: nothing tells flw which one that
-    # is. `present()` answers whether a host is on the machine, which is a
-    # different question — all three binaries resolve on a machine with all three
-    # installed, so a message naming one would name it wrongly two times in three.
-    sources: list[Path] = []
-    for host in HOSTS:
-        if not host.transcripts:
-            continue
-        directory = expand(host.transcripts)
-        if directory not in sources:
-            sources.append(directory)
-    # The trigger is the directory, not the declaration. claude-code declares its
-    # directory unconditionally, so a test on what a host declares is never false
-    # and would never fire — including on the reproduction this was written for,
-    # where the binary is on PATH and only the directory is missing.
-    readable = [d for d in sources if d.is_dir() and os.access(d, os.R_OK)]
-    candidates: list[Path] = []
-    for directory in readable:
-        candidates += engine.session_transcripts(root, directory)
-    if not candidates:
-        where = ", ".join(tilde(d) for d in sources)
-        print(
-            f"style check: nothing in {where} belongs to {tilde(root)}",
-            file=sys.stderr,
-        )
-        if not readable:
-            said = (
-                "that is the only directory flw reads transcripts from, and it is "
-                "absent or unreadable"
-                if len(sources) == 1
-                else "those are every directory flw reads transcripts from, and "
-                "none of them is readable"
-            )
-            print(f"         {said}", file=sys.stderr)
-        print(
-            "         `flw style lint` reads files rather than transcripts and "
-            "works here either way",
-            file=sys.stderr,
-        )
-        return 1
-    # Newest first, and the newest is often a session that has not spoken yet.
-    # Take the first that actually holds prose rather than reporting nothing.
-    transcript, replies = None, []
-    for candidate in candidates:
-        found, dispatched = engine.read_replies(candidate, args.last)
-        if found:
-            transcript, replies = candidate, found
-            break
-        if dispatched:
-            # Not a session that has yet to speak — one whose every reply is a
-            # dispatched agent's, and that prose never received the style. Moving
-            # on would report the next session's replies as this one's.
-            print(
-                f"style check: the newest transcript for {tilde(root)} holds "
-                f"{dispatched} replies and all of them are a dispatched agent's",
-                file=sys.stderr,
-            )
-            print(
-                f"         {tilde(candidate)}",
-                file=sys.stderr,
-            )
-            print(
-                "         run this from the session you want measured, not from "
-                "a dispatched agent",
-                file=sys.stderr,
-            )
-            return 1
-    if transcript is None:
-        print(
-            f"style check: {len(candidates)} transcripts for {tilde(root)}, "
-            "none holding a main-agent reply yet",
-            file=sys.stderr,
-        )
-        return 1
-
-    totals: dict[str, list[str]] = {}
-    for reply in replies:
-        for rule, examples in engine.reply_findings(reply).items():
-            totals.setdefault(rule, []).extend(examples)
-
-    among = f" · 1 of {len(candidates)} transcripts" if len(candidates) > 1 else ""
-    print(f"style check — last {len(replies)} replies · {tilde(transcript)}{among}")
-    found = False
-    for rule, examples in totals.items():
-        if not examples:
-            continue
-        found = True
-        print(f"  {rule}: {len(examples)}")
-        for example in examples[:3]:
-            print(f"    {example}")
-    if not found:
-        print("  clean")
-    return 0
 
 
 def style_state(entry: dict) -> tuple[str, str | None, str | None]:
@@ -4211,10 +4094,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="""Document geometry, and only that: a heading deeper than ###, a code
 fence with no language, and the trailing spaces that become a <br> in a file.
 
-The word rules are not here. They run against what an agent said, not what it wrote to
-disk, because the same words are almost always right in a hand-written document — one
-rule set over both corpora was measured at a 52% false-positive rate. Ask about the words
-with `flw style check`.
+The word rules are not here. They belong to what an agent said rather than to what it
+wrote to disk, because the same words are almost always right in a hand-written document —
+one rule set over both corpora was measured at a 52% false-positive rate. The `flw-style`
+skill is where the words are read, out of the agent's own recent turns.
 
 It says nothing about the prose rules either. A checker that guesses at "one idea per
 sentence" produces noise that teaches people to ignore it.""",
@@ -4224,29 +4107,6 @@ sentence" produces noise that teaches people to ignore it.""",
         "paths", nargs="*", metavar="PATH", help="files or directories; default: ."
     )
     q.set_defaults(handler=style_lint)
-
-    q = style_sub.add_parser(
-        "check",
-        help="what this session's own recent replies broke",
-        description="""Reads this project's session transcript and reports what the agent's
-own recent replies broke, with examples: the overused words, the openers and offers, a
-fence with no language tag, and two trailing spaces — refused in a reply as in a file,
-under one name, because the pair is what hard wrapping leaves behind. There is no width
-rule: the style leaves the width to your terminal.
-
-It never restates a rule. Constraint restatement accuracy is measured at 97.3% while the
-same models violate the constraint they just restated, so repeating a rule an agent can
-already recite addresses nothing; naming the specific violation is what moves.
-
-Exits 1 when no transcript for this project can be found, and when the newest one holds
-nothing but a dispatched agent's replies — that prose never received the style, and
-reading the next session's instead would report someone else's writing as yours.""",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    q.add_argument(
-        "--last", type=int, default=10, metavar="N", help="replies to read (default 10)"
-    )
-    q.set_defaults(handler=style_check)
 
     p = sub.add_parser("sync", help="repair what doctor can only report")
     p.add_argument("-n", "--dry-run", action="store_true", help="show, do nothing")

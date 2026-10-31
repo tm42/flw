@@ -9,8 +9,6 @@ file exists to catch.
 
 from __future__ import annotations
 
-import json
-import os
 import sys
 from pathlib import Path
 
@@ -215,239 +213,6 @@ def test_a_clean_run_over_real_targets_still_exits_0(tmp_path, capsys, monkeypat
     assert "style lint: clean" in capsys.readouterr().out
 
 
-# --- replies: vocabulary and reply-only geometry --------------------------- #
-
-
-def test_banned_words_are_findings_in_a_reply():
-    found = style_lint.reply_findings(
-        "Great question — this is a robust and elegant fix.\n"
-        "We can utilise sufficient context regarding it. 🎉\n"
-        "Let me know if you need anything else.\n"
-    )
-    assert {r for r, hits in found.items() if hits} >= {
-        "reaction-opener",
-        "evaluative",
-        "plain-word",
-        "closing-offer",
-    }
-    assert "emoji" not in found, "the emoji rule was deleted; the 🎉 must not fire"
-
-
-def test_a_hit_is_labelled_with_the_word_not_the_rule():
-    """A pattern with alternated groups used to label one hit `plain-word`."""
-    hits = style_lint.reply_findings("we utilise sufficient context regarding it")[
-        "plain-word"
-    ]
-    assert [h.split(":")[0] for h in hits] == ["utilise", "sufficient", "regarding"]
-
-
-def test_the_words_the_style_names_are_all_caught():
-    """Three of them were named by the style and matched by no pattern.
-
-    `honestly` fired and `honest` did not; `properly` was in the style's
-    evaluative sentence and in no rule. Measured in main-agent replies: honest
-    37, properly 10, really 5, quite 2, outside inline code spans.
-    """
-    for text, rule in (
-        ("the honest answer is no", "qualifier"),
-        ("we should really do this", "qualifier"),
-        ("it is quite small", "qualifier"),
-        ("it does not work properly", "evaluative"),
-    ):
-        assert style_lint.reply_findings(text)[rule], text
-
-
-def test_honest_fires_attributively_and_not_as_a_predicate():
-    """The predicate use is a claim the style permits, and 3 of 12 sampled were it."""
-    assert style_lint.reply_findings("the honest option")["qualifier"]
-    assert style_lint.reply_findings("the numbers stay honest")["qualifier"] == []
-
-
-def test_a_word_inside_backticks_is_quoted_not_used():
-    """25 of 44 measured false positives were exactly this — a reply reporting
-    this checker's own output trips the rules it is reporting on."""
-    assert style_lint.reply_findings("the `robust` rule fired twice")["evaluative"] == []
-    assert style_lint.reply_findings("the robust rule fired twice")["evaluative"]
-
-
-def test_an_untagged_fence_in_a_reply_is_a_finding():
-    """The only rule both sets run: a reply is written, so it takes a tag too."""
-    assert style_lint.reply_findings("text\n\n```\nls\n```\n")["fence-untagged"]
-    assert style_lint.reply_findings("text\n\n```sh\nls\n```\n")["fence-untagged"] == []
-
-
-def test_prose_written_as_the_style_now_asks_is_clean():
-    """The checker and the style file came apart once already: the reply set
-    enforced a 120-column wrap and a trailing pair on every line but a paragraph's
-    last, while the style asked for one line per paragraph and no trailing pair.
-    This is what holds the two together — if a geometry rule is ever added back,
-    it fails here first."""
-    text = (
-        "A paragraph written as one line, however long it runs, which is what the style "
-        "asks for and which the old width rule reported as a finding at 121 columns.\n"
-        "\n"
-        "A second paragraph, also one line, also carrying no trailing whitespace at all.\n"
-        "\n"
-        "- a bullet, which used to be its own block for a rule that no longer exists\n"
-        "- a second bullet\n"
-    )
-    geometry = {"fence-untagged", "trailing-spaces"}
-    assert {k: v for k, v in style_lint.reply_findings(text).items() if v and k in geometry} == {}
-
-
-def test_two_trailing_spaces_in_a_reply_are_a_finding():
-    """The style forbids the pair in a reply as well as in a file, and this is the
-    only rule in the reply set that reads a line's trailing whitespace. Without it
-    the pair is stated and measured nowhere."""
-    found = style_lint.reply_findings("a line of prose ending in a pair  \n")
-    assert len(found["trailing-spaces"]) == 1
-    assert style_lint.reply_findings("a line of prose with no pair\n")["trailing-spaces"] == []
-
-
-def test_two_trailing_spaces_inside_a_fence_are_not():
-    """A fenced block's alignment is its content, which is why the width rule
-    skipped fences too."""
-    text = "text\n\n```text\naligned  \ncolumns  \n```\n"
-    assert style_lint.reply_findings(text)["trailing-spaces"] == []
-
-
-# --- transcripts ----------------------------------------------------------- #
-
-
-def _record(text: str, **extra) -> str:
-    record = {
-        "type": "assistant",
-        "message": {"role": "assistant", "content": [{"type": "text", "text": text}]},
-    }
-    record.update(extra)
-    return json.dumps(record) + "\n"
-
-
-def test_recent_replies_skips_subagents(tmp_path):
-    """A dispatched agent does not receive the output style, so its prose is not
-    evidence: measured at 6.18 announcements per 10,000 words against 2.29."""
-    path = tmp_path / "s.jsonl"
-    path.write_text(
-        _record("mine")
-        + _record("a sidechain", isSidechain=True)
-        + _record("a named agent", agentName="reviewer")
-        + _record("mine too")
-    )
-    assert style_lint.recent_replies(path, 10) == ["mine", "mine too"]
-
-
-def test_read_replies_counts_what_it_skipped(tmp_path):
-    """A transcript of nothing but dispatched replies and one holding nothing are
-    different answers: the first means flw is about to read someone else's session."""
-    path = tmp_path / "s.jsonl"
-    path.write_text(
-        _record("theirs", agentName="reviewer")
-        + _record("theirs too", agentName="reviewer")
-    )
-    assert style_lint.read_replies(path, 10) == ([], 2)
-
-    empty = tmp_path / "e.jsonl"
-    empty.write_text(json.dumps({"type": "user"}) + "\n")
-    assert style_lint.read_replies(empty, 10) == ([], 0)
-
-
-def test_asking_for_no_replies_returns_none(tmp_path):
-    """replies[-0:] is every reply, so --last 0 used to read the whole transcript."""
-    path = tmp_path / "s.jsonl"
-    path.write_text("".join(_record(str(n)) for n in range(5)))
-    assert style_lint.read_replies(path, 0) == ([], 0)
-
-
-def test_recent_replies_takes_the_last_n(tmp_path):
-    path = tmp_path / "s.jsonl"
-    path.write_text("".join(_record(str(n)) for n in range(5)))
-    assert style_lint.recent_replies(path, 2) == ["3", "4"]
-
-
-def test_recent_replies_survives_a_malformed_line(tmp_path):
-    path = tmp_path / "s.jsonl"
-    path.write_text(_record("kept") + '{"type":"assistant" broken\n')
-    assert style_lint.recent_replies(path, 10) == ["kept"]
-
-
-def test_transcripts_are_matched_by_their_own_cwd(tmp_path):
-    """Not by reconstructing the host's directory naming, which is not ours."""
-    home = tmp_path / "home"
-    project = tmp_path / "work"
-    project.mkdir()
-    directory = home / ".claude" / "projects" / "whatever-mangling"
-    directory.mkdir(parents=True)
-    (directory / "match.jsonl").write_text(
-        json.dumps({"type": "assistant", "cwd": str(project)}) + "\n"
-    )
-    (directory / "other.jsonl").write_text(
-        json.dumps({"type": "assistant", "cwd": str(tmp_path / "elsewhere")}) + "\n"
-    )
-    found = style_lint.session_transcripts(project, home / ".claude" / "projects")
-    assert [p.name for p in found] == ["match.jsonl"]
-
-
-def test_a_transcript_naming_the_project_after_another_cwd_still_matches(tmp_path):
-    """A session that started in a parent directory names it first. 31 of 476
-    transcripts hold more than one distinct cwd, so the first is not the answer."""
-    home = tmp_path / "home"
-    project = tmp_path / "work"
-    project.mkdir()
-    directory = home / ".claude" / "projects" / "whatever-mangling"
-    directory.mkdir(parents=True)
-    (directory / "later.jsonl").write_text(
-        json.dumps({"type": "assistant", "cwd": str(tmp_path / "elsewhere")})
-        + "\n"
-        + json.dumps({"type": "assistant", "cwd": str(project)})
-        + "\n"
-    )
-    found = style_lint.session_transcripts(project, home / ".claude" / "projects")
-    assert [p.name for p in found] == ["later.jsonl"]
-
-
-def test_transcripts_come_back_newest_first(tmp_path):
-    """The caller takes the first that holds prose, so the order is the answer.
-
-    Nothing asserted this: deleting `reverse=True` left the whole suite green
-    while flw style check read the oldest matching session instead of this one.
-    """
-    home = tmp_path / "home"
-    project = tmp_path / "work"
-    project.mkdir()
-    directory = home / ".claude" / "projects" / "whatever-mangling"
-    directory.mkdir(parents=True)
-    record = json.dumps({"type": "assistant", "cwd": str(project)}) + "\n"
-    for name, mtime in (("older.jsonl", 1_000_000), ("newer.jsonl", 2_000_000)):
-        path = directory / name
-        path.write_text(record)
-        os.utime(path, (mtime, mtime))
-    found = style_lint.session_transcripts(project, home / ".claude" / "projects")
-    assert [p.name for p in found] == ["newer.jsonl", "older.jsonl"]
-
-
-def test_the_cap_counts_matches_not_candidates(tmp_path):
-    """Capping candidates meant the newest 40 files on the whole machine, so a day
-    in another repository made this project's transcripts unreadable."""
-    home = tmp_path / "home"
-    project = tmp_path / "work"
-    project.mkdir()
-    directory = home / ".claude" / "projects" / "whatever-mangling"
-    directory.mkdir(parents=True)
-    for n in range(style_lint.MATCH_CAP + 5):
-        (directory / f"other{n:03}.jsonl").write_text(
-            json.dumps({"type": "assistant", "cwd": str(tmp_path / "elsewhere")}) + "\n"
-        )
-    (directory / "mine.jsonl").write_text(
-        json.dumps({"type": "assistant", "cwd": str(project)}) + "\n"
-    )
-    found = style_lint.session_transcripts(project, home / ".claude" / "projects")
-    assert [p.name for p in found] == ["mine.jsonl"]
-
-
-def test_no_transcript_directory_is_not_an_error(tmp_path):
-    assert style_lint.session_transcripts(tmp_path, tmp_path / "nothing") == []
-
-
 # --- the repository itself ------------------------------------------------- #
 
 
@@ -464,13 +229,12 @@ def test_the_three_narrowed_words_are_in_neither_rule_set():
 
     The first two were 240 of roughly 356 measured vocabulary violations precisely
     because both have uses the style permits. `surface` joined them at 260 uses in
-    166,185 words, against a contract with a field of that name. A pattern that
-    reintroduces any of the three puts the checker back at odds with the sentence
-    it is supposed to enforce.
+    166,185 words, against a contract with a field of that name. The word rules
+    that would have banned them are gone, and this stays as the guard against one
+    being written back in: a pattern reintroducing any of the three puts the
+    checker at odds with the sentence it is supposed to enforce.
     """
-    patterns = " ".join(
-        p.pattern for _, p, _ in style_lint.REPLY_RULES + style_lint.FILE_RULES
-    )
+    patterns = " ".join(p.pattern for _, p, _ in style_lint.FILE_RULES)
     assert "clean" not in patterns
     assert "actually" not in patterns
     assert "surface" not in patterns
