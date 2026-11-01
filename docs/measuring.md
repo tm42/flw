@@ -138,7 +138,7 @@ cProfile.run('store.lint(notes)', sort='tottime')" 2>&1 | head -20
 
 ## The baseline
 
-Apple M3 Pro, macOS 26.6.2, Python 3.12.14, at flw 0.11.5. Wall clock, second run.
+Apple M3 Pro, macOS 26.6.2, Python 3.12.14, at commit 0eb58f2 (2026-09-01). Wall clock, second run.
 
 | command | corpus | time |
 |---|---|---|
@@ -158,7 +158,7 @@ Apple M3 Pro, macOS 26.6.2, Python 3.12.14, at flw 0.11.5. Wall clock, second ru
 About 20 ms of every one of those is interpreter startup, so the small numbers are partly Python
 booting rather than flw working.
 
-The table was taken at flw 0.11.5 and the repository has moved since, so treat a row as a
+The table was taken at commit 0eb58f2 (2026-09-01) and the repository has moved since, so treat a row as a
 starting point rather than as the current figure. Re-run the protocol before comparing against
 it.
 

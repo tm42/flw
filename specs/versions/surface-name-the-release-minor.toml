@@ -1,0 +1,43 @@
+name    = "surface-name-the-release"
+base    = "surface-trim-to-primitives"
+summary = "Give flw a released version: set the contract's release key to 0.1, tag the commit, and replace the two docs lines that name a version nothing can resolve."
+
+approach = '''
+flw has 183 commits and no released version. `flw version` prints a bare hash, so a
+user cannot say which flw they are running. The contract declares the `release` key and
+two places print it — the `flw context` header and the ledger header — and neither branch
+has ever run on this repository because the key was never set.
+
+The release is `0.1`. Nobody but the author runs flw, and `surface-trim-to-primitives`
+removed two subcommands a week before this record, so `1.0` would promise a stability the
+surface has not shown. The git tag is `v0.1`, so `git describe` and the contract agree.
+
+docs/measuring.md:141 and :161 say the baseline table was taken "at flw 0.11.5". That
+number was the spec version under the retired three-part scheme and resolves to nothing
+now: no tag carries it and the contract's number is two-part. The commit that moved the
+contract to 0.11.5 is 0eb58f2 (2026-09-01), so the label becomes that commit, which
+resolves. `surface-stop-proving` left this file alone because its caveat already said the
+baseline was old; this record touches it because the label stopped being followable, not
+because the caveat was wrong.
+
+This record changes no contract sentence. Setting `release` is the team's edit and not a
+run's, which is why it is done beside the record rather than in a `contract_edit`.
+'''
+
+[[decisions]]
+topic     = "the first release number"
+options   = ["0.1", "1.0", "19.0, matching the spec version"]
+chosen    = "0.1"
+rationale = "1.0 promises strangers a stable surface one week after two subcommands were removed. Reusing the spec version breaks the separation the contract states at the spec-version fold: the product's version is a key the fold never reads."
+
+[[decisions]]
+topic     = "the 17 legacy vX.Y records in specs/versions/"
+options   = ["ship them as history", "move them to specs/versions/legacy/", "delete them"]
+chosen    = "ship them as history"
+rationale = "They validate, they are the only record of versions 1.0 through 5.0, and `applied` still names 4.0 through 5.0, so deleting them leaves the contract pointing at records that do not exist. Moving them changes a declared directory shape for no reader's benefit."
+
+[[decisions]]
+topic     = "the five backlog items and three open questions"
+options   = ["carry them into the release", "close them first"]
+chosen    = "carry them into the release"
+rationale = "Each backlog item is blocked on a condition the release cannot create: use, a 10k-file repository, a smaller machine, a concurrent write happening, starting the store. Holding the release for them holds it for nothing."

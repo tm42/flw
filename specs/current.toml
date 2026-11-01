@@ -1,5 +1,6 @@
 schema_version = 4
-spec_version = "19.0"
+spec_version = "19.1"
+release = "0.1"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -60,6 +61,7 @@ applied = [
   "skills-keep-the-flw-directory-local",
   "scripts-source-every-number",
   "surface-trim-to-primitives",
+  "surface-name-the-release",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
