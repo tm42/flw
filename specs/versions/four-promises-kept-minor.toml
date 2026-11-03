@@ -1,0 +1,116 @@
+name    = "four-promises-kept"
+base    = "surface-name-the-release"
+spec_version = "19.1"
+summary = "Make the code keep four sentences the contract already carries — a piped check can fail, an ambient marker in prose is not a block, a first contract validates as written, a project outside $HOME reads no ancestor — and release 0.1.1."
+sources = [
+  ".flw/reports/2026-11-02T0027-release-0.1.md",
+  ".flw/reports/2026-11-02T0027-release-0.1-correctness.md",
+  ".flw/reports/2026-11-02T0027-release-0.1-agent-runtime.md",
+  ".flw/reports/2026-11-02T0027-release-0.1-security.md",
+]
+
+approach = '''
+The seven-lens review of the tree at b88e14f (v0.1) filed 3 CRITICAL, 14 MAJOR and
+17 MINOR findings. This record takes the three criticals and the one major with a
+security consequence, and nothing else. Each of the four is a sentence the contract
+already carries that the code or a skill contradicts, so three of the fixes change no
+contract text and the fourth adds one property. The rest of the review stays in the
+reports: the verdict-command majors each change a behaviour a user could notice and get
+their own record when one of them bites; the config-key documentation and the stamp
+granularity need a wording decision; the minors are not acted on.
+
+Every claim below was reproduced at b88e14f.
+
+1. core/scripts/run_tests.py:217 runs a check as `bash -c <command>` with no `pipefail`,
+   and `_separator` (:83) refuses only a newline and a `;`. `checks = ["false | cat"]`
+   prints `✓` and `flw test` exits 0; `checks = ["false & true"]` does the same. The
+   contract's sentence at current.toml:275 says a command that could not be run to
+   completion is never reported as passing. Fix: `["bash", "-o", "pipefail", "-c", …]`,
+   and `_separator` names a lone `&` the way it names `;`. `&&` and `||` stay, as the
+   sentence says, and shlex with punctuation_chars already tokenises `&&` as one token
+   and a lone `&` as another, so the check is one more comparison in the loop at :97.
+   The contract sentence gains `&` and a clause about pipelines, below.
+
+2. cli/flw.py:605 `strip_block` and :633 `replace_block` find the markers by substring,
+   `text.find(begin)`. A CLAUDE.md whose prose mentions `<!-- flw:begin -->` — a note
+   about flw, a code fence showing the marker — has its text from that mention to the
+   next end marker deleted by the second `flw install --ambient` and by `flw uninstall`.
+   The contract says at current.toml:136 and :166 that text outside the markers is
+   never touched. Fix: a marker is a whole line, equal to the marker text after the
+   line ending is stripped, so a mention inside a sentence or a fence is not one. The
+   read keeps line endings literally (`read_host_text`), so the match strips `\r\n`
+   and `\n` and nothing else. A begin line with no end line after it, or a second begin
+   line, is refused naming the file: rewriting around either would be guessing where
+   flw's text ends, and both callers — `install_block` at :693 and `strip_block_from`
+   at :783 — hold the path. The style block's `replace_block` call at :1412 goes
+   through the same function and gets the same rule.
+
+3. core/skills/flw-spec/SKILL.md:118 tells the agent to write `spec_version = "0.0.0"`
+   for a first contract. core/schemas/spec-v4.schema.json requires `^[0-9]+\.[0-9]+$`,
+   so every first contract written as instructed fails the skill's own step 5. The
+   fold in validate_spec.py:480 starts from `0.0` and a first `-minor` record lands at
+   `0.1`: `expected_spec_version([], {})` returns `'0.0'`. Fix: `"0.0"` at :118 and
+   `0.1` at :119. This is the only three-part number left in runtime prose
+   (`grep -rn '0\.0\.0\|0\.1\.0' core/skills core/shared README.md docs` finds these
+   two lines and nothing else).
+
+4. cli/flw.py:2221 `project_chain` stops only when a candidate equals `$HOME`, which
+   never happens for a project outside it, so the walk continues to `/`. The security
+   lens planted `<scratch>/shared/.flw/` with an extension and a `[tests] checks`
+   entry, and a project at `<scratch>/shared/victim/proj/` read the extension and ran
+   the check. `/private/tmp` and `/Users/Shared` are `drwxrwxrwt` on a default Mac, so
+   this is a directory any local process can write into. Fix: when `$HOME` is not
+   among the start directory's parents, the chain is the nearest root alone — the loop
+   breaks after its first hit. `nearest_project` is `chain[-1]` and is unchanged by
+   this. A directory outside `$HOME` that is not itself a project still resolves to
+   the nearest ancestor that is, as it does under `$HOME`; the root line the contract
+   promises at :255 is what makes that visible.
+
+What this record is not: it does not touch the verdict commands (`flw test -A` exiting
+2 on a `yours` entry, `check_chain` skipped when `specs/versions/` is missing, doctor
+over a lost record), does not add the scout ranking tests, and does not change what
+`flw know --stamp` certifies. Those are the review's next records, listed in
+.flw/reports/2026-11-02T0027-release-0.1.html under "Next actions".
+
+The release moves to `0.1.1` beside this record, because fix 3 means the shipped 0.1
+cannot write a first contract as its own skill instructs. `release` is the team's key
+and the run never moves it, so it is edited by hand when the record lands, with tag
+`v0.1.1`.
+'''
+
+contract_edit = '''
+In component "the flw CLI", `properties`, append:
+
+"A project outside $HOME has no ancestors: the walk that collects project roots stops at the nearest one it finds, so only a project under $HOME reads a parent's extensions and config. Above a project $HOME does not bound, every directory up to / is a candidate, and /tmp is one any process on the machine can write a flw directory into."
+
+In component "validation and checks", `properties`, replace the sentence beginning "A command that could not be run to completion is never reported as passing" with:
+
+"A command that could not be run to completion is never reported as passing: a check or a setup line holding a command separator bash would score by its last command — a newline, a `;` or a lone `&` — is refused at collection time naming the separator found, while `&&` and `||` are left alone because they are what a user writes deliberately. A pipeline runs under pipefail, so a command failing before a `|` fails the check rather than being scored by the command after it. A `checks` or `yours` that is not a list of strings is refused naming the file and the key, rather than iterated into one check per character."
+'''
+
+[[dag]]
+group = 1
+tasks = [
+  { id = "pipefail", desc = "run_tests.py: run checks under bash -o pipefail -c; _separator names a lone & as it names ;. Tests: `false | cat` fails, `false & true` is refused at collection, `&&` still passes." },
+  { id = "markers", desc = "cli/flw.py strip_block and replace_block: a marker is a whole line; an unclosed or doubled begin is refused naming the file from both callers. Tests: a CLAUDE.md mentioning the marker in a sentence and in a fence survives install --ambient twice and uninstall byte-identical outside the block; an unclosed begin is refused." },
+  { id = "first-contract", desc = "flw-spec/SKILL.md:118-119: \"0.0\" and 0.1. Test: a first contract with spec_version \"0.0\" and no applied key, plus one -minor record with no base, validates." },
+  { id = "home-bound", desc = "cli/flw.py project_chain: outside $HOME, stop at the first root found. Test: a planted ancestor .flw/ above a project under tmp_path, with HOME set elsewhere, appears in neither flw context's extensions nor flw test's checks." },
+]
+
+[[decisions]]
+topic     = "what a project outside $HOME reads"
+options   = ["the nearest root alone", "the chain up to the first world-writable or foreign-owned ancestor", "leave the walk unbounded and rely on the root line"]
+chosen    = "the nearest root alone"
+rationale = "The contract's extension rule already says 'below $HOME', so a project $HOME does not bound was never promised a chain. Stopping at a world-writable ancestor needs stat semantics that differ per platform and still trusts every ancestor below it. The root line alone leaves a planted /private/tmp/.flw supplying a test command to every project under it."
+
+[[decisions]]
+topic     = "a begin marker with no end, or two begins"
+options   = ["refuse naming the file", "treat as no block and append", "use the first pair and ignore the rest"]
+chosen    = "refuse naming the file"
+rationale = "Appending a second block or picking a pair both rewrite a file flw cannot read the shape of, and the contract says text outside the markers is never touched. Refusing costs the user one edit to a file that only reached that state by hand."
+
+[[decisions]]
+topic     = "the release number"
+options   = ["0.1.1", "0.2"]
+chosen    = "0.1.1"
+rationale = "Nothing a user relies on changes shape: the four fixes make existing promises true. The number says a shipped version was corrected, which is what happened."
