@@ -1,0 +1,28 @@
+name    = "cli-adopt-bundle-links"
+base    = "skills-review-each-phase"
+spec_version = "20.0"
+summary = "flw sync adopts an unrecorded symlink that points at the exact skill in a registered bundle, instead of refusing it as a symlink flw did not create."
+
+approach = '''
+The first bug report against 0.2. A Codex skills symlink pointed at the exact skill in a
+registered external bundle, with no line for it in links.toml. `flw sync` refused it:
+"a symlink flw did not create is already there; not replacing it", exit 1. Reproduced at
+0862482 by tests/test_cli.py::test_sync_adopts_an_unrecorded_link_into_a_registered_bundle
+before the fix, which failed with that line.
+
+The cause is `untracked_links` at cli/flw.py:301, which offered for adoption only a
+symlink resolving into flw's own checkout. A bundle's skills are linked by `flw install`
+exactly like flw's own, so a link into one is a symlink flw made, which the contract
+already says sync adopts. The fix is one list: `flw_owned_roots()`, the checkout plus
+each registered bundle's `skills/` directory, and `untracked_links` tests the resolved
+target against every one. The host does not matter; Codex was where it was seen.
+
+What stays: a symlink resolving anywhere else is still foreign, still refused, and still
+not announced by doctor as adoptable — the existing test for that passes unchanged. The
+adoption loop in sync still requires the resolved target to equal the skill the path is
+named for, so a link into a registered bundle at the wrong name is not adopted either.
+Doctor's notice now says "points into flw or a registered bundle".
+
+No contract edit: the sentence at specs/current.toml:135 covers a symlink flw made, and
+one into a bundle is one.
+'''
