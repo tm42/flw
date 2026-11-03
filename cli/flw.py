@@ -2312,10 +2312,15 @@ def test(args: argparse.Namespace) -> int:
 
     checks = engine.collect(root, specs, full=args.all)
     if not checks:
+        contract = specs / "current.toml"
+        declared = (
+            f"{contract} declares no tests and no removal checks"
+            if contract.exists()
+            else f"no contract at {contract}"
+        )
         print(
-            f"error: {specs / 'current.toml'} declares no tests and no removal "
-            f"checks, and {flw_dir_name()}/config.toml declares none either. "
-            "Nothing to run.",
+            f"error: {declared}, and {flw_dir_name()}/config.toml declares none "
+            "either. Nothing to run.",
             file=sys.stderr,
         )
         return 2

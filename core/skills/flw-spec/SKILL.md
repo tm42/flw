@@ -284,7 +284,7 @@ conversation and none of the steps.
 
 ## A second read, on any record that edits the contract
 
-**If the record carries a `contract_edit`, offer the critic in
+**If the record carries a `contract_edit`, or the run wrote a first contract, offer the critic in
 `$FLW/core/skills/flw-spec/references/spec-critic.md`.** That is the gate — not how large
 the contract is, and not how intricate the change feels while you are holding it. It finds
 the semantic gaps validation structurally cannot: a requirement with no component, an
@@ -299,7 +299,7 @@ decision had already ruled out, and a review found it 71 minutes after the commi
 on size excludes by the wrong variable, because a one-sentence edit to a contract is read
 by every later run exactly as a long one is.
 
-A record with no `contract_edit` changes no shared statement, so skip it there. Nothing
+An amending record with no `contract_edit` changes no shared statement, so skip it there. Nothing
 about this is a promise the critic finds something; it is a promise it gets to look.
 
 ## Rules

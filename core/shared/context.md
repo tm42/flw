@@ -142,8 +142,9 @@ that skill alone, and **`shared.md`**, read by every skill.
 
 They are read from **every project root at or above the resolved one and below `$HOME`**,
 outermost first, so a directory holding several checkouts can carry what all of them obey.
-Within a level `shared.md` comes first, so a nearer level beats a farther one and, within
-one level, a skill's own file beats `shared.md`.
+Within a level `shared.md` comes first and the skill's own file after it. A later file
+overrides an earlier one, so a nearer level beats a farther one and, within one level, a
+skill's own file beats `shared.md`.
 
 `flw context` has already printed all of them below the root line — this section says what
 they are, not that you should now go and read them.

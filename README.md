@@ -1,6 +1,6 @@
 # flw
 
-A spec-driven workflow for coding agents, and the tool that keeps it current across them.
+A spec-driven workflow for coding agents, installed once as skills into every host you use.
 
 It takes intent to a versioned contract, works against that contract, and stops when the work would drift from what was agreed.
 
@@ -20,7 +20,7 @@ An agent asked to build something will build something adjacent to it, and the g
 
 Not a hook layer. flw does not intercept, wrap or police your agent's operation — hosts have their own permission systems. Its entire runtime presence is skills a host chooses to load.
 
-Not a framework. There is no plugin API. A **bundle** adds a skill: a folder with a `SKILL.md` in it, shaped like flw's own. An **extension** amends a skill you already have: prose at `.flw/extensions/<skill name>.md`, read from every project root at or above the one it resolved to. `flw doctor` says which extensions are live and which sit there read by nobody.
+Not a framework. There is no plugin API. A **bundle** adds a skill: a folder with a `SKILL.md` in it, shaped like flw's own. An **extension** amends a skill you already have: prose at `.flw/extensions/<skill name>.md`, read from every project root at or above the one it resolved to and below `$HOME`. `flw doctor` says which extensions are live and which sit there read by nobody.
 
 Not a scaffolder. It writes no boilerplate and invents no files.
 
@@ -70,7 +70,7 @@ Your host loads these after `flw install`, and you invoke them by name — `/flw
 |---|---|
 | `/flw-spec` | Author or amend the contract. Interview-driven; nothing inferred silently. |
 | `/flw-execute` | Walk the pending record's phases, run the declared checks, propose the commits. |
-| `/flw-review` | Review at any stage — one reader by default, a team of lenses when you name one. Reports; fixes nothing. |
+| `/flw-review` | Review at any stage — one reader by default, a team of lenses when you name one. Reports; fixes nothing, except correcting a knowledge file the code has already falsified. |
 | `/flw-research` | Bring flw to a repo you did not set up: learn how it is tested and built, write that into its own config. |
 | `/flw-style` | Find this session's own instances of a writing failure you name, and stop doing it. |
 
@@ -135,7 +135,7 @@ plans/               design prose, and plans/backlog/ for what is not yet specce
 specs/               flw's own contract and version records
 ```
 
-`plans/design-v3.md` is the design and `plans/backlog/index.md` is what is not yet built, each item with what it is blocked on. `specs/current.toml` is what "done" means, and its `applied` list is the order it was built in.
+`plans/design-v3.md` is the design the build started from, and where the two differ the code is the authority. `plans/backlog/index.md` is what is not yet built, each item with what it is blocked on. `specs/current.toml` is what "done" means, and its `applied` list is the order it was built in.
 
 ## License
 

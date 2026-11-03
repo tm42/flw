@@ -39,7 +39,7 @@ extensions: ~/work/.flw/extensions
 extensions: ~/work/ds/.flw/extensions
   ✓ flw-spec.md — read by flw-spec (50 B)
   ✗ spec.md — read by nobody: no installed skill is named 'spec'
-      skills here: flw-execute, flw-research, flw-review, flw-spec, and shared.md
+      skills here: flw-execute, flw-research, flw-review, flw-spec, flw-style, and shared.md
 ```
 
 ### Generated, not typed

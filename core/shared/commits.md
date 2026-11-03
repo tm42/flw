@@ -11,7 +11,9 @@ than the file you edited or the defect you chased.
 
 **It carries everything that changed for that part**: the code, the check that proves it,
 the prose that describes it, the contract sentence that claims it. Not the fix in one
-commit and its test in another.
+commit and its test in another. The version record is the exception: it is committed
+alone when it is written, because it waits for a run, and its contract edit lands in the
+commit of the work that makes it true.
 
 **Two changes to the same part, in the same step, are one commit** — even when each could
 stand alone. The four tests below are a floor, not the grouping.

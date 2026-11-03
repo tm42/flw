@@ -23,7 +23,8 @@ path naming specific files does not extend to a sibling.
 
 **Which tests and commits are authorised** — `success_criteria.tests` in the contract and
 `[tests] checks` in `.flw/config.toml` for the checks; `$FLW/core/shared/commits.md` plus
-propose-never-perform for the commits. flw stages by name and never commits.
+propose-never-perform for the commits. The tool stages by name and never commits; the
+agent running a skill proposes each commit, and makes it only where the user said to.
 
 **What stays the user's to run** — `[tests] yours` in `.flw/config.toml`. A check declared
 there is not a failure and not a mystery: it is work this session cannot do.
@@ -43,8 +44,8 @@ settle on your own.
 
 ## Why this is a page and not a manager
 
-A separate agent supervising the work was measured and is not worth its cost: it mostly
-repeats context that is already in the artifacts, and it raises the price of every step.
+A separate agent supervising the work mostly repeats context that is already in the
+artifacts, and it raises the price of every step.
 The same result arrived from the other direction when review teams were run against flw's
 own tree — they returned findings about wording and confirmed what had already been
 verified. The boundaries are cheap to read and expensive to re-derive, which is why they

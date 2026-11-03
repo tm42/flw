@@ -4479,3 +4479,22 @@ def test_project_chain_outside_home_is_the_nearest_root_alone(tmp_path, monkeypa
 
     assert flw.project_chain(project) == [project]
     assert flw.nearest_project(project) == project
+
+
+def test_flw_test_with_nothing_declared_and_no_contract_names_the_missing_contract(
+    tmp_path, capsys, monkeypatch
+):
+    """A project holding only .flw/ and no checks has nothing to run. The message
+    says there is no contract rather than that a file which does not exist
+    declares nothing — the adopter read the old wording as a file it should go
+    and find."""
+    root = tmp_path / "bare"
+    (root / ".flw").mkdir(parents=True)
+    (root / ".flw" / "config.toml").write_text("[paths]\n")
+    monkeypatch.setenv("FLW_HOME", str(tmp_path / "no-global"))
+
+    args = argparse.Namespace(path=str(root), all=False, timeout=30, stream=False)
+    assert flw.test(args) == 2
+    err = capsys.readouterr().err
+    assert "no contract at" in err
+    assert "declares no tests" not in err

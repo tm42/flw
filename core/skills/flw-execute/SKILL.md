@@ -144,10 +144,9 @@ non-terse moment.
   pre-approved.
 
 `--auto` skips both, and skips them at every later boundary too. It does not relax the
-drift rule, and **its report names the mode in the header** — the contract assumes a human
-reads what an agent wrote before the work runs, and that assumption is what buys flw the
-right to verify nothing about its own reports. `--auto` removes that read, so a report not
-saying so claims a review that did not happen.
+drift rule, and **its report names the mode in the header** — flw does not check its own
+reports, because it assumes a person reads what the agent wrote before the work runs.
+`--auto` removes that read, so a report not saying so claims a review that did not happen.
 
 Treat a plain request for an unattended run — *"just do the whole thing"*, *"don't ask me
 between phases"* — as `--auto`. Say that you are reading it that way, and say up front that
@@ -245,7 +244,8 @@ proposal, not a licence — the wording was reviewed at spec time and improving 
 words in the contract the user never saw.
 
 **Print `git diff <specs>/current.toml` on its own, before the run's overall staged diff
-in step 6, and paste it into the reply.** This is the diff to read line by line: it should
+in step 6, and paste it into the reply.** On a first contract the file is untracked and the
+diff is empty, so print the file itself. This is the diff to read line by line: it should
 show exactly the agreement above and nothing else. Commit `cd4aca9` both added the rule in
 the paragraph above and violated it, repunctuating two clauses the edit never mentioned —
 the contract was one file of eleven in a single staged diff, and a diff that size is

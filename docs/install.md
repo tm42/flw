@@ -31,7 +31,7 @@ Moving the checkout later dangles this link and the skill links with it. Re-run 
 flw install
 ```
 
-The skills are symlinked into each present host's discovery path, so editing `core/skills/<name>/SKILL.md` is live everywhere at once. A host that is not on this machine is named and skipped; name one to install anyway:
+The skills are symlinked into each present host's discovery path, so editing `core/skills/<name>/SKILL.md` is live everywhere at once. A host counts as present when its binary is on PATH or its instructions file exists and flw did not write it, so an empty home directory still gets `~/.claude` once `claude` is on PATH. A host that is not present is named and skipped; name one to install anyway:
 
 ```sh
 flw install claude-code
@@ -45,7 +45,7 @@ OpenCode reads Claude Code's and Codex's skill directories as well as its own, s
 flw doctor
 ```
 
-It reports which links resolve, which hosts the skills reach, whether the writing style is installed, and — run inside a project — which extensions an installed skill will read and which sit there read by nobody. `flw doctor -v` adds each host's notes. The last line is `OK` or a problem count.
+It reports which links resolve, which hosts the skills reach, whether the writing style is installed, and — run inside a project — which extensions an installed skill will read and which sit there read by nobody. That section is about the project at the current directory, so run it from the checkout you are asking about. `flw doctor -v` adds each host's notes. The last line is `OK` or a problem count.
 
 ## The host has to reload
 
@@ -82,6 +82,6 @@ flw uninstall codex      # one
 
 `flw scout` in any repository gives a ranked orientation with nothing installed and nothing cached. `/flw-research` configures a repository flw did not set up. Neither needs a contract.
 
-A repository that holds only a `.flw/` directory is a complete flw project. `flw scout`, `flw know`, `flw map`, `flw kb` and plain `flw test` all run there, and so do `/flw-research` and `/flw-review`. `flw validate` says there is no contract to check against and exits 0. Only `flw test -A` needs one, because the full definition of done is a contract field — so a repository that already ships can be adopted before anything is agreed.
+A repository that holds only a `.flw/` directory is a complete flw project. `flw scout`, `flw know`, `flw map` and `flw kb` all run there, and so do `/flw-research` and `/flw-review`. Plain `flw test` exits 2 saying there is nothing to run until `[tests] checks` declares a command. `flw validate` says there is no contract to check against and exits 0. Only `flw test -A` needs one, because the full definition of done is a contract field — so a repository that already ships can be adopted before anything is agreed.
 
 `-n` on `install`, `sync`, `update` and `style install` writes nothing and reports what the command would do.
