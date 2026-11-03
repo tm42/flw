@@ -1,0 +1,190 @@
+name    = "skills-review-each-phase"
+base    = "surface-read-by-a-stranger"
+spec_version = "19.3"
+summary = "A fresh reviewer at each phase boundary of an execute run, asked for once on an attended run, always on --auto and never on --yolo; every dispatched finding refuted by a second fresh call with tools before it reaches the human; findings with ids, a reproduction and a consequence; and review configs naming a model class rather than an effort word."
+
+approach = '''
+From plans/design-review.md, the redesign of review written on 2026-11-03 against the
+critic and monitor literature. Three of its sections are not in this record and the plan
+still carries them: §3.4 calibration and §3.8 second-round prompting go, because a
+planted-defect file measures whether a reviewer finds planted defects and says nothing
+about whether its findings on real work were the ones that mattered, and flw has no way
+yet to produce an evaluation anyone would rely on. §3.2's path zones become an optional
+key rather than the default, because in the 0.1 review the two findings the plan would
+call duplicate reads were the strongest ones: the config-key gap and the stamp
+granularity were each found by three lenses asking different questions about the same
+files. The plan's seven literature results are taken as stated; nobody here read the
+papers.
+
+**Where review happens.** `flw-execute` gains a reviewer at each phase boundary, after
+`flw test` and before the commit. The reviewer is a fresh context, discarded after the
+phase, given the phase's diff, the record, the contract narrowed to the diff's paths, the
+project's `flw-review.md` extension, and the ledger. Which lens it looks through is
+`[review] phase = "<config>"` in the flw config, naming a team config the way `flw-review`
+resolves one; absent, it is the `correctness` lens of `quick.toml` with probes on. The
+run decides whether to review by its mode and asks nothing else: an attended run asks
+once, at the start, next to "Proceed with phase 1?"; `--auto` always reviews, because the
+reviewer stands in for the read the user is not there to make; `--yolo` never reviews,
+because that run already reports itself built and not verified, and with both flags
+`--yolo` wins. There is no config key for the default, because each mode has its answer.
+
+The ledger is `<reports>/<record name>-ledger.md`, one line per finding ever raised in
+the run: id, severity, file:line, claim, status. The next phase's reviewer reads it first
+and does not re-raise a finding marked `decided`. It is scaffolding in the reports
+directory, gitignored in most projects, and a record specced from it cites it in
+`approach` the way a review report is cited today.
+
+Findings reach the executor only through the user. On an attended run the boundary
+shows the commit proposal and a decision list of the findings above MINOR, one line
+each, at most a screen, and the user marks each `fixed`, `decided` or `withdrawn` before
+the next phase. Under `--auto` nobody is reading between phases, so a CRITICAL stops the
+run at that boundary the way a failed check does: the phase stays uncommitted and the
+STOPPED block names the finding. MAJOR and below go into the ledger and the final report
+and the run continues, and the next phase's executor is told nothing about them. A
+`Fix:` line is a direction, never a patch, and no run applies one.
+
+`core/skills/flw-execute/SKILL.md` has 1,386 bytes of headroom under its ceiling at
+a744880, so the mechanism goes in `references/phase-review.md` and the skill carries
+the mode rule, the question, and a pointer. `budget.py` is the check.
+
+**What happens to a finding before the human sees it.** Every finding a dispatched
+reviewer files, in a team run or at a phase boundary, passes one fresh call whose only
+task is to knock it down. It gets the finding, its evidence, the file at the cited line
+and the tools to run the finding's own `Reproduce:` command; it does not get the
+reviewer's role, so a strong reviewer's finding is refuted as hard as a cheap one's. It
+returns `stands`, `demoted` with the reason, or `withdrawn`. A MAJOR or CRITICAL whose
+`Reproduce:` line names no command is demoted to MINOR with the note `no reproduction`.
+The reviewer's own report is not edited; the consolidated report and the ledger carry
+the verdict beside the finding. The solo path in `flw-review/SKILL.md`, where the agent
+is the reviewer, gets no refute call: the contract says that path does not read the team
+machinery, and a refuter there would be the one fresh context the solo path exists to
+avoid spending.
+
+Where two reviewers' findings sit on the same line and disagree, one refute call sees
+both and its verdict is reported beside both; this replaces the `## Disagreements`
+section that named them unresolved. Where they agree, both stay, deduplicated only on
+exact repeats, and the consolidation no longer calls the agreement signal: the refuter's
+verdict is what weighs a finding now.
+
+**What reaches the human.** Three changes to the finding shape, in the discipline block
+of `flw-review/SKILL.md` and the report template in `team-dispatch.md`: an id
+`R-<stamp>-<n>`, stable across phases and rounds, with the stamp the one in the report's
+filename; a `Reproduce:` line carrying the one command that shows it, or `none`; and an
+`If ignored:` line with the consequence in one sentence. The terminal summary's
+`Findings:` count line becomes the decision list, findings above MINOR one per line with
+id, severity, file:line, claim and the refuter's verdict; the other lines of the block
+stay.
+
+**Rendering.** A reviewer handed another agent's transcript reads it quoted inside a user
+message as that agent's work, never as its own assistant turns. One sentence in
+`team-dispatch.md`'s dispatch section, because a model misses its own errors and a
+transcript rendered as its history puts it in that case.
+
+**The config.** `review.schema.json` loses `effort` and gains `model`, one of `strong`,
+`cheap` or `inherit`, default `inherit`, mapped by the dispatching agent to what its host
+has. `zone`, an array of paths, and `question`, a one-line form of `perspective`, are
+optional; a reviewer carries `perspective` or `question`. A top-level `[shared]` table
+with one `question` key is optional and every reviewer answers it over its own zone or
+the whole scope. A reviewer with no zone reads the whole scope, as today, and the
+orchestrator assigns none. `family` from §3.5 is not added. The two shipped configs under
+`core/reviews/` are rewritten to `model`; so are the seven under this checkout's
+`.flw/reviews/`, by the run, because `flw validate` reads them and refuses `effort` once
+the schema changes, and the rename is mechanical. `tests/test_validate_spec.py`'s review
+config cases move with the key. Every refute call runs on `cheap`.
+
+Not in this record: a `--fix` flag, a calibration command, any measurement of what the
+reviewer costs or finds, and the question of who stands in for the user in research and
+spec runs. The `--auto` rule here answers it for execute only.
+'''
+
+contract_edit = '''
+In the component "the skills", `provides`, append four sentences:
+
+"A user running a version's work can have each phase read by a fresh reviewer before its commit is proposed, with the findings reaching the executor only through the user's decision on each. An attended run asks once at the start; an unattended run always reviews, because the reviewer stands in for the read the user is not there to make; a run that skips its checks never reviews, because it already reports itself unverified. Under --auto a CRITICAL finding stops the run at that phase boundary the way a failed check does, and everything below it waits in the ledger and the final report."
+
+"Every finding a dispatched reviewer files passes one fresh read whose only task is to knock it down, with the tools to run the finding's own reproduction and without the reviewer's name, and the user sees its verdict beside the finding. A MAJOR or CRITICAL that names no reproduction reaches the report as MINOR."
+
+"A finding carries an id stable across phases and rounds, the command that reproduces it, and what goes wrong if it is ignored, and the terminal shows the findings above MINOR as a decision list rather than as counts."
+
+"A reviewer handed another agent's transcript reads it as that agent's work, quoted, and never as its own turns."
+
+In the component "the schemas", `provides`, append one sentence:
+
+"A reviewer entry in a review config names the model class it runs on, strong, cheap or inherit, rather than an effort level, and may narrow itself to a zone of paths and a one-line question; a question every reviewer answers over its own zone is stated once for the team."
+
+In the top-level `assumptions` list, the entry at specs/current.toml:79 beginning "A human reads what an agent wrote before the work runs" — replace:
+
+"A human reads what an agent wrote before the work runs. Every mechanism flw might build to police an agent's description of its own change is redundant with that review, and cannot be trusted more than it."
+
+with:
+
+"A human reads what an agent wrote before the work runs. Every mechanism flw might build to police an agent's description of its own change is redundant with that review, and cannot be trusted more than it. Where a run is unattended that read does not happen, and a fresh reviewer at each phase boundary stands in for it: the one mechanism of this kind flw builds, and only where the human read is absent."
+'''
+
+[[dag]]
+group = 1
+tasks = [
+  { id = "schema", desc = "core/schemas/review.schema.json: model (strong|cheap|inherit, default inherit) replaces effort; optional zone (array of paths) and question (string), with perspective or question required; optional top-level [shared] with one question key. core/reviews/eng.toml and quick.toml, and this checkout's .flw/reviews/*.toml, rewritten to model. tests/test_validate_spec.py: the effort cases become model cases, plus a config carrying zone, question and [shared] validates and one carrying effort is refused." },
+]
+
+[[dag]]
+group = 2
+tasks = [
+  { id = "review-shape", depends_on = ["schema"], desc = "core/skills/flw-review/SKILL.md: the finding shape in the discipline block gains the id, Reproduce: and If ignored: lines; the summary block's Findings: line becomes the decision list. references/team-dispatch.md: the report template carries the same shape; the rendering sentence in the dispatch section; the refute pass and the tiebreak replace the Disagreements section and the 'signal, not noise' rule in consolidation; zone and [shared] question in what every reviewer is given; model in place of effort wherever named; every refute call on cheap." },
+  { id = "execute", depends_on = ["schema"], desc = "core/skills/flw-execute/SKILL.md: the mode rule (ask once attended, always on --auto, never on --yolo, --yolo wins), the question beside 'Proceed with phase 1?', the CRITICAL stop under --auto in the STOPPED block, a Review: line in the report block, and a pointer to references/phase-review.md, which carries the reviewer's inputs, the ledger's path and line shape, the decision list at the boundary, and that no run applies a Fix: line. core/shared/context.md's config block gains [review] phase. budget.py stays green." },
+  { id = "docs", depends_on = ["schema"], desc = "README.md's /flw-execute row says each phase can be read by a fresh reviewer before its commit. No doc names effort, so nothing else moves." },
+]
+
+[[decisions]]
+topic     = "whether an execute run reviews each phase"
+options   = ["attended asks once, --auto always, --yolo never", "a config key with a default", "always ask, even under --auto"]
+chosen    = "attended asks once, --auto always, --yolo never"
+rationale = "Each mode already says what it verifies. An attended run has a person to ask. --auto removes the human read, and the reviewer is the one thing that can stand in for it. --yolo reports itself built and not verified, and a reviewer on it would verify work the run refuses to call verified. A config key would store a default that no mode needs."
+
+[[decisions]]
+topic     = "a CRITICAL finding under --auto"
+options   = ["stop the run at the boundary like a failed check", "continue and list it in the report"]
+chosen    = "stop the run at the boundary like a failed check"
+rationale = "Review blocks nothing when a person reads it, because the person decides. Unattended, a CRITICAL the run carries past is a finding nobody acts on until the commits exist. Stopping leaves the phase uncommitted, which is the state a failed check already leaves."
+
+[[decisions]]
+topic     = "calibration and second-round prompting from the plan"
+options   = ["leave both out", "build calibration first as the baseline"]
+chosen    = "leave both out"
+rationale = "flw cannot yet produce an evaluation anyone would rely on: a planted-defect file measures recall on planted defects, and a clean commit measures a floor on one commit. Both would be numbers the docs rule forbids quoting. The rest of the plan stands as judgment, configurable, rather than as changes measured against a baseline."
+
+[[decisions]]
+topic     = "zones as the default partition"
+options   = ["optional key, whole scope by default", "disjoint zones assigned from scout when the config has none"]
+chosen    = "optional key, whole scope by default"
+rationale = "In the 0.1 review three lenses asking different questions found the config-key gap on the same files, and three found the stamp granularity. Those were not duplicate reads. Zones partition code and not prose, which the plan's own fifth open question says. A config that wants zones writes them."
+
+[[decisions]]
+topic     = "what the refuter sees and runs"
+options   = ["the finding, the file and the tools to run its reproduction, not the reviewer's role", "the finding and the file only"]
+chosen    = "the finding, the file and the tools to run its reproduction, not the reviewer's role"
+rationale = "A refuter that cannot run the reproduction demotes real findings for lack of a reproduction it never attempted, which is the no-tools reviewer the plan's first result says adds nothing. Hiding the role settles the plan's third open question: a strong reviewer's finding is refuted as hard as a cheap one's."
+
+[[decisions]]
+topic     = "the refute pass on the solo review path"
+options   = ["team and phase reviewers only", "every path including solo"]
+chosen    = "team and phase reviewers only"
+rationale = "The contract says the solo path does not read the team machinery, and its reason for existing is that it spends no fresh context. A refute call is one."
+
+[[decisions]]
+topic     = "the effort key in this checkout's own .flw/reviews/"
+options   = ["the run renames it in the seven local configs", "leave them and let validate refuse them"]
+chosen    = "the run renames it in the seven local configs"
+rationale = "flw validate reads .flw/reviews/ and prints a line per config, so a stale key fails the project's own validate at the end of the run. The rename is mechanical and the files are this checkout's. Another project's configs are its own to rename, and the refusal names the key."
+
+[[decisions]]
+topic     = "where the ledger lives"
+options   = ["<reports>/<record name>-ledger.md, scaffolding", "beside the version record, tracked"]
+chosen    = "<reports>/<record name>-ledger.md, scaffolding"
+rationale = "A ledger is a review report's running form, and reports are disposable once a record cites what they found. A record is one run, so its name identifies the ledger without a run id."
+
+[[decisions]]
+topic     = "agreement between two reviewers"
+options   = ["keep both, deduplicate exact repeats, do not call it signal", "report agreement as signal, as today", "drop one"]
+chosen    = "keep both, deduplicate exact repeats, do not call it signal"
+rationale = "Two independent reads reaching one finding is worth keeping, and the 0.1 round's best findings arrived that way. What goes is the weighting: the refuter's verdict decides what a finding is worth, and a rule that counts readers would weigh a finding twice before anyone tried to knock it down."
