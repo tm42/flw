@@ -153,10 +153,16 @@ commit.** Whether that directory is tracked is already the user's answer.
 > Report findings in this shape, most severe first:
 >
 > ```
-> SEVERITY | path/to/file:LINE | one-line claim
+> R-<stamp>-<n> | SEVERITY | path/to/file:LINE | one-line claim
 >   Evidence: what you checked and what it showed.
->   Fix: the smallest change that resolves it.
+>   Reproduce: the one command that shows it, or none.
+>   If ignored: what goes wrong, in one sentence.
+>   Fix: the smallest change that resolves it — a direction, never a patch.
 > ```
+>
+> `<stamp>` is the one in your target file's name and `<n>` counts from 1 in this report,
+> or continues the ledger you were given. A finding without a consequence cannot be
+> prioritised; one without a command was not demonstrated.
 >
 > `CRITICAL` — something is wrong or will break. `MAJOR` — a real risk, or real weight
 > that earns nothing. `MINOR` — worth knowing, changes little.
@@ -200,13 +206,16 @@ Never present this as a dispatched review. It is a structured, disclosed read.
 flw-review — <config>
   Scope:     <what>
   Reviewers: <n>
-  Findings:  CRITICAL <n> · MAJOR <n> · MINOR <n>
+  Decide:    R-<stamp>-1  MAJOR  path:LINE  <claim>  — <verdict>
+             <one line per finding above MINOR, at most a screen; MINOR stays in the file>
   Knowledge: <files corrected under the carve-out, or none>
   Report:    <path>
 ```
 
-Do not summarise the findings inline as well. The findings are already in the report;
-repeating them here doubles the reading.
+The `Decide:` lines are the decision list, and they replace a count: a count tells the
+reader nothing about what to decide. The verdict is the refute call's, `stands`,
+`demoted`, `withdrawn` or `unrefuted`; a solo run has no refute call and prints none.
+Do not summarise the findings beyond that line each. They are already in the report.
 
 **The `Knowledge:` line is there because the store is gitignored in most projects**, so a
 file this run rewrote appears in no diff and in nothing else the run prints. A lane whose

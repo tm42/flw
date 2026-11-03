@@ -143,6 +143,10 @@ non-terse moment.
   do, in a few lines, then ask **"Proceed?"** A version with no dag is small, not
   pre-approved.
 
+**Ask once, beside that question, whether each phase gets a fresh reviewer** before its
+commit is proposed. `--auto` always does, `--yolo` never, and with both `--yolo` wins.
+When the answer is yes, read `$FLW/core/skills/flw-execute/references/phase-review.md`.
+
 `--auto` skips both, and skips them at every later boundary too. It does not relax the
 drift rule, and **its report names the mode in the header** — flw does not check its own
 reports, because it assumes a person reads what the agent wrote before the work runs.
@@ -171,6 +175,10 @@ practice `flw test --no-stream` at each boundary, before the proposal, and `--yo
 these as it skips step 4's. `commits.md` requires every commit to pass every declared
 check on its own, so a run whose checks ran once at the end proposed every commit but the
 last with nothing having run. Step 4 is the full run over finished work, not the first.
+
+**Then the phase review, when the run has one**, after the checks and before the
+proposal — `references/phase-review.md`. Under `--auto` a CRITICAL that stands, or a
+reviewer that returns nothing, stops the run here the way a failed check does.
 
 At the phase boundary, **propose a commit** — the files touched and a message — and let
 the user or their agent make it, in whatever VCS the repo uses. flw does not commit or
@@ -305,6 +313,7 @@ flw-execute — <version><, unattended (--auto) when it was>
   Phases: <n> of <m>, or — when the record carried no dag
   Checks: <p> passed · <q> failed · <r> for you
   Knowledge: <files re-stamped · files awaiting the commit, or none>
+  Review: <per phase, findings above MINOR by id and verdict · none · not run>
   Left to do: <what stopped, or nothing>
 ```
 
@@ -315,7 +324,8 @@ failed after the phases were done.
 ```text
 flw-execute — <version> — STOPPED, awaiting a decision
   Done:        <phases and tasks that completed>
-  Stopped at:  <task id and what the contract does not cover — or the check that failed>
+  Stopped at:  <task id and what the contract does not cover — or the check that failed
+               — or the finding by id, or the missing review, under --auto>
   Uncommitted: <files from this phase, left in place>
   Contract:    not moved — the run did not finish
   Waiting on:  the spec change above, through flw-spec — or the failing check

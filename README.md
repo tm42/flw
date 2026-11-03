@@ -69,7 +69,7 @@ Your host loads these after `flw install`, and you invoke them by name — `/flw
 | Skill | Use |
 |---|---|
 | `/flw-spec` | Author or amend the contract. Interview-driven; nothing inferred silently. |
-| `/flw-execute` | Walk the pending record's phases, run the declared checks, propose the commits. |
+| `/flw-execute` | Walk the pending record's phases, run the declared checks, propose the commits. Each phase can be read by a fresh reviewer before its commit: asked once, always under `--auto`, never under `--yolo`. |
 | `/flw-review` | Review at any stage — one reader by default, a team of lenses when you name one. Reports; fixes nothing, except correcting a knowledge file the code has already falsified. |
 | `/flw-research` | Bring flw to a repo you did not set up: learn how it is tested and built, write that into its own config. |
 | `/flw-style` | Find this session's own instances of a writing failure you name, and stop doing it. |

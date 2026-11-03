@@ -1,5 +1,5 @@
 schema_version = 4
-spec_version = "19.3"
+spec_version = "20.0"
 release = "0.1.1"
 
 # The order the versions landed in. flw-execute appends a name here when its run
@@ -64,6 +64,7 @@ applied = [
   "surface-name-the-release",
   "four-promises-kept",
   "surface-read-by-a-stranger",
+  "skills-review-each-phase",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -76,7 +77,7 @@ assumptions = [
   "The Agent Skills format stays stable enough that one SKILL.md carrying every host's optional frontmatter keys installs on all of them; hosts ignore keys they do not recognise rather than rejecting the file.",
   "Hosts are responsible for their own permission and approval policy; flw does not intercept, wrap, or police host operation.",
   "A project's own conventions are discoverable by reading it, so flw can seed an interview from a repo rather than requiring the user to state everything twice.",
-  "A human reads what an agent wrote before the work runs. Every mechanism flw might build to police an agent's description of its own change is redundant with that review, and cannot be trusted more than it.",
+  "A human reads what an agent wrote before the work runs. Every mechanism flw might build to police an agent's description of its own change is redundant with that review, and cannot be trusted more than it. Where a run is unattended that read does not happen, and a fresh reviewer at each phase boundary stands in for it: the one mechanism of this kind flw builds, built for the run where the human read is absent and offered on an attended run as a second read the user chooses.",
   "Some of a project's checks cannot run in an agent's session — no network, no database, no browser. Handing those back is the normal case, not a degraded one. Which ones is the project's to declare, because no exit code identifies them.",
   "Claude Code is the only host with a switchable output style. On the others, style guidance can only sit in the always-on instructions file, so flw writes it there as its own removable block.",
   "The user's project may use any version control system, or none; flw proposes commits but does not make them, and reads VCS state only to locate a project root when nothing nearer is found, to measure a knowledge file against the revision it records, and, under git, to find the commit that applied each version record. A project under another VCS or none gets no attribution rather than a failure. Attribution also assumes that the contract has lived at one path, that a record's quoted name appears in it only under applied, and that the history is deep enough to hold the last landing. A shallow clone reads as no attribution.",
@@ -85,6 +86,7 @@ assumptions = [
   "Two declared members whose directories share a basename have no store between them: system.md's revision table is keyed by member directory basename, so one entry would stand for both, and flw know refuses the pair naming both config keys and both paths rather than recording one and reporting it for the other.",
   "The areas a record's name may open with are a fact about one project, so they are declared in its flw config and never shipped by flw. A project that declares none is a project this check says nothing about, and flw's own checkout declares none.",
   "A project that adopted flw before the spec version lost its leading component carries a three-part number, and may carry an applied record declaring release_line. Both are refused once the schemas change, and the repair is two edits an adopter makes by hand: drop the leading component from spec_version, and put whatever the line meant into the contract's release key. flw ships no migration for it, because a schema that accepted both shapes to ease one edit would have to go on accepting both.",
+  "A phase reviewer or a refute call that returns nothing is never read as a clean result: under --auto a phase with no review stops the run the way a CRITICAL does, an attended run says the phase went unreviewed, and a finding with no refute verdict reaches the user marked unrefuted. A reproduction at a phase boundary runs read-only or in a scratch copy, because the tree holds the phase's uncommitted work, and one that would write is reported as not run.",
 ]
 
 open_questions = [
@@ -233,6 +235,10 @@ provides = [
   "A spec run checks the amendment it has just written against the extensions live in that repository and names any the amendment contradicts, so a convention a human made binding is not left standing over a contract that removed what it requires.",
   "A change spanning several repositories gets one plan in the project whose config declares the set, in a standard shape rather than an invented one: what the feature is, which repository owns which field of the seam, the delivery slices as an indented list where a line needs the line above it, the order that matters and the order that does not, and what is expected to change. flw parses none of it, so a pull request number sits there as text and the plan is rewritten rather than patched when the design moves.",
   "An agent reads the boundaries it may act within from one place: which decisions are approved, which still need the user, which files and behaviour it may change, which tests and commits are authorised, and what stays the user's to run. Each of those is recorded somewhere already, and this file names where.",
+  "A user running a version's work can have each phase read by a fresh reviewer before its commit is proposed, and the executor acts on a finding only through the user's decision on it. An attended run asks once at the start; an unattended run always reviews, because the reviewer stands in for the read the user is not there to make; a run that skips its checks never reviews, because it already reports itself unverified. Under --auto a CRITICAL finding stops the run at that phase boundary the way a failed check does, and everything below it waits in the ledger and the final report.",
+  "Every finding a dispatched reviewer files passes one fresh read whose only task is to knock it down, with the tools to run the finding's own reproduction and without the reviewer's name, and the user sees its verdict beside the finding. A MAJOR or CRITICAL that names no reproduction reaches the report as MINOR.",
+  "A finding carries an id stable across the phases of one run, the command that reproduces it, and what goes wrong if it is ignored, and the terminal shows the findings above MINOR as a decision list rather than as counts.",
+  "A reviewer handed another agent's transcript reads it as that agent's work, quoted, and never as its own turns.",
 ]
 
 [[final_state.components]]
@@ -314,6 +320,7 @@ provides = [
   "A version record may still carry a sources field naming the review reports it came from, which the schema accepts so that every record written while the field was required keeps validating. Nothing reads it: the fold from a report to the record that acted on it is not maintained, and flw-spec no longer instructs a record to fill it.",
   "A version record may retire others by name in a retires field, so a record written and then abandoned is marked as such in the artifact that is versioned rather than left for someone to remember. A retires entry naming no record is refused, and the field takes effect only from a record the contract has applied, so an unfinished draft cannot retire live work.",
   "A project whose product has its own released version states it once in the contract's `release` key, free-form and checked against no pattern, so a team can land many spec majors and minors inside one release and size that release on product grounds. flw records and prints it and never folds, moves or refuses it, which is why the spec version is free to describe the contract alone.",
+  "A reviewer entry in a review config names the model class it runs on, strong, cheap or inherit, rather than an effort level, and may narrow itself to a zone of paths and a one-line question; a question every reviewer answers over its own zone is stated once for the team.",
 ]
 
 [[final_state.components]]

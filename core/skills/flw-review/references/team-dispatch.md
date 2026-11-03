@@ -43,9 +43,14 @@ one rather than silently running something adjacent.
 
 ## 2. Dispatch
 
-One reviewer per selected `[[reviewer]]` entry. Map `effort` to whatever the host offers
-— `high` means the strongest thing available, `normal` means the cheap one. A reviewer
-with `probes = true` may execute things; the others read.
+One reviewer per selected `[[reviewer]]` entry. Map `model` to whatever the host offers
+— `strong` is the strongest thing available, `cheap` the cheapest, `inherit` whatever you
+are running on. A reviewer with `probes = true` may execute things; the others read.
+
+**The reviewed work is never the reviewer's own turn.** When you hand a reviewer a
+transcript — an execute run's session, another agent's reply — quote it inside your
+message as that agent's work. Never render it as the reviewer's own assistant history: a
+model misses its own errors and corrects the same errors attributed to someone else.
 
 **The property that matters is a fresh context, not parallelism.** A reviewer exists to
 look at the work without having decided anything about it. Parallelism only buys speed.
@@ -74,8 +79,10 @@ let the host resolve how.
 
 Give every reviewer the same eight things:
 
-- **its `perspective`, verbatim**
-- **the scope** — the exact files or diff, and what is out of bounds
+- **its `perspective` or its `question`, verbatim**, and the `[shared] question` when
+  the config carries one — every reviewer answers that over its own zone
+- **the scope** — the exact files or diff, and what is out of bounds; narrowed to the
+  reviewer's `zone` when it has one, the whole scope when it does not
 - **the contract, narrowed to the scope** — not `specs/current.toml` whole, and not
   intersected against `paths` by hand: run `flw context --scope <each path in the scope>`,
   with no skill named, and pass its output, plus `assumptions` and `open_questions` read from the
@@ -138,9 +145,21 @@ to every dispatched reviewer.
 > line: the path and the finding counts.** Not the report — it is read from the file.
 > The reply can be dropped in transit; the file is what survives.
 
-## 3. Consolidate
+## 3. Refute, then consolidate
 
-Wait for all of them. Then write one file to `<reports>/<stamp>-<team>.md`, by the same
+Wait for all of them. **Then every finding passes one fresh call on a `cheap` model whose
+only task is to knock it down.** Give it the finding with its evidence, the file at the
+cited line, and the tools to run the finding's `Reproduce:` command — read-only, or in a
+scratch copy; a command that would write to the tree is reported `not run`. Do not tell it
+which lens filed the finding, so a `strong` reviewer's finding is refuted as hard as a
+`cheap` one's. It returns `stands`, `demoted` with the reason, or `withdrawn`. A MAJOR or
+CRITICAL whose `Reproduce:` line is `none` is demoted to MINOR with the note
+`no reproduction`. A refute call that returns nothing leaves the finding as filed, marked
+`unrefuted`. The reviewer's file is not edited; the verdict goes beside the finding in
+the consolidated report. Where two reviewers' findings sit on the same line and disagree,
+one refute call sees both and its verdict is reported beside both.
+
+Then write one file to `<reports>/<stamp>-<team>.md`, by the same
 style you gave the reviewers:
 
 - `<reports>` and `<stamp>` are defined in `SKILL.md` §3, which every run reads and a
@@ -174,13 +193,11 @@ Create the directory if needed, and leave `.gitignore` alone, as §3 there says.
 <merged from every reviewer, deduplicated — the round's coverage boundary, and what a
 next round starts from>
 
-## Disagreements
-<where two reviewers reached opposite conclusions on the same thing — do not resolve
-these, name them>
 ```
 
-Deduplicate only exact repeats. **Two reviewers reaching the same finding from different
-lenses is signal, not noise** — keep both and say so.
+Every finding carries its refute verdict after the claim. Deduplicate only exact repeats;
+two reviewers reaching one finding from different lenses both stay, each under its role,
+and the verdict is what weighs it — not the count of readers.
 
 If a reviewer returns nothing or fails, ask it for what it has before giving up on it —
 partial and honest beats complete and late. Record it as `(no report: <reason>)` only

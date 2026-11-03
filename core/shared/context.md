@@ -118,6 +118,10 @@ reports = ".flw/reports/"            # where review reports are written
 [interview]
 mode = "thrifty"                     # conversational (default) | thrifty
 
+[review]
+phase = "eng"                        # the team a phase reviewer on execute looks through;
+                                     # absent, quick's correctness lens with probes on
+
 [tests]
 setup  = "source .venv/bin/activate" # prepended to every check; each runs in its own shell
                                      # whatever the project needs first, or omitted:
