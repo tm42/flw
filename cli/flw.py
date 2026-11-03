@@ -298,15 +298,34 @@ def links_under(roots: set[Path]) -> list[dict]:
     return [link for link in read_links() if Path(link["path"]).parent in roots]
 
 
+def flw_owned_roots() -> list[Path]:
+    """Every directory a symlink flw made resolves into: this checkout and the
+    skills/ directory of each registered bundle. A bundle's skills are linked
+    by `flw install` exactly like flw's own, so a link into one is flw's to
+    adopt. Anything resolving elsewhere is the user's and stays untouched.
+    """
+    roots = [checkout()]
+    for bundle in read_bundles():
+        skills = expand(bundle["path"]) / "skills"
+        if skills.is_dir():
+            roots.append(skills.resolve())
+    return roots
+
+
 def untracked_links(recorded: list[dict]) -> list[Path]:
-    """Symlinks in a host root that resolve into this checkout but that flw
-    has no record of — left by an interrupted or racing `flw install`, or made
-    by hand. doctor reports them; sync adopts the ones a known skill explains.
+    """Symlinks in a host root that resolve into this checkout or a registered
+    bundle but that flw has no record of — left by an interrupted or racing
+    `flw install`, or made by hand. doctor reports them; sync adopts the ones a
+    known skill explains.
 
     One definition, read by both: a second one would drift from this the way
-    the record itself used to drift from the disk.
+    the record itself used to drift from the disk. The first 0.2 bug report was
+    this function knowing only the checkout: a Codex link already pointing at
+    the exact skill in a registered bundle was never offered for adoption, so
+    sync then refused it as a symlink flw did not create.
     """
     recorded_paths = {link["path"] for link in recorded}
+    owned = flw_owned_roots()
     return [
         entry
         for root_name in {r for h in HOSTS for r in h.roots}
@@ -314,7 +333,7 @@ def untracked_links(recorded: list[dict]) -> list[Path]:
         for entry in sorted(directory.iterdir())
         if entry.is_symlink()
         and str(entry) not in recorded_paths
-        and checkout() in entry.resolve().parents
+        and any(root in entry.resolve().parents for root in owned)
     ]
 
 
@@ -1573,7 +1592,7 @@ def doctor(args: argparse.Namespace) -> int:
     # nothing wrong.
     for entry in untracked_links(recorded):
         print(
-            f"  · {tilde(entry)} — points into flw but was not created by it. "
+            f"  · {tilde(entry)} — points into flw or a registered bundle but was not created by it. "
             "`flw sync` will adopt it."
         )
 

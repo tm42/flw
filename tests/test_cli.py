@@ -264,7 +264,7 @@ def test_an_interrupted_install_over_claims_rather_than_under_claims(
     doctor()
     out = capsys.readouterr().out
     assert "an-unrecorded-skill" not in {link["skill"] for link in flw.read_links()}
-    assert "points into flw but was not created by it" in out
+    assert "points into flw or a registered bundle but was not created by it" in out
 
 
 def test_installing_one_host_does_not_forget_another(home, capsys):
@@ -4498,3 +4498,27 @@ def test_flw_test_with_nothing_declared_and_no_contract_names_the_missing_contra
     err = capsys.readouterr().err
     assert "no contract at" in err
     assert "declares no tests" not in err
+
+
+def test_sync_adopts_an_unrecorded_link_into_a_registered_bundle(home, bundle, capsys):
+    """The first 0.2 bug report: a Codex skills symlink already pointing at the
+    exact skill in a registered bundle, with no record of it. untracked_links
+    recognised only targets inside the checkout, so sync never saw it as
+    adoptable, then refused it as a symlink flw did not create and exited 1.
+    A bundle's skill is installed by flw exactly like its own, so a link to it
+    is flw's to adopt. A link into an unregistered directory stays foreign."""
+    flw.add(argparse.Namespace(path=str(bundle("team-review")), name=None))
+    install("claude-code")
+    link = home / ".claude" / "skills" / "team-review"
+    assert link.is_symlink()
+    flw.write_links([lk for lk in flw.read_links() if lk["skill"] != "team-review"])
+    capsys.readouterr()
+
+    assert sync() == 0, capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "team-review — adopted" in out
+    assert "did not create" not in out
+    assert any(lk["skill"] == "team-review" for lk in flw.read_links())
+
+    doctor()
+    assert "was not created by it" not in capsys.readouterr().out
