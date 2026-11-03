@@ -3,7 +3,7 @@ description = "Two lenses, for a change small enough that four would overlap: is
 
 [[reviewer]]
 role   = "correctness"
-effort = "high"
+model  = "strong"
 probes = true
 perspective = """
 Does the code do what it claims? Read it — do not infer from names.
@@ -23,7 +23,7 @@ Ignore style, naming and structure.
 
 [[reviewer]]
 role   = "footprint"
-effort = "high"
+model  = "cheap"
 perspective = """
 What in the scope you were given earns nothing?
 

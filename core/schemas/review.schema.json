@@ -22,23 +22,46 @@
       "minItems": 1,
       "items": { "$ref": "#/$defs/reviewer" },
       "description": "One entry per lens. Every reviewer is dispatched with the same instructions and a different perspective, so overlapping lenses produce overlapping findings and waste a context each."
+    },
+    "shared": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question"],
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One question every reviewer answers over its own zone, or over the whole scope when it has none. Stated once for the team rather than once per lens, so the lenses cannot drift on it."
+        }
+      },
+      "description": "Optional. What every reviewer is asked in addition to its own question."
     }
   },
   "$defs": {
     "reviewer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["role", "perspective"],
+      "required": ["role"],
       "properties": {
         "role": {
           "type": "string",
           "minLength": 1,
           "description": "A short name for the lens. Appears in the consolidated report against every finding it produced."
         },
-        "effort": {
-          "enum": ["high", "normal"],
-          "default": "normal",
-          "description": "How hard this lens is to look through, not which model to use. Model names are host-specific; the agent doing the dispatching maps this to whatever it has. Reserve high for lenses where being wrong is invisible."
+        "model": {
+          "enum": ["strong", "cheap", "inherit"],
+          "default": "inherit",
+          "description": "Which class of model this lens runs on. Model names are host-specific; the agent doing the dispatching maps strong to the strongest thing it has, cheap to the cheapest, and inherit to whatever it is running on itself. Strong is for a question that needs tracing across files or a judgment a weaker read gets wrong silently; cheap is for a property checked mechanically or one zone read."
+        },
+        "zone": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional. The paths this reviewer reads, as a narrowing of the scope. Absent, the reviewer reads the whole scope. The orchestrator assigns none."
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional. The one question only this lens answers, as a one-line form of perspective. A reviewer carries perspective or question; a config may give both, and then perspective is the long form."
         },
         "probes": {
           "type": "boolean",
@@ -48,7 +71,7 @@
         "perspective": {
           "type": "string",
           "minLength": 1,
-          "description": "What this lens looks for, and what it should leave to the others. Written as instructions to the reviewer. Do not restate the reporting format or the general discipline — the skill supplies both to every reviewer, and repeating them here means they drift."
+          "description": "What this lens looks for, and what it should leave to the others, in full. Written as instructions to the reviewer. Required unless question is given. Do not restate the reporting format or the general discipline — the skill supplies both to every reviewer, and repeating them here means they drift."
         }
       }
     }

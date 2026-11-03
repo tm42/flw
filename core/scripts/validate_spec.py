@@ -287,6 +287,11 @@ def check_review(config: dict, name: str) -> list[str]:
     seen: set[str] = set()
     for reviewer in config.get("reviewer", []):
         role = reviewer.get("role")
+        if not reviewer.get("perspective") and not reviewer.get("question"):
+            errors.append(
+                f"reviewer {role!r}: carries neither perspective nor question; a lens "
+                "with no question of its own reads the scope for nothing in particular"
+            )
         if role in seen:
             errors.append(
                 f"reviewer: role {role!r} appears more than once; the role is what "

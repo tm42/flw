@@ -90,21 +90,67 @@ def test_at_least_one_lens_probes():
 
 
 def test_a_reviewer_without_a_perspective_is_refused():
+    """The schema requires role alone, because a lens may carry question instead;
+    the cross-field check is what refuses one carrying neither."""
     config = {
         "name": "broken",
         "description": "x",
         "reviewer": [{"role": "correctness"}],
     }
-    assert any("perspective" in e for e in check(config))
+    assert any("perspective" in e for e in check_review(config, "broken.toml"))
 
 
-def test_an_unknown_effort_is_refused():
+def test_an_unknown_model_class_is_refused():
     config = {
         "name": "broken",
         "description": "x",
-        "reviewer": [{"role": "r", "perspective": "p", "effort": "maximum"}],
+        "reviewer": [{"role": "r", "perspective": "p", "model": "gpt-9"}],
+    }
+    assert any("model" in e for e in check(config))
+
+
+def test_effort_is_no_longer_a_reviewer_key():
+    """skills-review-each-phase replaced it with model. A config still carrying
+    it is refused naming the key rather than silently run at the default."""
+    config = {
+        "name": "broken",
+        "description": "x",
+        "reviewer": [{"role": "r", "perspective": "p", "effort": "high"}],
     }
     assert any("effort" in e for e in check(config))
+
+
+def test_a_zone_a_question_and_a_shared_question_validate():
+    config = {
+        "name": "zoned",
+        "description": "x",
+        "reviewer": [
+            {"role": "correctness", "model": "strong", "zone": ["cli/"],
+             "question": "Where does it exit zero doing the wrong thing?"},
+            {"role": "tests", "model": "cheap", "perspective": "p"},
+        ],
+        "shared": {"question": "What could be deleted and nothing breaks?"},
+    }
+    assert check(config) == []
+
+
+def test_a_reviewer_with_neither_perspective_nor_question_is_refused():
+    config = {
+        "name": "broken",
+        "description": "x",
+        "reviewer": [{"role": "r", "model": "cheap"}],
+    }
+    assert any("neither perspective nor question" in e for e in check_review(config, "broken.toml"))
+
+
+def test_the_shipped_lenses_carry_the_model_the_plan_assigned():
+    """correctness and adversarial trace across files; tests and footprint check
+    a property each. plans/design-review.md §3.5, taken as stated."""
+    want = {"correctness": "strong", "adversarial": "strong", "tests": "cheap", "footprint": "cheap"}
+    for name in ("quick", "eng"):
+        config = tomllib.loads((REVIEWS / f"{name}.toml").read_text())
+        for r in config["reviewer"]:
+            assert r["model"] == want[r["role"]], (name, r["role"])
 
 
 def test_a_config_naming_itself_something_else_is_caught():
@@ -134,9 +180,9 @@ def test_an_unknown_key_is_refused():
     config = {
         "name": "broken",
         "description": "x",
-        "reviewer": [{"role": "r", "perspective": "p", "model": "opus"}],
+        "reviewer": [{"role": "r", "perspective": "p", "lens": "opus"}],
     }
-    assert any("unexpected property 'model'" in e for e in check(config))
+    assert any("unexpected property 'lens'" in e for e in check(config))
 
 
 # --- the contract chain ---------------------------------------------------- #
