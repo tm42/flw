@@ -1,0 +1,117 @@
+name    = "surface-read-by-a-stranger"
+base    = "four-promises-kept"
+spec_version = "19.2"
+summary = "Fix the fourteen sentences two fresh agents tripped on when one explained flw from a clone and the other ran a full cycle on a toy repo, and make plain flw test name what is missing rather than a contract that is not there."
+sources = [
+  ".flw/reports/2026-11-03T0821-adopt-explain.md",
+  ".flw/reports/2026-11-03T0821-adopt-use.md",
+]
+
+approach = '''
+Two agents with fresh contexts were given a clone of flw at 0122bad and nothing else. One
+read 16 files and wrote what flw is for a manager and how to adopt it for an engineer;
+both texts are correct, and the manager one found the package at README.md:3-17. The
+other installed flw into an empty HOME, ran research, wrote a first contract and a record,
+executed it and committed, following the four skill files by hand; the change landed with
+10 tests passing and no flw command failed for a reason of flw's own. So the docs work.
+What this record fixes is every place where the two agents had to guess, read twice, or
+found two files disagreeing. The reports in `sources` carry each item with its path:line
+and the orchestrator checked every one against the tree before writing this.
+
+Prose only, except one code line. The edits, by file:
+
+- README.md:3 — the tagline. "keeps it current across them" names neither what is kept
+  current nor across what; see the decision below. :23 — add "and below $HOME", which
+  context.md:143 and docs/extending.md:14 both carry and this line does not, so the README
+  reads as if a .flw/ in the home directory would be read. :73 — review "fixes nothing"
+  and the skill's one exception is unmentioned. :138 — "plans/design-v3.md is the design"
+  while that file's own third line says the design is history and the code is the
+  authority.
+- docs/install.md:34 — "a host that is not on this machine" does not say what on the
+  machine means; `present()` at cli/flw.py:126 finds a host by its binary on PATH or the
+  config directory the host itself made, which is why an empty HOME still got ~/.claude.
+  :85 — plain `flw test` in a project with nothing declared exits 2 saying there is
+  nothing to run; the line says it runs there and stops. Also one clause on doctor: its
+  extensions section is about the project at the current directory, which is how the
+  adopter's first doctor call, run from a different checkout, reported that checkout's
+  extensions.
+- docs/extending.md:42 — the doctor example names four skills; there are five.
+- pyproject.toml:3-4 — "the two tests specs/current.toml declares"; it declares four at
+  :355-358.
+- core/shared/autonomy.md:26 — "flw stages by name and never commits" is true of the
+  tool, and flw-execute/SKILL.md:188 says "when the run makes the commit". Nothing says
+  that "flw" means the tool in one and the agent in the other. One sentence: the tool
+  never commits; the agent proposes, and makes a commit only where the user said to.
+  :46 — "was measured and is not worth its cost" carries no number, command or pointer,
+  and `grep -rl supervis specs/versions plans docs` finds nothing; see the decision.
+- core/shared/context.md:145 — "shared.md comes first, so a nearer level beats a farther
+  one": the "so" claims a cause that does not exist, since nearer-beats-farther comes
+  from outermost-first in the sentence before.
+- core/shared/commits.md:12 — says a commit carries the contract sentence with the code,
+  and nothing says when the record itself is committed. The adopter guessed one commit
+  for plan, contract, record, code and tests. What this repository does: the record is
+  committed alone when written, because it waits for a run (513b808), and the contract
+  edit lands in the commit of the work that makes it true (0122bad). One sentence.
+- core/skills/flw-spec/SKILL.md:287 — the critic is offered only when a record carries a
+  contract_edit, and a first record never does, so the largest contract write a project
+  makes is never offered the critic. The gate gains "or the run wrote a first contract".
+- core/skills/flw-execute/SKILL.md:247 — "print git diff <specs>/current.toml" is empty
+  on a first contract, because the file is untracked; print the file instead there.
+  :147 — "buys flw the right to verify nothing" is a figure of speech that took the
+  explain agent a second read; the plain claim is that flw does not check its own
+  reports because a person is expected to read them first.
+- cli/flw.py:2315 — the nothing-to-run message names `specs/current.toml` as declaring no
+  tests when no such file exists. Reproduced: a directory holding only `.flw/`, `flw test`
+  → "error: …/specs/current.toml declares no tests and no removal checks". The message
+  says "no contract" when there is none.
+
+The contract sentence at specs/current.toml:85 says flw's own six areas are its
+components. The clone declares none: `.flw/` is ignored whole, so `[spec] areas` ships
+nowhere and the record-name check says nothing about flw's own records, which is what
+.flw/knowledge/specs/specs.md already notes. The clause goes.
+
+Not in this record: who stands in for the user in a run nobody is watching. Every skill
+gates a write on the user's yes, and the adopter guessed eleven times that the lead's
+task was the yes. That is a design decision across four skills, and plans/design-review.md
+is where it is being worked out. Also not here: the config-key documentation and the
+"three stores" reconciliation from the 0.1 review, which the explain agent did not trip
+on and which stay in that review's next actions.
+'''
+
+contract_edit = '''
+In component "the skills", `assumptions` or wherever the sentence sits — the sentence at specs/current.toml:85 beginning "The areas a record's name may open with are a fact about one project" — replace:
+
+"The areas a record's name may open with are a fact about one project, so they are declared in its flw config and never shipped by flw. flw's own six are its contract's components; another project's are its own, and a project that declares none is a project this check says nothing about."
+
+with:
+
+"The areas a record's name may open with are a fact about one project, so they are declared in its flw config and never shipped by flw. A project that declares none is a project this check says nothing about, and flw's own checkout declares none."
+'''
+
+[[dag]]
+group = 1
+tasks = [
+  { id = "readme", desc = "README.md: the tagline per the decision; :23 gains 'and below $HOME'; :73 names the knowledge-file exception; :138 says design-v3 is the design the build started from and the code is the authority." },
+  { id = "docs", desc = "docs/install.md:34 says present means the host's binary on PATH or its own config directory; :85 says plain flw test exits 2 naming nothing to run until a check is declared; one clause that doctor's extensions section is about the project at the current directory. docs/extending.md:42 lists five skills. pyproject.toml:3-4 says two of the four checks." },
+  { id = "shared", desc = "autonomy.md:26 one sentence on tool-never-commits versus agent-commits-when-told; :46 per the decision. context.md:145 drop the false 'so'. commits.md after :14 one sentence on when the record and the contract edit are committed." },
+  { id = "skills", desc = "flw-spec/SKILL.md:287 gate gains 'or the run wrote a first contract'. flw-execute/SKILL.md:247 says a first contract is untracked, so print the file; :147-149 rewritten plainly." },
+  { id = "test-message", desc = "cli/flw.py:2315 says 'no contract at <path>' when specs/current.toml does not exist, and keeps the current wording when it does. Test: a project holding only .flw/ with no checks gets a message that does not name specs/current.toml as declaring anything." },
+]
+
+[[decisions]]
+topic     = "the README tagline"
+options   = ["A spec-driven workflow for coding agents, installed once as skills into every host you use.", "keep it"]
+chosen    = "A spec-driven workflow for coding agents, installed once as skills into every host you use."
+rationale = "The sentence is the first thing a stranger reads and the explain agent could not say what it kept current. What it kept current is the skills across hosts, by symlink, which the new sentence says. Edit it in this record if a better one comes to mind; it is a tagline."
+
+[[decisions]]
+topic     = "the unsourced measurement at autonomy.md:46"
+options   = ["cut the measurement claim and keep the decision", "find and cite the measurement"]
+chosen    = "cut the measurement claim and keep the decision"
+rationale = "No record, plan or doc holds the measurement, so it cannot be cited. The paragraph's point is the decision that boundaries live in files rather than in a supervising agent, which stands without a figure. docs stay free of claims nobody can re-take."
+
+[[decisions]]
+topic     = "who stands in for the user in an unattended run"
+options   = ["leave to plans/design-review.md", "one sentence per skill in this record"]
+chosen    = "leave to plans/design-review.md"
+rationale = "A sentence per skill would settle a design question in a docs patch. The adopter's eleven guesses are the evidence that question needs, and the plan already addresses it for execute under --auto."
