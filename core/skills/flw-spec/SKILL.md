@@ -115,8 +115,8 @@ validation.
    classification, so nothing downstream can move `spec_version` by it. The first version
    file has no `base` — there is no predecessor.
 
-   **`spec_version = "0.0.0"`, and no `applied` key.** The number folds from the records
-   that have landed, and none has: this record lands when `flw-execute` runs it. `0.1.0`
+   **`spec_version = "0.0"`, and no `applied` key.** The number folds from the records
+   that have landed, and none has: this record lands when `flw-execute` runs it. `0.1`
    reads at least as naturally and fails validation — and the error names `applied`, so
    the repair an agent reaches for is to add this record's name to it, which validates
    while claiming a run that never happened and leaves the first real run nothing to

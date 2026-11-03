@@ -600,17 +600,57 @@ def write_host_text(path: Path, text: str) -> None:
         f.write(text)
 
 
-def strip_block(text: str, begin: str, end: str) -> str:
+def _block_span(
+    text: str, begin: str, end: str, where: str = "the file"
+) -> tuple[int, int] | None:
+    """Where the tagged block starts and where the text after it resumes, or
+    None when there is no block.
+
+    A marker is a whole line. The markers were found by substring, so a sentence
+    mentioning the begin marker started a block that ran to the next end marker,
+    and the second install deleted the user's text between them. A marker line
+    inside a code fence is a marker being shown, not one bounding a block; fences
+    are tracked outside the block only, because the block's own body may hold
+    an odd number of them. A begin with no end after it, or a second begin, is
+    refused naming the file rather than guessed around: both are states only a
+    hand edit reaches, and rewriting either moves text flw cannot tell is its own.
+    """
+    begins: list[int] = []
+    ends: list[int] = []
+    fenced = inside = False
+    at = 0
+    for line in text.splitlines(keepends=True):
+        bare = line.rstrip()
+        if inside:
+            if bare == end:
+                ends.append(at + len(line))
+                inside = False
+        elif bare.startswith(("```", "~~~")):
+            fenced = not fenced
+        elif not fenced and bare == begin:
+            begins.append(at)
+            inside = True
+        at += len(line)
+    if not begins:
+        return None
+    if len(begins) > 1:
+        raise SystemExit(
+            f"error: {where} holds two {begin} lines; fix the markers by hand and rerun"
+        )
+    if inside:
+        raise SystemExit(
+            f"error: {where} holds a {begin} line with no {end} line after it; "
+            "fix the markers by hand and rerun"
+        )
+    return begins[0], ends[0]
+
+
+def strip_block(text: str, begin: str, end: str, where: str = "the file") -> str:
     """Remove exactly the tagged block, leaving the rest byte-identical."""
-    start = text.find(begin)
-    if start == -1:
+    span = _block_span(text, begin, end, where)
+    if span is None:
         return text
-    end_at = text.find(end, start)
-    if end_at == -1:
-        return text
-    after = end_at + len(end)
-    if after < len(text) and text[after] == "\n":
-        after += 1
+    start, after = span
     before = text[:start]
     # install separates the block from the user's own content with one blank
     # line. That separator is flw's too, so it goes as well — otherwise every
@@ -621,7 +661,9 @@ def strip_block(text: str, begin: str, end: str) -> str:
     return before + text[after:]
 
 
-def replace_block(text: str, block: str, begin: str, end: str) -> str:
+def replace_block(
+    text: str, block: str, begin: str, end: str, where: str = "the file"
+) -> str:
     """Swap a tagged block for a new one, keeping the blank line that separates
     the user's own content from flw's.
 
@@ -630,14 +672,9 @@ def replace_block(text: str, block: str, begin: str, end: str) -> str:
     lies outside the markers is the user's and is never touched, and moving it is
     touching it. Text with no block yet is appended, which is how install adds one.
     """
-    start = text.find(begin)
-    stop = text.find(end, start + len(begin)) if start != -1 else -1
-    if start != -1 and stop != -1:
-        after = stop + len(end)
-        # `wrap` ends the block with a newline, so the one already after the old
-        # end tag is the same newline and taking both doubles it.
-        if after < len(text) and text[after] == "\n":
-            after += 1
+    span = _block_span(text, begin, end, where)
+    if span is not None:
+        start, after = span
         return text[:start] + block + text[after:]
     return (text.rstrip("\n") + "\n\n" if text.strip() else "") + block
 
@@ -690,8 +727,8 @@ def install_block(
     target = expand(host.ambient)
     existing = read_host_text(target) if target.exists() else ""
 
-    updated = replace_block(existing, block, begin, end)
-    verb = "update" if begin in existing else "add"
+    updated = replace_block(existing, block, begin, end, where=tilde(target))
+    verb = "update" if _block_span(existing, begin, end) else "add"
 
     if updated == existing:
         print(f"  {label}: {tilde(target)} already current")
@@ -775,12 +812,12 @@ def strip_block_from(
     if not target.exists():
         return
     text = read_host_text(target)
-    if begin not in text:
+    if _block_span(text, begin, end, where=tilde(target)) is None:
         return
     print(f"  {label}: stripping the tagged block from {tilde(target)}")
     if dry:
         return
-    remaining = strip_block(text, begin, end)
+    remaining = strip_block(text, begin, end, where=tilde(target))
     if remaining.strip() or not created:
         # Only a file flw created may be removed. An instructions file that was
         # already there is the user's, whatever is left in it.
@@ -1409,7 +1446,10 @@ def refresh_style(
         # refresh rewrote every line ending in a file whose other lines are the
         # user's. install_block writes the same file through the same pair.
         write_host_text(
-            path, replace_block(read_host_text(path), block, STYLE_BEGIN, STYLE_END)
+            path,
+            replace_block(
+                read_host_text(path), block, STYLE_BEGIN, STYLE_END, where=tilde(path)
+            ),
         )
     print("         refreshed")
     return True
@@ -2214,15 +2254,23 @@ def project_chain(start: Path | None = None) -> list[Path]:
     it, and every command run outside a real project would resolve to $HOME.
     Observed before the guard: `flw scout` walked all of $HOME into a network mount
     and hung.
+
+    Outside $HOME nothing bounds the walk, so every directory up to / would be a
+    candidate, and /private/tmp is one any process on the machine can write a
+    flw directory into — a planted one there supplied extensions and a test
+    command to every project under it. There the chain is the nearest root alone.
     """
     here = (start or Path.cwd()).resolve()
     home = Path.home().resolve()
+    bounded = home in (here, *here.parents)
     found: list[Path] = []
     for candidate in (here, *here.parents):
         if candidate == home:
             break
         if (candidate / "specs").is_dir() or flw_dir(candidate).is_dir():
             found.append(candidate)
+            if not bounded:
+                break
     found.reverse()
     return found
 

@@ -4419,3 +4419,63 @@ def test_style_lint_through_the_subcommand_exits_2_on_a_path_it_cannot_read(
     captured = capsys.readouterr()
     assert "no such path: no-such-file.md" in captured.err
     assert "clean" not in captured.out
+
+
+# --- the markers are whole lines ------------------------------------------- #
+
+
+def test_a_mention_of_the_marker_in_prose_or_a_fence_is_not_a_block(home, capsys):
+    """The markers were found by substring, so a sentence mentioning the begin
+    marker started a block that ran to the next end marker, and the second
+    install --ambient deleted the user's text between them. A marker is a whole
+    line outside a code fence, so the prose and the fenced example both survive
+    two installs and an uninstall byte for byte."""
+    instructions = home / ".claude" / "CLAUDE.md"
+    instructions.parent.mkdir(parents=True)
+    original = (
+        "# Mine\n\nflw writes between `<!-- flw:begin -->` and `<!-- flw:end -->`.\n\n"
+        "```text\n<!-- flw:begin -->\nshown, not live\n<!-- flw:end -->\n```\n"
+    )
+    instructions.write_text(original)
+
+    install("claude-code", ambient=True)
+    install("claude-code", ambient=True)
+    capsys.readouterr()
+    after = instructions.read_text()
+    assert after.startswith(original)
+    assert after.count("\n" + flw.BEGIN + "\n") == 2  # the fenced one and flw's own
+
+    uninstall("claude-code")
+    capsys.readouterr()
+    assert instructions.read_text() == original
+
+
+def test_an_unclosed_or_doubled_begin_marker_is_refused_naming_the_file(home, capsys):
+    """Both are states only a hand edit reaches, and rewriting around either
+    moves text flw cannot tell is its own."""
+    instructions = home / ".claude" / "CLAUDE.md"
+    instructions.parent.mkdir(parents=True)
+    instructions.write_text(f"# Mine\n\n{flw.BEGIN}\nleft open\n")
+    with pytest.raises(SystemExit, match=r"CLAUDE\.md holds a .* line with no .* line after it"):
+        install("claude-code", ambient=True)
+    assert instructions.read_text() == f"# Mine\n\n{flw.BEGIN}\nleft open\n"
+
+    instructions.write_text(f"{flw.BEGIN}\na\n{flw.END}\n{flw.BEGIN}\nb\n{flw.END}\n")
+    with pytest.raises(SystemExit, match=r"CLAUDE\.md holds two"):
+        uninstall("claude-code")
+
+
+def test_project_chain_outside_home_is_the_nearest_root_alone(tmp_path, monkeypatch):
+    """Outside $HOME nothing bounded the walk, so a .flw/ planted in a
+    world-writable ancestor such as /private/tmp supplied extensions and the test
+    command to every project under it. The chain there is the nearest root."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (tmp_path / "home").mkdir()
+    planted = tmp_path / "shared"
+    (planted / ".flw" / "extensions").mkdir(parents=True)
+    (planted / ".flw" / "extensions" / "shared.md").write_text("PLANTED\n")
+    project = planted / "victim" / "proj"
+    (project / ".flw").mkdir(parents=True)
+
+    assert flw.project_chain(project) == [project]
+    assert flw.nearest_project(project) == project

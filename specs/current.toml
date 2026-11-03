@@ -1,6 +1,6 @@
 schema_version = 4
-spec_version = "19.1"
-release = "0.1"
+spec_version = "19.2"
+release = "0.1.1"
 
 # The order the versions landed in. flw-execute appends a name here when its run
 # finishes. Records earlier than 4.0 predate the list and are not backfilled: nothing
@@ -62,6 +62,7 @@ applied = [
   "scripts-source-every-number",
   "surface-trim-to-primitives",
   "surface-name-the-release",
+  "four-promises-kept",
 ]
 
 # flw's own contract, hand-written before the schema that validates it exists.
@@ -152,6 +153,7 @@ properties = [
   "A [project.roots] path resolves relative to the project directory whose config declares it, never against $PWD. Nothing walks upward from a member looking for a project that declares it: standing inside a member, flw sees that member alone, and the system is seen by naming its root.",
   "The per-project directory's name comes from the machine — $FLW_DIR, else [paths] flw in ~/.flw/config.toml, else .flw — and never from the project, whose config lives inside the directory it would name. One name is in force at a time: a directory under another name is not a project, and a walk probes exactly one name per level. A name that is not a string, is empty, is `.` or `..`, or is absolute is refused naming its source, because each of those makes every directory a project or none.",
   "flw context --scope prints the full text of every contract component whose declared paths meet one of the given paths, after the names-and-paths block, so a skill that has to hand a contract to another agent passes command output rather than intersecting paths by hand. A scope path matching no component prints no component and is not an error; a scope path outside the resolved root is refused naming it.",
+  "A project outside $HOME has no ancestors: the walk that collects project roots stops at the nearest one it finds, so only a project under $HOME reads a parent's extensions and config. Above a project $HOME does not bound, every directory up to / is a candidate, and /tmp is one any process on the machine can write a flw directory into.",
 ]
 surfaces = [
   "$FLW_HOME, defaulting to ~/.flw, holds flw's own state.",
@@ -272,7 +274,7 @@ provides = [
 properties = [
   "A contract whose applied list names only records that exist validates clean; a record no applied list names is a version in flight rather than an error.",
   "A check reported as one this session could not run is one the project named in [tests] yours. A failing [tests] setup fails every check in the run instead, with the setup's own error text attached.",
-  "A command that could not be run to completion is never reported as passing: a check or a setup line holding a command separator bash would score by its last command — a newline or a `;` — is refused at collection time naming the separator found, while `&&` and `||` are left alone because they are what a user writes deliberately. A `checks` or `yours` that is not a list of strings is refused naming the file and the key, rather than iterated into one check per character.",
+  "A command that could not be run to completion is never reported as passing: a check or a setup line holding a command separator bash would score by its last command — a newline, a `;` or a lone `&` — is refused at collection time naming the separator found, while `&&` and `||` are left alone because they are what a user writes deliberately. A pipeline runs under pipefail, so a command failing before a `|` fails the check rather than being scored by the command after it. A `checks` or `yours` that is not a list of strings is refused naming the file and the key, rather than iterated into one check per character.",
   "A config section that is not a table is refused naming the file and the section, in the machine-wide file and the project's alike, rather than tracebacking the command that read it — including the read that resolves the flw directory itself, which runs before any other and so breaks every command on the machine when it fails.",
   "Every subcommand that takes -n is checked by a test that fails if that command writes anything under -n. The promise is one sentence covering six commands, so a check covering one of them reads as a check covering the sentence.",
   "A definition reached through files that are themselves depended on outranks one imported by the same number of files that nothing depends on; with damping at zero the two tie exactly, because what separates them is transitivity and not how many importers each has.",

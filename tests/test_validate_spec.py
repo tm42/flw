@@ -23,6 +23,7 @@ from core.scripts.validate_spec import (
     load_records,
     parse_record_filename,
     validate,
+    validate_file,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -855,3 +856,25 @@ def test_the_belt_leaves_an_ordinary_area_named_record_alone():
         )
         == []
     )
+
+
+def test_a_first_contract_written_as_flw_spec_instructs_validates(tmp_path):
+    """flw-spec told the agent to write spec_version = "0.0.0", which the
+    schema's two-part pattern refuses, so every first contract failed the skill's
+    own step 5. The fold starts at 0.0 with nothing applied, and the first -minor
+    record lands at 0.1."""
+    from tests.conftest import CONTRACT
+
+    specs = tmp_path / "specs"
+    (specs / "versions").mkdir(parents=True)
+    (specs / "versions" / "first-minor.toml").write_text('name = "first"\nsummary = "the first version"\n')
+    schema = REPO / "core" / "schemas" / "spec-v4.schema.json"
+
+    (specs / "current.toml").write_text(CONTRACT.replace('spec_version = "1.0"', 'spec_version = "0.0"'))
+    code, messages = validate_file(specs / "current.toml", schema)
+    assert code == 0, messages
+    assert check_chain(specs / "versions") == []
+
+    (specs / "current.toml").write_text(CONTRACT.replace('spec_version = "1.0"', 'spec_version = "0.0.0"'))
+    code, messages = validate_file(specs / "current.toml", schema)
+    assert code != 0 and any("spec_version" in m for m in messages), messages

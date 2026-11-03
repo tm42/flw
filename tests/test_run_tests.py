@@ -579,3 +579,29 @@ def test_a_missing_command_is_reported_failed_at_the_cli(tmp_path, capsys, monke
     out = capsys.readouterr().out
     assert "1 failed" in out
     assert "this one is yours" not in out
+
+
+def test_a_failing_command_before_a_pipe_fails_the_check(project):
+    """bash scores a pipeline by its last command, so `false | cat` reported a
+    pass and the contract's "never reported as passing" was false for every
+    check written with a pipe. pipefail is the fix, and a pipe that succeeds
+    still passes under it."""
+    failing = engine.run_one(engine.Check("contract", "false | cat"), project, "", 10, stream=False)
+    assert failing.state == "fail"
+    passing = engine.run_one(engine.Check("contract", "true | cat"), project, "", 10, stream=False)
+    assert passing.state == "pass"
+
+
+def test_a_lone_ampersand_is_refused_and_the_doubled_one_is_not(tmp_path):
+    """`false & true` backgrounds the failure and bash scores what follows, so it
+    reported a pass. `&&` carries the failure forward and stays allowed, and a
+    redirection's `>&` is one token to shlex and is not an `&` either."""
+    (tmp_path / ".flw").mkdir()
+    config = tmp_path / ".flw" / "config.toml"
+    config.write_text('[tests]\nchecks = ["false & true"]\n')
+    with pytest.raises(SystemExit, match="holds a '&'"):
+        engine.collect(tmp_path, tmp_path / "specs", full=False)
+
+    config.write_text('[tests]\nchecks = ["true && true", "true 2>&1"]\n')
+    found = engine.collect(tmp_path, tmp_path / "specs", full=False)
+    assert [c.command for c in found] == ["true && true", "true 2>&1"]

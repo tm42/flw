@@ -72,7 +72,10 @@ def _parse_toml(path: Path) -> dict:
 # list would let an earlier failing command pass silently — the tool's own defect
 # class, in the one place a user writes the command by hand. `&&` and `||` are
 # not separators here: they are what a user writes deliberately, and both carry
-# the earlier command's failure forward.
+# the earlier command's failure forward. A lone `&` is a separator: it backgrounds
+# the command before it and bash scores the list by what follows, so
+# `false & true` reported a pass. A pipeline is the same defect with a `|`, and
+# run_one answers it with pipefail rather than by refusing pipes.
 #
 # Which is why the `;` is found by tokenising and never by scanning bytes. Two
 # of flw's own removal checks are `python3 -c "import …; sys.exit(…)"`, where the
@@ -95,6 +98,10 @@ def _separator(command: str) -> str:
         # behind.
         return ""
     for index, token in enumerate(tokens):
+        # shlex groups punctuation runs, so `&&` and `>&` arrive as one token
+        # each and only a lone `&` is the backgrounding operator.
+        if token == "&":
+            return "a '&'"
         # A `;` closing a brace group, not extending a list.
         if token == ";" and tokens[index + 1 : index + 2] != ["}"]:
             return "a ';'"
@@ -215,7 +222,10 @@ def run_one(check: Check, root: Path, setup: str, timeout: int, stream: bool) ->
     command = f"{setup} || exit {SETUP_FAILED}\n{check.command}" if setup else check.command
     started = time.monotonic()
     process = subprocess.Popen(
-        ["bash", "-c", command],
+        # pipefail: bash scores a pipeline by its last command, so without it
+        # `false | cat` passed and the contract's "never reported as passing"
+        # was false for every check written with a pipe.
+        ["bash", "-o", "pipefail", "-c", command],
         cwd=root,
         # No stdin: a command that prompts should fail fast rather than hang
         # forever in a session where nobody can answer it.
